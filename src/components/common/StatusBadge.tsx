@@ -15,6 +15,7 @@ const statusStyles: Record<Status, string> = {
   fully_received: 'bg-success/10 text-success',
   closed: 'bg-muted text-muted-foreground',
   cancelled: 'bg-destructive/10 text-destructive',
+  rejected: 'bg-destructive/10 text-destructive',
   // Project statuses
   active: 'bg-success/10 text-success',
   on_hold: 'bg-warning/10 text-warning',
@@ -37,6 +38,7 @@ const statusLabels: Record<Status, string> = {
   fully_received: 'Fully Received',
   closed: 'Closed',
   cancelled: 'Cancelled',
+  rejected: 'Rejected',
   active: 'Active',
   on_hold: 'On Hold',
   completed: 'Completed',

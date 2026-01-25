@@ -1,21 +1,48 @@
+import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '@/hooks/useNotifications';
 import { PageHeader } from '@/components/common/PageHeader';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Bell, Check, CheckCheck, Package, ClipboardList, AlertTriangle } from 'lucide-react';
-import { format } from 'date-fns';
+import { Bell, Check, CheckCheck, Package, ClipboardList, AlertTriangle, Users, FolderOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatManilaTime } from '@/lib/notificationService';
 
 const notificationIcons: Record<string, React.ElementType> = {
   order: ClipboardList,
   inventory: Package,
   low_stock: AlertTriangle,
+  team: Users,
+  project: FolderOpen,
   default: Bell,
 };
 
 export default function Notifications() {
+  const navigate = useNavigate();
   const { notifications, loading, markAsRead, markAllAsRead, unreadCount } = useNotifications();
+
+  const handleNotificationClick = (notification: typeof notifications[0]) => {
+    // Mark as read if unread
+    if (!notification.is_read) {
+      markAsRead(notification.id);
+    }
+
+    // Navigate based on reference type
+    if (notification.reference_type && notification.reference_id) {
+      switch (notification.reference_type) {
+        case 'order':
+          // Navigate to Orders page - the modal will be handled there
+          navigate('/orders');
+          break;
+        case 'project':
+          navigate(`/projects/${notification.reference_id}`);
+          break;
+        default:
+          // Just mark as read, no navigation
+          break;
+      }
+    }
+  };
 
   if (!loading && notifications.length === 0) {
     return (
@@ -56,7 +83,7 @@ export default function Notifications() {
                 'cursor-pointer transition-colors hover:bg-muted/50',
                 !notification.is_read && 'border-l-4 border-l-accent bg-accent/5'
               )}
-              onClick={() => !notification.is_read && markAsRead(notification.id)}
+              onClick={() => handleNotificationClick(notification)}
             >
               <CardContent className="flex items-start gap-4 p-4">
                 <div
@@ -75,7 +102,7 @@ export default function Notifications() {
                   </p>
                   <p className="text-sm text-muted-foreground">{notification.message}</p>
                   <p className="text-xs text-muted-foreground">
-                    {format(new Date(notification.created_at), 'MMM d, yyyy h:mm a')}
+                    {formatManilaTime(notification.created_at)}
                   </p>
                 </div>
                 {!notification.is_read && (

@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { EmptyState } from '@/components/common/EmptyState';
+import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, ClipboardList, Search } from 'lucide-react';
+import { Plus, ClipboardList, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import type { Order, Project, OrderStatus } from '@/types/database';
 import { format } from 'date-fns';
 
@@ -33,8 +33,10 @@ interface OrderWithProject extends Order {
   project: Project;
 }
 
+type SortField = 'created_at' | 'expected_delivery_date' | 'total_amount';
+type SortDirection = 'asc' | 'desc';
+
 export default function Orders() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<OrderWithProject[]>([]);
@@ -42,6 +44,9 @@ export default function Orders() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<SortField>('created_at');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     project_id: '',
@@ -104,16 +109,66 @@ export default function Orders() {
     }
   };
 
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.order_number?.toLowerCase().includes(search.toLowerCase()) ||
-      order.supplier_name?.toLowerCase().includes(search.toLowerCase()) ||
-      order.project?.name?.toLowerCase().includes(search.toLowerCase());
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('desc');
+    }
+  };
 
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="h-4 w-4 text-primary" />
+      : <ArrowDown className="h-4 w-4 text-primary" />;
+  };
 
-    return matchesSearch && matchesStatus;
-  });
+  const filteredAndSortedOrders = useMemo(() => {
+    let result = orders.filter((order) => {
+      const matchesSearch =
+        order.order_number?.toLowerCase().includes(search.toLowerCase()) ||
+        order.supplier_name?.toLowerCase().includes(search.toLowerCase()) ||
+        order.project?.name?.toLowerCase().includes(search.toLowerCase());
+
+      const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+
+      return matchesSearch && matchesStatus;
+    });
+
+    // Sort
+    result.sort((a, b) => {
+      let aVal: number | string | null = null;
+      let bVal: number | string | null = null;
+
+      switch (sortField) {
+        case 'created_at':
+          aVal = a.created_at;
+          bVal = b.created_at;
+          break;
+        case 'expected_delivery_date':
+          aVal = a.expected_delivery_date || '';
+          bVal = b.expected_delivery_date || '';
+          break;
+        case 'total_amount':
+          aVal = a.total_amount ?? 0;
+          bVal = b.total_amount ?? 0;
+          break;
+      }
+
+      if (aVal === null || aVal === '') return sortDirection === 'asc' ? 1 : -1;
+      if (bVal === null || bVal === '') return sortDirection === 'asc' ? -1 : 1;
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [orders, search, statusFilter, sortField, sortDirection]);
 
   const columns: Column<OrderWithProject>[] = [
     {
@@ -142,7 +197,15 @@ export default function Orders() {
     },
     {
       key: 'expected_delivery',
-      header: 'Expected Delivery',
+      header: (
+        <button 
+          className="flex items-center gap-1 hover:text-primary transition-colors"
+          onClick={() => handleSort('expected_delivery_date')}
+        >
+          Expected Delivery
+          {getSortIcon('expected_delivery_date')}
+        </button>
+      ) as unknown as string,
       render: (order) =>
         order.expected_delivery_date
           ? format(new Date(order.expected_delivery_date), 'MMM d, yyyy')
@@ -150,26 +213,45 @@ export default function Orders() {
     },
     {
       key: 'total',
-      header: 'Amount',
+      header: (
+        <button 
+          className="flex items-center gap-1 hover:text-primary transition-colors"
+          onClick={() => handleSort('total_amount')}
+        >
+          Amount
+          {getSortIcon('total_amount')}
+        </button>
+      ) as unknown as string,
       render: (order) =>
-        order.total_amount ? `$${order.total_amount.toLocaleString()}` : '-',
+        order.total_amount 
+          ? `₱${order.total_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` 
+          : '-',
       className: 'text-right',
     },
     {
       key: 'created',
-      header: 'Created',
+      header: (
+        <button 
+          className="flex items-center gap-1 hover:text-primary transition-colors"
+          onClick={() => handleSort('created_at')}
+        >
+          Created
+          {getSortIcon('created_at')}
+        </button>
+      ) as unknown as string,
       render: (order) => format(new Date(order.created_at), 'MMM d, yyyy'),
     },
   ];
 
   const statusOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'All Statuses' },
-    { value: 'draft', label: 'Draft' },
-    { value: 'for_approval', label: 'For Approval' },
+    { value: 'for_approval', label: 'Order Request' },
     { value: 'approved', label: 'Approved' },
     { value: 'ordered', label: 'Ordered' },
-    { value: 'in_transit', label: 'In Transit' },
     { value: 'delivered', label: 'Delivered' },
+    { value: 'rejected', label: 'Rejected' },
+    { value: 'draft', label: 'Draft' },
+    { value: 'in_transit', label: 'In Transit' },
     { value: 'partially_received', label: 'Partially Received' },
     { value: 'fully_received', label: 'Fully Received' },
     { value: 'closed', label: 'Closed' },
@@ -324,10 +406,17 @@ export default function Orders() {
 
       <DataTable
         columns={columns}
-        data={filteredOrders}
+        data={filteredAndSortedOrders}
         loading={loading}
         emptyMessage="No orders found"
-        onRowClick={(order) => navigate(`/orders/${order.id}`)}
+        onRowClick={(order) => setSelectedOrderId(order.id)}
+      />
+
+      <OrderDetailModal
+        orderId={selectedOrderId}
+        open={!!selectedOrderId}
+        onOpenChange={(open) => !open && setSelectedOrderId(null)}
+        onStatusChange={fetchData}
       />
     </div>
   );

@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { OrderCard } from './OrderCard';
+import { OrderDetailModal } from './OrderDetailModal';
+import { RejectOrderDialog } from './RejectOrderDialog';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, ArrowLeft, Loader2 } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, XCircle, Check } from 'lucide-react';
+import { logActivity } from '@/lib/activityLogger';
+import { notifyProjectMembers } from '@/lib/notificationService';
 import type { Order, Project, OrderStatus } from '@/types/database';
 import {
   Dialog,
@@ -28,16 +31,19 @@ const STATUS_LANES: { key: OrderStatus; label: string; color: string }[] = [
   { key: 'approved', label: 'Approved', color: 'bg-success/10 border-success/30' },
   { key: 'ordered', label: 'Ordered', color: 'bg-primary/10 border-primary/30' },
   { key: 'delivered', label: 'Delivered', color: 'bg-success/10 border-success/30' },
+  { key: 'rejected', label: 'Rejected', color: 'bg-destructive/10 border-destructive/30' },
 ];
 
 export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps) {
-  const navigate = useNavigate();
-  const { user, isApprover, isSuperAdmin } = useAuth();
+  const { user, isApprover, isSuperAdmin, isAdmin } = useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [orderToReject, setOrderToReject] = useState<Order | null>(null);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [formData, setFormData] = useState({
     supplier_name: '',
     supplier_contact: '',
@@ -62,6 +68,27 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
   useEffect(() => {
     fetchOrders();
+
+    // Set up realtime subscription
+    const channel = supabase
+      .channel('orders-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'orders',
+          filter: `project_id=eq.${project.id}`,
+        },
+        () => {
+          fetchOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [project.id]);
 
   const handleCreateOrder = async (e: React.FormEvent) => {
@@ -70,7 +97,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
     setIsCreating(true);
 
-    const { error } = await supabase.from('orders').insert({
+    const { data, error } = await supabase.from('orders').insert({
       project_id: project.id,
       supplier_name: formData.supplier_name || null,
       supplier_contact: formData.supplier_contact || null,
@@ -78,12 +105,32 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       notes: formData.notes || null,
       created_by: user.id,
       order_number: '', // Auto-generated
-      status: 'for_approval' as OrderStatus, // Always start as Order Request
-    });
+      status: 'for_approval' as OrderStatus,
+    }).select().single();
 
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    } else if (data) {
+      // Log activity
+      await logActivity({
+        action: 'create',
+        tableName: 'orders',
+        recordId: data.id,
+        newValues: { order_number: data.order_number, status: 'for_approval' },
+        userId: user.id,
+      });
+
+      // Notify project members
+      await notifyProjectMembers({
+        projectId: project.id,
+        title: 'New Order Created',
+        message: `Order ${data.order_number} has been created for ${project.name}`,
+        type: 'order',
+        referenceType: 'order',
+        referenceId: data.id,
+        excludeUserId: user.id,
+      });
+
       toast({ title: 'Success', description: 'Order created successfully' });
       setIsCreateDialogOpen(false);
       setFormData({ supplier_name: '', supplier_contact: '', expected_delivery_date: '', notes: '' });
@@ -94,27 +141,136 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   };
 
   const handleStatusChange = async (order: Order, newStatus: OrderStatus) => {
+    if (!user) return;
+
     // Check permissions
-    if (!isSuperAdmin() && !isApprover()) {
+    const canTransition = isSuperAdmin() || isApprover();
+    if (!canTransition) {
       toast({ 
         title: 'Permission Denied', 
-        description: 'Only Approvers and Super Admins can change order status', 
+        description: 'Only Approvers, Admins, and Super Admins can change order status', 
         variant: 'destructive' 
       });
       return;
     }
 
+    // Validate transition rules (non-Super Admin)
+    if (!isSuperAdmin()) {
+      const validTransitions: Record<OrderStatus, OrderStatus[]> = {
+        for_approval: ['approved', 'rejected'],
+        approved: ['ordered'],
+        ordered: ['delivered'],
+        delivered: [],
+        rejected: [],
+        draft: ['for_approval'],
+        in_transit: ['delivered'],
+        partially_received: ['fully_received'],
+        fully_received: ['closed'],
+        closed: [],
+        cancelled: [],
+      };
+
+      if (!validTransitions[order.status]?.includes(newStatus)) {
+        toast({
+          title: 'Invalid Transition',
+          description: `Cannot move from ${order.status} to ${newStatus}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
+    const updateData: Record<string, unknown> = { status: newStatus };
+    
+    // Set approval info if approving
+    if (newStatus === 'approved' && order.status === 'for_approval') {
+      updateData.approved_by = user.id;
+      updateData.approved_at = new Date().toISOString();
+    }
+
     const { error } = await supabase
       .from('orders')
-      .update({ status: newStatus })
+      .update(updateData)
       .eq('id', order.id);
 
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
-      toast({ title: 'Success', description: `Order moved to ${newStatus.replace('_', ' ')}` });
+      // Log activity
+      await logActivity({
+        action: newStatus === 'approved' ? 'approve' : 'status_change',
+        tableName: 'orders',
+        recordId: order.id,
+        oldValues: { status: order.status },
+        newValues: { status: newStatus, order_number: order.order_number },
+        userId: user.id,
+      });
+
+      // Notify project members
+      const statusLabel = newStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      await notifyProjectMembers({
+        projectId: project.id,
+        title: `Order ${statusLabel}`,
+        message: `Order ${order.order_number} has been moved to ${statusLabel}`,
+        type: 'order',
+        referenceType: 'order',
+        referenceId: order.id,
+        excludeUserId: user.id,
+      });
+
+      toast({ title: 'Success', description: `Order moved to ${statusLabel}` });
       fetchOrders();
     }
+  };
+
+  const handleReject = async (reason: string) => {
+    if (!orderToReject || !user) return;
+    setIsRejecting(true);
+
+    const { error } = await supabase
+      .from('orders')
+      .update({
+        status: 'rejected' as OrderStatus,
+        rejected_by: user.id,
+        rejected_at: new Date().toISOString(),
+        rejection_reason: reason || null,
+      })
+      .eq('id', orderToReject.id);
+
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      // Log activity
+      await logActivity({
+        action: 'reject',
+        tableName: 'orders',
+        recordId: orderToReject.id,
+        oldValues: { status: orderToReject.status },
+        newValues: { 
+          status: 'rejected', 
+          order_number: orderToReject.order_number,
+          rejection_reason: reason || null 
+        },
+        userId: user.id,
+      });
+
+      // Notify project members
+      await notifyProjectMembers({
+        projectId: project.id,
+        title: 'Order Rejected',
+        message: `Order ${orderToReject.order_number} has been rejected${reason ? `: ${reason}` : ''}`,
+        type: 'order',
+        referenceType: 'order',
+        referenceId: orderToReject.id,
+        excludeUserId: user.id,
+      });
+
+      toast({ title: 'Order Rejected', description: `Order ${orderToReject.order_number} has been rejected` });
+      setOrderToReject(null);
+      fetchOrders();
+    }
+
+    setIsRejecting(false);
   };
 
   // Get orders for a specific lane
@@ -126,13 +282,14 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   const getNextStatus = (currentStatus: OrderStatus): OrderStatus | null => {
     const statusOrder: OrderStatus[] = ['for_approval', 'approved', 'ordered', 'delivered'];
     const currentIndex = statusOrder.indexOf(currentStatus);
-    if (currentIndex < statusOrder.length - 1) {
+    if (currentIndex >= 0 && currentIndex < statusOrder.length - 1) {
       return statusOrder[currentIndex + 1];
     }
     return null;
   };
 
   const canMoveOrder = isApprover() || isSuperAdmin();
+  const canRejectOrder = isApprover() || isAdmin() || isSuperAdmin();
 
   if (loading) {
     return (
@@ -162,7 +319,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       </div>
 
       {/* Workflow Board - Status Lanes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {STATUS_LANES.map((lane) => {
           const laneOrders = getOrdersForLane(lane.key);
           return (
@@ -187,10 +344,43 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                     <div key={order.id} className="group relative">
                       <OrderCard
                         order={order}
-                        onClick={() => navigate(`/orders/${order.id}`)}
+                        onClick={() => setSelectedOrderId(order.id)}
                       />
-                      {/* Move button - show on hover if user can move */}
-                      {canMoveOrder && getNextStatus(order.status) && (
+                      {/* Action buttons - show on hover if user has permissions */}
+                      {order.status === 'for_approval' && (
+                        <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {canMoveOrder && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="text-xs h-7 bg-success/20 hover:bg-success/30 text-success"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleStatusChange(order, 'approved');
+                              }}
+                            >
+                              <Check className="h-3 w-3 mr-1" />
+                              Approve
+                            </Button>
+                          )}
+                          {canRejectOrder && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="text-xs h-7 bg-destructive/20 hover:bg-destructive/30 text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOrderToReject(order);
+                              }}
+                            >
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Reject
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                      {/* Move button for other statuses */}
+                      {order.status !== 'for_approval' && order.status !== 'rejected' && canMoveOrder && getNextStatus(order.status) && (
                         <Button
                           size="sm"
                           variant="secondary"
@@ -267,6 +457,23 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Order Detail Modal */}
+      <OrderDetailModal
+        orderId={selectedOrderId}
+        open={!!selectedOrderId}
+        onOpenChange={(open) => !open && setSelectedOrderId(null)}
+        onStatusChange={fetchOrders}
+      />
+
+      {/* Reject Order Dialog */}
+      <RejectOrderDialog
+        open={!!orderToReject}
+        onOpenChange={(open) => !open && setOrderToReject(null)}
+        orderNumber={orderToReject?.order_number || ''}
+        onConfirm={handleReject}
+        isSubmitting={isRejecting}
+      />
     </div>
   );
 }
