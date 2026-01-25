@@ -709,6 +709,7 @@ export type Database = {
         | "storekeeper"
         | "site_lead"
         | "viewer"
+        | "approver"
       order_status:
         | "draft"
         | "for_approval"
@@ -720,7 +721,12 @@ export type Database = {
         | "fully_received"
         | "closed"
         | "cancelled"
-      project_status: "active" | "on_hold" | "completed" | "cancelled"
+      project_status:
+        | "active"
+        | "on_hold"
+        | "completed"
+        | "cancelled"
+        | "deleted"
       transaction_type:
         | "stock_in"
         | "stock_out"
@@ -863,6 +869,7 @@ export const Constants = {
         "storekeeper",
         "site_lead",
         "viewer",
+        "approver",
       ],
       order_status: [
         "draft",
@@ -876,7 +883,13 @@ export const Constants = {
         "closed",
         "cancelled",
       ],
-      project_status: ["active", "on_hold", "completed", "cancelled"],
+      project_status: [
+        "active",
+        "on_hold",
+        "completed",
+        "cancelled",
+        "deleted",
+      ],
       transaction_type: [
         "stock_in",
         "stock_out",
