@@ -490,6 +490,7 @@ export type Database = {
           created_by: string | null
           description: string | null
           end_date: string | null
+          estimated_cost: number | null
           id: string
           location: string | null
           name: string
@@ -504,6 +505,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           end_date?: string | null
+          estimated_cost?: number | null
           id?: string
           location?: string | null
           name: string
@@ -518,6 +520,7 @@ export type Database = {
           created_by?: string | null
           description?: string | null
           end_date?: string | null
+          estimated_cost?: number | null
           id?: string
           location?: string | null
           name?: string

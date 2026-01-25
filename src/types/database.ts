@@ -64,6 +64,7 @@ export interface Project {
   start_date: string | null;
   end_date: string | null;
   project_manager_id: string | null;
+  estimated_cost: number | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
