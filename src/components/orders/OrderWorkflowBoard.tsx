@@ -5,9 +5,10 @@ import { OrderCard } from './OrderCard';
 import { OrderDetailModal } from './OrderDetailModal';
 import { RejectOrderDialog } from './RejectOrderDialog';
 import { CreateOrderModal } from './CreateOrderModal';
+import { CompletedOrdersModal } from './CompletedOrdersModal';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, ArrowLeft, Loader2, XCircle, Check } from 'lucide-react';
+import { Plus, ArrowLeft, Loader2, XCircle, Check, Archive, EyeOff } from 'lucide-react';
 import { logActivity } from '@/lib/activityLogger';
 import { notifyProjectMembers } from '@/lib/notificationService';
 import type { Order, Project, OrderStatus } from '@/types/database';
@@ -17,7 +18,7 @@ interface OrderWorkflowBoardProps {
   onBack: () => void;
 }
 
-// Status lanes configuration for the workflow board
+// Status lanes configuration for the workflow board (exclude 'closed' which is hidden)
 const STATUS_LANES: { key: OrderStatus; label: string; color: string }[] = [
   { key: 'for_approval', label: 'Order Request', color: 'bg-warning/10 border-warning/30' },
   { key: 'approved', label: 'Approved', color: 'bg-success/10 border-success/30' },
@@ -36,12 +37,14 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [orderToReject, setOrderToReject] = useState<Order | null>(null);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [isCompletedModalOpen, setIsCompletedModalOpen] = useState(false);
 
   const fetchOrders = async () => {
     const { data, error } = await supabase
       .from('orders')
       .select('*')
       .eq('project_id', project.id)
+      .neq('status', 'closed') // Exclude completed/hidden orders from workflow view
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -296,6 +299,43 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     );
   }
 
+  const handleHideOrder = async (order: Order) => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from('orders')
+      .update({ status: 'closed' as OrderStatus })
+      .eq('id', order.id);
+
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      // Log activity
+      await logActivity({
+        action: 'hide',
+        tableName: 'orders',
+        recordId: order.id,
+        oldValues: { status: order.status },
+        newValues: { status: 'closed', order_number: order.order_number },
+        userId: user.id,
+      });
+
+      // Notify project members
+      await notifyProjectMembers({
+        projectId: project.id,
+        title: 'Order Completed',
+        message: `Order ${order.order_number} has been marked as completed`,
+        type: 'order',
+        referenceType: 'order',
+        referenceId: order.id,
+        excludeUserId: user.id,
+      });
+
+      toast({ title: 'Success', description: 'Order moved to Completed' });
+      fetchOrders();
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -309,10 +349,16 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
             <p className="text-sm text-muted-foreground">Order Workflow</p>
           </div>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Order
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setIsCompletedModalOpen(true)}>
+            <Archive className="mr-2 h-4 w-4" />
+            Completed
+          </Button>
+          <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Order
+          </Button>
+        </div>
       </div>
 
       {/* Workflow Board - Status Lanes */}
@@ -376,8 +422,8 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                           )}
                         </div>
                       )}
-                      {/* Move button for other statuses */}
-                      {order.status !== 'for_approval' && order.status !== 'rejected' && canMoveOrder && getNextStatus(order.status) && (
+                      {/* Move button for approved/ordered statuses */}
+                      {order.status !== 'for_approval' && order.status !== 'rejected' && order.status !== 'delivered' && canMoveOrder && getNextStatus(order.status) && (
                         <Button
                           size="sm"
                           variant="secondary"
@@ -389,6 +435,21 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                           }}
                         >
                           Move to Next →
+                        </Button>
+                      )}
+                      {/* Hide button for delivered orders */}
+                      {order.status === 'delivered' && canMoveOrder && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs h-7 bg-muted/80 hover:bg-muted"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleHideOrder(order);
+                          }}
+                        >
+                          <EyeOff className="h-3 w-3 mr-1" />
+                          Hide
                         </Button>
                       )}
                     </div>
@@ -424,6 +485,14 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         orderNumber={orderToReject?.order_number || ''}
         onConfirm={handleReject}
         isSubmitting={isRejecting}
+      />
+
+      {/* Completed Orders Modal */}
+      <CompletedOrdersModal
+        projectId={project.id}
+        projectName={project.name}
+        open={isCompletedModalOpen}
+        onOpenChange={setIsCompletedModalOpen}
       />
     </div>
   );
