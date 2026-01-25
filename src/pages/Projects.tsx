@@ -122,6 +122,25 @@ export default function Projects() {
     setIsDialogOpen(true);
   };
 
+  const handleDeleteProject = async (project: Project) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', project.id);
+
+      if (error) throw error;
+      toast({ title: 'Success', description: 'Project deleted successfully' });
+      fetchProjects();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete project',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleCloseDialog = (open: boolean) => {
     if (!open) {
       setEditingProject(null);
@@ -230,6 +249,7 @@ export default function Projects() {
               project={project}
               canEdit={isAdmin()}
               onEdit={handleEditProject}
+              onDelete={handleDeleteProject}
               onClick={() => navigate(`/projects/${project.id}`)}
             />
           ))}
