@@ -57,9 +57,11 @@ export default function Orders() {
   });
 
   const fetchData = async () => {
+    // Fetch orders with only the 5 main statuses (exclude closed, draft, etc.)
     const { data: ordersData } = await supabase
       .from('orders')
       .select('*, project:projects(*)')
+      .in('status', ['for_approval', 'approved', 'ordered', 'delivered', 'rejected'])
       .order('created_at', { ascending: false });
 
     setOrders((ordersData || []) as OrderWithProject[]);
@@ -243,6 +245,7 @@ export default function Orders() {
     },
   ];
 
+  // Simplified status options - only 5 statuses
   const statusOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'All Statuses' },
     { value: 'for_approval', label: 'Order Request' },
@@ -250,12 +253,6 @@ export default function Orders() {
     { value: 'ordered', label: 'Ordered' },
     { value: 'delivered', label: 'Delivered' },
     { value: 'rejected', label: 'Rejected' },
-    { value: 'draft', label: 'Draft' },
-    { value: 'in_transit', label: 'In Transit' },
-    { value: 'partially_received', label: 'Partially Received' },
-    { value: 'fully_received', label: 'Fully Received' },
-    { value: 'closed', label: 'Closed' },
-    { value: 'cancelled', label: 'Cancelled' },
   ];
 
   if (!loading && orders.length === 0) {
