@@ -308,6 +308,9 @@ export type Database = {
           order_number: string
           order_type: string | null
           project_id: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
           status: Database["public"]["Enums"]["order_status"] | null
           supplier_contact: string | null
           supplier_name: string | null
@@ -325,6 +328,9 @@ export type Database = {
           order_number: string
           order_type?: string | null
           project_id: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
           status?: Database["public"]["Enums"]["order_status"] | null
           supplier_contact?: string | null
           supplier_name?: string | null
@@ -342,6 +348,9 @@ export type Database = {
           order_number?: string
           order_type?: string | null
           project_id?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
           status?: Database["public"]["Enums"]["order_status"] | null
           supplier_contact?: string | null
           supplier_name?: string | null
@@ -723,6 +732,7 @@ export type Database = {
         | "fully_received"
         | "closed"
         | "cancelled"
+        | "rejected"
       project_status:
         | "active"
         | "on_hold"
@@ -884,6 +894,7 @@ export const Constants = {
         "fully_received",
         "closed",
         "cancelled",
+        "rejected",
       ],
       project_status: [
         "active",

@@ -4,8 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
+import { ProjectTeamTab } from '@/components/projects/ProjectTeamTab';
+import { ProjectActivityTab } from '@/components/projects/ProjectActivityTab';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
@@ -27,7 +29,7 @@ import {
   FileText,
   DollarSign,
 } from 'lucide-react';
-import type { Project, ProjectMember, InventoryTransaction, SKU, Profile, ProjectStatus } from '@/types/database';
+import type { Project, ProjectStatus } from '@/types/database';
 import { format, differenceInDays } from 'date-fns';
 
 // Format currency in Philippine Peso
@@ -45,11 +47,9 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
-  const [members, setMembers] = useState<(ProjectMember & { profile: Profile })[]>([]);
-  const [transactions, setTransactions] = useState<(InventoryTransaction & { sku: SKU; creator: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,55 +79,6 @@ export default function ProjectDetail() {
     }
 
     setProject(projectData as Project);
-
-    // Fetch members with profiles
-    const { data: membersData } = await supabase
-      .from('project_members')
-      .select('*')
-      .eq('project_id', id);
-
-    // Fetch profiles for members
-    if (membersData && membersData.length > 0) {
-      const userIds = membersData.map(m => m.user_id);
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', userIds);
-
-      const membersWithProfiles = membersData.map(member => ({
-        ...member,
-        profile: (profilesData || []).find(p => p.id === member.user_id) || {} as Profile,
-      }));
-      setMembers(membersWithProfiles as (ProjectMember & { profile: Profile })[]);
-    } else {
-      setMembers([]);
-    }
-
-    // Fetch recent transactions
-    const { data: transactionsData } = await supabase
-      .from('inventory_transactions')
-      .select('*, sku:skus(*)')
-      .eq('project_id', id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    // Fetch creators for transactions
-    if (transactionsData && transactionsData.length > 0) {
-      const creatorIds = [...new Set(transactionsData.map(t => t.created_by))];
-      const { data: creatorsData } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', creatorIds);
-
-      const transactionsWithCreators = transactionsData.map(tx => ({
-        ...tx,
-        creator: (creatorsData || []).find(p => p.id === tx.created_by) || {} as Profile,
-      }));
-      setTransactions(transactionsWithCreators as (InventoryTransaction & { sku: SKU; creator: Profile })[]);
-    } else {
-      setTransactions([]);
-    }
-
     setLoading(false);
   };
 
@@ -166,10 +117,11 @@ export default function ProjectDetail() {
       toast({ title: 'Success', description: 'Project updated successfully' });
       setIsEditDialogOpen(false);
       fetchProjectData();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Something went wrong';
       toast({
         title: 'Error',
-        description: error.message || 'Something went wrong',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -334,7 +286,7 @@ export default function ProjectDetail() {
         </Card>
       </div>
 
-      {/* Tabs - Only Team and Activity */}
+      {/* Tabs - Team and Activity */}
       <Tabs defaultValue="team" className="space-y-4">
         <TabsList>
           <TabsTrigger value="team" className="gap-2">
@@ -348,81 +300,11 @@ export default function ProjectDetail() {
         </TabsList>
 
         <TabsContent value="team">
-          <Card>
-            <CardHeader>
-              <CardTitle>Team Members</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {members.length > 0 ? (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {members.map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center gap-3 rounded-lg border p-4"
-                    >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        {member.profile?.full_name?.charAt(0) ||
-                          member.profile?.email?.charAt(0) ||
-                          'U'}
-                      </div>
-                      <div>
-                        <p className="font-medium">
-                          {member.profile?.full_name || 'Unknown User'}
-                        </p>
-                        <p className="text-xs capitalize text-muted-foreground">
-                          {member.role.replace('_', ' ')}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="py-8 text-center text-muted-foreground">
-                  No team members assigned yet.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <ProjectTeamTab projectId={project.id} projectName={project.name} />
         </TabsContent>
 
         <TabsContent value="activity">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {transactions.length > 0 ? (
-                <div className="space-y-4">
-                  {transactions.map((tx) => (
-                    <div
-                      key={tx.id}
-                      className="flex items-start gap-4 rounded-lg border p-4"
-                    >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 flex-shrink-0">
-                        <Activity className="h-4 w-4 text-accent-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium">
-                          {tx.transaction_type.replace('_', ' ').toUpperCase()}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {tx.sku?.name} • Qty: {tx.quantity}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          By {tx.creator?.full_name || 'Unknown'} •{' '}
-                          {format(new Date(tx.created_at), 'MMM dd, yyyy h:mm a')}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="py-8 text-center text-muted-foreground">
-                  No recent activity.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+          <ProjectActivityTab projectId={project.id} />
         </TabsContent>
       </Tabs>
 

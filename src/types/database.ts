@@ -18,7 +18,8 @@ export type OrderStatus =
   | 'partially_received'
   | 'fully_received'
   | 'closed'
-  | 'cancelled';
+  | 'cancelled'
+  | 'rejected';
 
 export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'cancelled' | 'deleted';
 
@@ -143,6 +144,9 @@ export interface Order {
   total_amount: number | null;
   approved_by: string | null;
   approved_at: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -150,6 +154,7 @@ export interface Order {
   items?: OrderItem[];
   creator?: Profile;
   approver?: Profile;
+  rejector?: Profile;
 }
 
 export interface OrderItem {
