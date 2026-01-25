@@ -14,16 +14,717 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          id: string
+          ip_address: string | null
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string
+          table_name: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id: string
+          table_name: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string
+          table_name?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      deliveries: {
+        Row: {
+          carrier: string | null
+          created_at: string | null
+          delivery_date: string | null
+          delivery_number: string
+          id: string
+          notes: string | null
+          order_id: string
+          received_by: string | null
+          received_date: string | null
+          tracking_number: string | null
+        }
+        Insert: {
+          carrier?: string | null
+          created_at?: string | null
+          delivery_date?: string | null
+          delivery_number: string
+          id?: string
+          notes?: string | null
+          order_id: string
+          received_by?: string | null
+          received_date?: string | null
+          tracking_number?: string | null
+        }
+        Update: {
+          carrier?: string | null
+          created_at?: string | null
+          delivery_date?: string | null
+          delivery_number?: string
+          id?: string
+          notes?: string | null
+          order_id?: string
+          received_by?: string | null
+          received_date?: string | null
+          tracking_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deliveries_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      delivery_items: {
+        Row: {
+          condition: string | null
+          created_at: string | null
+          delivery_id: string
+          id: string
+          notes: string | null
+          order_item_id: string
+          quantity_received: number
+        }
+        Insert: {
+          condition?: string | null
+          created_at?: string | null
+          delivery_id: string
+          id?: string
+          notes?: string | null
+          order_item_id: string
+          quantity_received: number
+        }
+        Update: {
+          condition?: string | null
+          created_at?: string | null
+          delivery_id?: string
+          id?: string
+          notes?: string | null
+          order_item_id?: string
+          quantity_received?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_items_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_items_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_transactions: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          id: string
+          notes: string | null
+          project_id: string
+          quantity: number
+          quantity_after: number
+          quantity_before: number
+          reference_id: string | null
+          reference_type: string | null
+          sku_id: string
+          transaction_type: Database["public"]["Enums"]["transaction_type"]
+          transfer_project_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          id?: string
+          notes?: string | null
+          project_id: string
+          quantity: number
+          quantity_after: number
+          quantity_before: number
+          reference_id?: string | null
+          reference_type?: string | null
+          sku_id: string
+          transaction_type: Database["public"]["Enums"]["transaction_type"]
+          transfer_project_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          id?: string
+          notes?: string | null
+          project_id?: string
+          quantity?: number
+          quantity_after?: number
+          quantity_before?: number
+          reference_id?: string | null
+          reference_type?: string | null
+          sku_id?: string
+          transaction_type?: Database["public"]["Enums"]["transaction_type"]
+          transfer_project_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transactions_sku_id_fkey"
+            columns: ["sku_id"]
+            isOneToOne: false
+            referencedRelation: "skus"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_transactions_transfer_project_id_fkey"
+            columns: ["transfer_project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          message: string
+          reference_id: string | null
+          reference_type: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message: string
+          reference_id?: string | null
+          reference_type?: string | null
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      order_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string | null
+          order_id: string
+          quantity_ordered: number
+          quantity_received: number | null
+          sku_id: string
+          unit_price: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          order_id: string
+          quantity_ordered: number
+          quantity_received?: number | null
+          sku_id: string
+          unit_price?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          order_id?: string
+          quantity_ordered?: number
+          quantity_received?: number | null
+          sku_id?: string
+          unit_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_sku_id_fkey"
+            columns: ["sku_id"]
+            isOneToOne: false
+            referencedRelation: "skus"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      orders: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string | null
+          created_by: string
+          expected_delivery_date: string | null
+          id: string
+          notes: string | null
+          order_number: string
+          order_type: string | null
+          project_id: string
+          status: Database["public"]["Enums"]["order_status"] | null
+          supplier_contact: string | null
+          supplier_name: string | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          created_by: string
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_number: string
+          order_type?: string | null
+          project_id: string
+          status?: Database["public"]["Enums"]["order_status"] | null
+          supplier_contact?: string | null
+          supplier_name?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          created_by?: string
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          order_number?: string
+          order_type?: string | null
+          project_id?: string
+          status?: Database["public"]["Enums"]["order_status"] | null
+          supplier_contact?: string | null
+          supplier_name?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          is_active: boolean | null
+          notification_preferences: Json | null
+          phone: string | null
+          sms_opt_in: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          is_active?: boolean | null
+          notification_preferences?: Json | null
+          phone?: string | null
+          sms_opt_in?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          is_active?: boolean | null
+          notification_preferences?: Json | null
+          phone?: string | null
+          sms_opt_in?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      project_inventory: {
+        Row: {
+          created_at: string | null
+          id: string
+          location_in_site: string | null
+          min_threshold: number | null
+          on_hand: number | null
+          project_id: string
+          reserved: number | null
+          sku_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          location_in_site?: string | null
+          min_threshold?: number | null
+          on_hand?: number | null
+          project_id: string
+          reserved?: number | null
+          sku_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          location_in_site?: string | null
+          min_threshold?: number | null
+          on_hand?: number | null
+          project_id?: string
+          reserved?: number | null
+          sku_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_inventory_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "project_inventory_sku_id_fkey"
+            columns: ["sku_id"]
+            isOneToOne: false
+            referencedRelation: "skus"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_members: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          project_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          project_id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          project_id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_members_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          code: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_date: string | null
+          id: string
+          location: string | null
+          name: string
+          project_manager_id: string | null
+          start_date: string | null
+          status: Database["public"]["Enums"]["project_status"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          code?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          project_manager_id?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["project_status"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          project_manager_id?: string | null
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["project_status"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      skus: {
+        Row: {
+          brand: string | null
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          default_min_threshold: number | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          sku_code: string
+          specifications: Json | null
+          unit_of_measure: string
+          updated_at: string | null
+        }
+        Insert: {
+          brand?: string | null
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          default_min_threshold?: number | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          sku_code: string
+          specifications?: Json | null
+          unit_of_measure?: string
+          updated_at?: string | null
+        }
+        Update: {
+          brand?: string | null
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          default_min_threshold?: number | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          sku_code?: string
+          specifications?: Json | null
+          unit_of_measure?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sms_logs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          event_type: string | null
+          id: string
+          message: string
+          phone_number: string
+          provider_message_id: string | null
+          recipient_user_id: string | null
+          reference_id: string | null
+          reference_type: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          event_type?: string | null
+          id?: string
+          message: string
+          phone_number: string
+          provider_message_id?: string | null
+          recipient_user_id?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          status: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          event_type?: string | null
+          id?: string
+          message?: string
+          phone_number?: string
+          provider_message_id?: string | null
+          recipient_user_id?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      sms_settings: {
+        Row: {
+          created_at: string | null
+          event_rules: Json | null
+          id: string
+          is_enabled: boolean | null
+          twilio_account_sid: string | null
+          twilio_auth_token: string | null
+          twilio_sender_number: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_rules?: Json | null
+          id?: string
+          is_enabled?: boolean | null
+          twilio_account_sid?: string | null
+          twilio_auth_token?: string | null
+          twilio_sender_number?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_rules?: Json | null
+          id?: string
+          is_enabled?: boolean | null
+          twilio_account_sid?: string | null
+          twilio_auth_token?: string | null
+          twilio_sender_number?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_project_role: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"]
+      }
+      has_project_access: {
+        Args: { _project_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "super_admin"
+        | "admin"
+        | "project_manager"
+        | "procurement"
+        | "storekeeper"
+        | "site_lead"
+        | "viewer"
+      order_status:
+        | "draft"
+        | "for_approval"
+        | "approved"
+        | "ordered"
+        | "in_transit"
+        | "delivered"
+        | "partially_received"
+        | "fully_received"
+        | "closed"
+        | "cancelled"
+      project_status: "active" | "on_hold" | "completed" | "cancelled"
+      transaction_type:
+        | "stock_in"
+        | "stock_out"
+        | "transfer_in"
+        | "transfer_out"
+        | "adjustment"
+        | "receiving"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +851,37 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "super_admin",
+        "admin",
+        "project_manager",
+        "procurement",
+        "storekeeper",
+        "site_lead",
+        "viewer",
+      ],
+      order_status: [
+        "draft",
+        "for_approval",
+        "approved",
+        "ordered",
+        "in_transit",
+        "delivered",
+        "partially_received",
+        "fully_received",
+        "closed",
+        "cancelled",
+      ],
+      project_status: ["active", "on_hold", "completed", "cancelled"],
+      transaction_type: [
+        "stock_in",
+        "stock_out",
+        "transfer_in",
+        "transfer_out",
+        "adjustment",
+        "receiving",
+      ],
+    },
   },
 } as const
