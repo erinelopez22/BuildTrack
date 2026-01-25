@@ -3,49 +3,25 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
-import { DataTable, Column } from '@/components/common/DataTable';
-import { StatusBadge } from '@/components/common/StatusBadge';
 import { EmptyState } from '@/components/common/EmptyState';
+import { ProjectCard } from '@/components/projects/ProjectCard';
+import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, FolderKanban, Search, MapPin, Calendar } from 'lucide-react';
+import { Plus, FolderKanban, Search } from 'lucide-react';
 import type { Project, ProjectStatus } from '@/types/database';
-import { format } from 'date-fns';
 
 export default function Projects() {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    name: '',
-    code: '',
-    location: '',
-    description: '',
-    status: 'active' as ProjectStatus,
-    start_date: '',
-    end_date: '',
-  });
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchProjects = async () => {
     const { data, error } = await supabase
@@ -65,91 +41,92 @@ export default function Projects() {
     fetchProjects();
   }, []);
 
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const { error } = await supabase.from('projects').insert({
-      name: formData.name,
-      code: formData.code || null,
-      location: formData.location || null,
-      description: formData.description || null,
-      status: formData.status,
-      start_date: formData.start_date || null,
-      end_date: formData.end_date || null,
-    });
+  const handleSubmit = async (data: {
+    name: string;
+    description?: string;
+    estimated_cost: number;
+    start_date?: string;
+    end_date?: string;
+    status: ProjectStatus;
+  }) => {
+    setIsSubmitting(true);
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ title: 'Success', description: 'Project created successfully' });
+    try {
+      if (editingProject) {
+        // Update existing project
+        const { error } = await supabase
+          .from('projects')
+          .update({
+            name: data.name,
+            description: data.description || null,
+            estimated_cost: data.estimated_cost,
+            start_date: data.start_date || null,
+            end_date: data.end_date || null,
+            status: data.status,
+          })
+          .eq('id', editingProject.id);
+
+        if (error) throw error;
+        toast({ title: 'Success', description: 'Project updated successfully' });
+      } else {
+        // Create new project
+        const { error } = await supabase.from('projects').insert({
+          name: data.name,
+          description: data.description || null,
+          estimated_cost: data.estimated_cost,
+          start_date: data.start_date || null,
+          end_date: data.end_date || null,
+          status: data.status,
+          created_by: user?.id,
+        });
+
+        if (error) throw error;
+        toast({ title: 'Success', description: 'Project created successfully' });
+      }
+
       setIsDialogOpen(false);
-      setFormData({
-        name: '',
-        code: '',
-        location: '',
-        description: '',
-        status: 'active',
-        start_date: '',
-        end_date: '',
-      });
+      setEditingProject(null);
       fetchProjects();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Something went wrong',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
     }
+  };
+
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project);
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = (open: boolean) => {
+    if (!open) {
+      setEditingProject(null);
+    }
+    setIsDialogOpen(open);
   };
 
   const filteredProjects = projects.filter(
     (p) =>
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.code?.toLowerCase().includes(search.toLowerCase()) ||
-      p.location?.toLowerCase().includes(search.toLowerCase())
+      p.location?.toLowerCase().includes(search.toLowerCase()) ||
+      p.description?.toLowerCase().includes(search.toLowerCase())
   );
 
-  const columns: Column<Project>[] = [
-    {
-      key: 'name',
-      header: 'Project Name',
-      render: (project) => (
-        <div>
-          <p className="font-medium">{project.name}</p>
-          {project.code && (
-            <p className="text-xs text-muted-foreground">{project.code}</p>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'location',
-      header: 'Location',
-      render: (project) => (
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <MapPin className="h-3 w-3" />
-          {project.location || '-'}
-        </div>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Status',
-      render: (project) => <StatusBadge status={project.status} />,
-    },
-    {
-      key: 'dates',
-      header: 'Timeline',
-      render: (project) => (
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <Calendar className="h-3 w-3" />
-          {project.start_date
-            ? `${format(new Date(project.start_date), 'MMM d, yyyy')}${
-                project.end_date
-                  ? ` - ${format(new Date(project.end_date), 'MMM d, yyyy')}`
-                  : ''
-              }`
-            : '-'}
-        </div>
-      ),
-    },
-  ];
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-accent border-t-transparent" />
+      </div>
+    );
+  }
 
-  if (!loading && projects.length === 0) {
+  if (projects.length === 0) {
     return (
       <div className="animate-fade-in">
         <PageHeader title="Projects" description="Manage your construction projects" />
@@ -166,6 +143,13 @@ export default function Projects() {
               : undefined
           }
         />
+        <ProjectFormModal
+          open={isDialogOpen}
+          onOpenChange={handleCloseDialog}
+          project={editingProject}
+          onSubmit={handleSubmit}
+          isSubmitting={isSubmitting}
+        />
       </div>
     );
   }
@@ -177,120 +161,10 @@ export default function Projects() {
         description="Manage your construction projects"
         action={
           isAdmin() && (
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Project
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Project</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleCreateProject} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Project Name *</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="code">Project Code</Label>
-                      <Input
-                        id="code"
-                        value={formData.code}
-                        onChange={(e) =>
-                          setFormData({ ...formData, code: e.target.value })
-                        }
-                        placeholder="PRJ-001"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="status">Status</Label>
-                      <Select
-                        value={formData.status}
-                        onValueChange={(value: ProjectStatus) =>
-                          setFormData({ ...formData, status: value })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="on_hold">On Hold</SelectItem>
-                          <SelectItem value="completed">Completed</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="location">Location</Label>
-                    <Input
-                      id="location"
-                      value={formData.location}
-                      onChange={(e) =>
-                        setFormData({ ...formData, location: e.target.value })
-                      }
-                      placeholder="123 Main St, City"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="start_date">Start Date</Label>
-                      <Input
-                        id="start_date"
-                        type="date"
-                        value={formData.start_date}
-                        onChange={(e) =>
-                          setFormData({ ...formData, start_date: e.target.value })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="end_date">End Date</Label>
-                      <Input
-                        id="end_date"
-                        type="date"
-                        value={formData.end_date}
-                        onChange={(e) =>
-                          setFormData({ ...formData, end_date: e.target.value })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea
-                      id="description"
-                      value={formData.description}
-                      onChange={(e) =>
-                        setFormData({ ...formData, description: e.target.value })
-                      }
-                      rows={3}
-                    />
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsDialogOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit">Create Project</Button>
-                  </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+            <Button onClick={() => setIsDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Project
+            </Button>
           )
         }
       />
@@ -307,12 +181,30 @@ export default function Projects() {
         </div>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filteredProjects}
-        loading={loading}
-        emptyMessage="No projects found"
-        onRowClick={(project) => navigate(`/projects/${project.id}`)}
+      {filteredProjects.length === 0 ? (
+        <div className="py-12 text-center">
+          <p className="text-muted-foreground">No projects match your search.</p>
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filteredProjects.map((project) => (
+            <ProjectCard
+              key={project.id}
+              project={project}
+              canEdit={isAdmin()}
+              onEdit={handleEditProject}
+              onClick={() => navigate(`/projects/${project.id}`)}
+            />
+          ))}
+        </div>
+      )}
+
+      <ProjectFormModal
+        open={isDialogOpen}
+        onOpenChange={handleCloseDialog}
+        project={editingProject}
+        onSubmit={handleSubmit}
+        isSubmitting={isSubmitting}
       />
     </div>
   );

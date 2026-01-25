@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -16,110 +17,181 @@ import {
   Activity,
   MapPin,
   Calendar,
+  DollarSign,
+  Pencil,
+  ShoppingCart,
 } from 'lucide-react';
-import type { Project, ProjectInventory, Order, ProjectMember, InventoryTransaction, SKU, Profile } from '@/types/database';
-import { format } from 'date-fns';
+import type { Project, ProjectInventory, Order, ProjectMember, InventoryTransaction, SKU, Profile, ProjectStatus } from '@/types/database';
+import { format, differenceInDays } from 'date-fns';
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { isAdmin, user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [inventory, setInventory] = useState<(ProjectInventory & { sku: SKU })[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [members, setMembers] = useState<(ProjectMember & { profile: Profile })[]>([]);
   const [transactions, setTransactions] = useState<(InventoryTransaction & { sku: SKU; creator: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    async function fetchProjectData() {
-      if (!id) return;
+  const fetchProjectData = async () => {
+    if (!id) return;
 
-      // Fetch project
-      const { data: projectData, error: projectError } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', id)
-        .single();
+    // Fetch project
+    const { data: projectData, error: projectError } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
 
-      if (projectError) {
-        toast({ title: 'Error', description: 'Project not found', variant: 'destructive' });
-        navigate('/projects');
-        return;
-      }
-
-      setProject(projectData as Project);
-
-      // Fetch inventory
-      const { data: inventoryData } = await supabase
-        .from('project_inventory')
-        .select('*, sku:skus(*)')
-        .eq('project_id', id);
-
-      setInventory((inventoryData || []) as (ProjectInventory & { sku: SKU })[]);
-
-      // Fetch orders
-      const { data: ordersData } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('project_id', id)
-        .order('created_at', { ascending: false });
-
-      setOrders((ordersData || []) as Order[]);
-
-      // Fetch members with profiles
-      const { data: membersData } = await supabase
-        .from('project_members')
-        .select('*')
-        .eq('project_id', id);
-
-      // Fetch profiles for members
-      if (membersData && membersData.length > 0) {
-        const userIds = membersData.map(m => m.user_id);
-        const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', userIds);
-
-        const membersWithProfiles = membersData.map(member => ({
-          ...member,
-          profile: (profilesData || []).find(p => p.id === member.user_id) || {} as Profile,
-        }));
-        setMembers(membersWithProfiles as (ProjectMember & { profile: Profile })[]);
-      } else {
-        setMembers([]);
-      }
-
-      // Fetch recent transactions
-      const { data: transactionsData } = await supabase
-        .from('inventory_transactions')
-        .select('*, sku:skus(*)')
-        .eq('project_id', id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      // Fetch creators for transactions
-      if (transactionsData && transactionsData.length > 0) {
-        const creatorIds = [...new Set(transactionsData.map(t => t.created_by))];
-        const { data: creatorsData } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', creatorIds);
-
-        const transactionsWithCreators = transactionsData.map(tx => ({
-          ...tx,
-          creator: (creatorsData || []).find(p => p.id === tx.created_by) || {} as Profile,
-        }));
-        setTransactions(transactionsWithCreators as (InventoryTransaction & { sku: SKU; creator: Profile })[]);
-      } else {
-        setTransactions([]);
-      }
-
-      setLoading(false);
+    if (projectError || !projectData) {
+      toast({ title: 'Error', description: 'Project not found', variant: 'destructive' });
+      navigate('/projects');
+      return;
     }
 
+    setProject(projectData as Project);
+
+    // Fetch inventory
+    const { data: inventoryData } = await supabase
+      .from('project_inventory')
+      .select('*, sku:skus(*)')
+      .eq('project_id', id);
+
+    setInventory((inventoryData || []) as (ProjectInventory & { sku: SKU })[]);
+
+    // Fetch orders
+    const { data: ordersData } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('project_id', id)
+      .order('created_at', { ascending: false });
+
+    setOrders((ordersData || []) as Order[]);
+
+    // Fetch members with profiles
+    const { data: membersData } = await supabase
+      .from('project_members')
+      .select('*')
+      .eq('project_id', id);
+
+    // Fetch profiles for members
+    if (membersData && membersData.length > 0) {
+      const userIds = membersData.map(m => m.user_id);
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', userIds);
+
+      const membersWithProfiles = membersData.map(member => ({
+        ...member,
+        profile: (profilesData || []).find(p => p.id === member.user_id) || {} as Profile,
+      }));
+      setMembers(membersWithProfiles as (ProjectMember & { profile: Profile })[]);
+    } else {
+      setMembers([]);
+    }
+
+    // Fetch recent transactions
+    const { data: transactionsData } = await supabase
+      .from('inventory_transactions')
+      .select('*, sku:skus(*)')
+      .eq('project_id', id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    // Fetch creators for transactions
+    if (transactionsData && transactionsData.length > 0) {
+      const creatorIds = [...new Set(transactionsData.map(t => t.created_by))];
+      const { data: creatorsData } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', creatorIds);
+
+      const transactionsWithCreators = transactionsData.map(tx => ({
+        ...tx,
+        creator: (creatorsData || []).find(p => p.id === tx.created_by) || {} as Profile,
+      }));
+      setTransactions(transactionsWithCreators as (InventoryTransaction & { sku: SKU; creator: Profile })[]);
+    } else {
+      setTransactions([]);
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
     fetchProjectData();
   }, [id, navigate, toast]);
+
+  const handleEditSubmit = async (data: {
+    name: string;
+    description?: string;
+    estimated_cost: number;
+    start_date?: string;
+    end_date?: string;
+    status: ProjectStatus;
+  }) => {
+    if (!project) return;
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          name: data.name,
+          description: data.description || null,
+          estimated_cost: data.estimated_cost,
+          start_date: data.start_date || null,
+          end_date: data.end_date || null,
+          status: data.status,
+        })
+        .eq('id', project.id);
+
+      if (error) throw error;
+      toast({ title: 'Success', description: 'Project updated successfully' });
+      setIsEditDialogOpen(false);
+      fetchProjectData();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Something went wrong',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCheckOrders = () => {
+    toast({
+      title: 'Coming Soon',
+      description: 'Order management functionality is coming soon!',
+    });
+  };
+
+  const formatCurrency = (amount: number | null | undefined) => {
+    if (amount == null) return '$0';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const getDurationDisplay = () => {
+    if (!project) return '-';
+    if (project.start_date && project.end_date) {
+      const days = differenceInDays(new Date(project.end_date), new Date(project.start_date));
+      return `${days} days`;
+    }
+    return '-';
+  };
 
   if (loading || !project) {
     return (
@@ -148,10 +220,16 @@ export default function ProjectDetail() {
           />
         </div>
         <StatusBadge status={project.status} />
+        {isAdmin() && (
+          <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        )}
       </div>
 
       {/* Project Info Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
             <div className="rounded-lg bg-primary/10 p-2">
@@ -165,23 +243,30 @@ export default function ProjectDetail() {
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-accent/10 p-2">
-              <Calendar className="h-5 w-5 text-accent" />
+            <div className="rounded-lg bg-success/10 p-2">
+              <DollarSign className="h-5 w-5 text-success" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Timeline</p>
-              <p className="font-medium">
-                {project.start_date
-                  ? format(new Date(project.start_date), 'MMM d, yyyy')
-                  : 'Not set'}
-              </p>
+              <p className="text-xs text-muted-foreground">Estimated Cost</p>
+              <p className="font-medium">{formatCurrency(project.estimated_cost)}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-success/10 p-2">
-              <Package className="h-5 w-5 text-success" />
+            <div className="rounded-lg bg-accent/10 p-2">
+              <Calendar className="h-5 w-5 text-accent" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Duration</p>
+              <p className="font-medium">{getDurationDisplay()}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex items-center gap-3 p-4">
+            <div className="rounded-lg bg-primary/10 p-2">
+              <Package className="h-5 w-5 text-primary" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Inventory Items</p>
@@ -202,6 +287,14 @@ export default function ProjectDetail() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Check Orders Button */}
+      <div className="flex justify-end">
+        <Button onClick={handleCheckOrders}>
+          <ShoppingCart className="mr-2 h-4 w-4" />
+          Check Orders
+        </Button>
       </div>
 
       {/* Tabs */}
@@ -414,6 +507,15 @@ export default function ProjectDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Project Modal */}
+      <ProjectFormModal
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        project={project}
+        onSubmit={handleEditSubmit}
+        isSubmitting={isSubmitting}
+      />
     </div>
   );
 }
