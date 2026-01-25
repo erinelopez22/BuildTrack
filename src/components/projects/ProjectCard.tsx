@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Calendar, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { Calendar, MoreVertical, Pencil, Trash2, RotateCcw } from 'lucide-react';
 import { differenceInDays, format } from 'date-fns';
 import type { Project } from '@/types/database';
 
@@ -26,8 +26,10 @@ interface ProjectCardProps {
   project: Project;
   onEdit?: (project: Project) => void;
   onDelete?: (project: Project) => void;
+  onRestore?: (project: Project) => void;
   onClick?: () => void;
   canEdit?: boolean;
+  canRestore?: boolean;
 }
 
 // Format currency in Philippine Peso
@@ -41,7 +43,15 @@ const formatPHP = (amount: number | null | undefined) => {
   }).format(amount);
 };
 
-export function ProjectCard({ project, onEdit, onDelete, onClick, canEdit }: ProjectCardProps) {
+export function ProjectCard({ 
+  project, 
+  onEdit, 
+  onDelete, 
+  onRestore, 
+  onClick, 
+  canEdit, 
+  canRestore 
+}: ProjectCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const getDurationDays = () => {
@@ -61,6 +71,7 @@ export function ProjectCard({ project, onEdit, onDelete, onClick, canEdit }: Pro
   };
 
   const durationDays = getDurationDays();
+  const isDeleted = project.status === 'deleted';
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Prevent click if clicking on dropdown
@@ -78,7 +89,9 @@ export function ProjectCard({ project, onEdit, onDelete, onClick, canEdit }: Pro
   return (
     <>
       <Card
-        className="group relative cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary/30 bg-card"
+        className={`group relative cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary/30 bg-card ${
+          isDeleted ? 'opacity-70 border-destructive/30' : ''
+        }`}
         onClick={handleCardClick}
       >
         <CardContent className="p-5">
@@ -90,7 +103,7 @@ export function ProjectCard({ project, onEdit, onDelete, onClick, canEdit }: Pro
               </h3>
             </div>
             
-            {canEdit && (
+            {(canEdit || canRestore) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -104,7 +117,19 @@ export function ProjectCard({ project, onEdit, onDelete, onClick, canEdit }: Pro
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-popover z-50">
-                  {onEdit && (
+                  {canRestore && onRestore && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRestore(project);
+                      }}
+                      className="text-success focus:text-success"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Restore Project
+                    </DropdownMenuItem>
+                  )}
+                  {canEdit && !isDeleted && onEdit && (
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
@@ -115,7 +140,7 @@ export function ProjectCard({ project, onEdit, onDelete, onClick, canEdit }: Pro
                       Edit Project
                     </DropdownMenuItem>
                   )}
-                  {onDelete && (
+                  {canEdit && !isDeleted && onDelete && (
                     <DropdownMenuItem
                       onClick={(e) => {
                         e.stopPropagation();
@@ -170,7 +195,7 @@ export function ProjectCard({ project, onEdit, onDelete, onClick, canEdit }: Pro
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Project</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{project.name}"? This action cannot be undone and will permanently remove the project and all associated data.
+              Are you sure you want to delete "{project.name}"? The project will be moved to deleted status and can be restored by a Super Admin.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

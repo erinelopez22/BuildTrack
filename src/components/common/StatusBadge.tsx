@@ -19,6 +19,7 @@ const statusStyles: Record<Status, string> = {
   active: 'bg-success/10 text-success',
   on_hold: 'bg-warning/10 text-warning',
   completed: 'bg-muted text-muted-foreground',
+  deleted: 'bg-destructive/10 text-destructive',
   // Inventory statuses
   ok: 'bg-success/10 text-success',
   low: 'bg-warning/10 text-warning',
@@ -39,6 +40,7 @@ const statusLabels: Record<Status, string> = {
   active: 'Active',
   on_hold: 'On Hold',
   completed: 'Completed',
+  deleted: 'Deleted',
   ok: 'OK',
   low: 'Low Stock',
   critical: 'Critical',
