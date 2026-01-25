@@ -22,6 +22,7 @@ const roleLabels: Record<AppRole, string> = {
   storekeeper: 'Storekeeper',
   site_lead: 'Site Lead',
   viewer: 'Viewer',
+  approver: 'Approver',
 };
 
 const eventLabels: Record<string, string> = {

@@ -38,11 +38,13 @@ const roleLabels: Record<AppRole, string> = {
   storekeeper: 'Storekeeper',
   site_lead: 'Site Lead',
   viewer: 'Viewer',
+  approver: 'Approver',
 };
 
 const roleOptions: AppRole[] = [
   'super_admin',
   'admin',
+  'approver',
   'project_manager',
   'procurement',
   'storekeeper',

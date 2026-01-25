@@ -37,6 +37,7 @@ import { CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Project, ProjectStatus } from '@/types/database';
 
+// Form schema excludes 'deleted' status - that's system-managed
 const projectFormSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(200, 'Name must be less than 200 characters'),
   description: z.string().max(2000, 'Description must be less than 2000 characters').optional(),
@@ -53,6 +54,8 @@ const projectFormSchema = z.object({
   message: 'End date must be later than start date',
   path: ['end_date'],
 });
+
+type FormStatusType = 'active' | 'on_hold' | 'completed' | 'cancelled';
 
 type ProjectFormValues = z.infer<typeof projectFormSchema>;
 
@@ -72,7 +75,7 @@ interface ProjectFormModalProps {
   isSubmitting?: boolean;
 }
 
-const statusOptions: { value: ProjectStatus; label: string }[] = [
+const statusOptions: { value: FormStatusType; label: string }[] = [
   { value: 'active', label: 'Active' },
   { value: 'on_hold', label: 'On hold' },
   { value: 'completed', label: 'Completed' },
@@ -115,6 +118,9 @@ export function ProjectFormModal({
   useEffect(() => {
     if (open) {
       if (project) {
+        // For form purposes, treat 'deleted' as 'cancelled' since it shouldn't be editable
+        const safeStatus: FormStatusType = 
+          project.status === 'deleted' ? 'cancelled' : (project.status as FormStatusType);
         form.reset({
           name: project.name,
           description: project.description || '',
@@ -122,7 +128,7 @@ export function ProjectFormModal({
           estimated_cost: project.estimated_cost || 0,
           start_date: project.start_date ? new Date(project.start_date) : undefined,
           end_date: project.end_date ? new Date(project.end_date) : undefined,
-          status: project.status,
+          status: safeStatus,
         });
       } else {
         form.reset({

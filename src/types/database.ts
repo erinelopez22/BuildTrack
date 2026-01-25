@@ -5,7 +5,8 @@ export type AppRole =
   | 'procurement' 
   | 'storekeeper' 
   | 'site_lead' 
-  | 'viewer';
+  | 'viewer'
+  | 'approver';
 
 export type OrderStatus = 
   | 'draft'
@@ -19,7 +20,7 @@ export type OrderStatus =
   | 'closed'
   | 'cancelled';
 
-export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'cancelled';
+export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'cancelled' | 'deleted';
 
 export type TransactionType = 
   | 'stock_in'

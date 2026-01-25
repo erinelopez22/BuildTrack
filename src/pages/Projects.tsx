@@ -19,17 +19,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, FolderKanban, Search } from 'lucide-react';
 import type { Project, ProjectStatus } from '@/types/database';
 
-const statusFilterOptions: { value: string; label: string }[] = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'active', label: 'Active' },
-  { value: 'on_hold', label: 'On hold' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
-
 export default function Projects() {
   const navigate = useNavigate();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, isSuperAdmin, user } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,11 +31,28 @@ export default function Projects() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Super Admin can see deleted projects, others cannot
+  const statusFilterOptions: { value: string; label: string }[] = [
+    { value: 'all', label: 'All Statuses' },
+    { value: 'active', label: 'Active' },
+    { value: 'on_hold', label: 'On hold' },
+    { value: 'completed', label: 'Completed' },
+    { value: 'cancelled', label: 'Cancelled' },
+    ...(isSuperAdmin() ? [{ value: 'deleted', label: 'Deleted' }] : []),
+  ];
+
   const fetchProjects = async () => {
-    const { data, error } = await supabase
+    let query = supabase
       .from('projects')
       .select('*')
       .order('created_at', { ascending: false });
+
+    // Non-super-admins should never see deleted projects
+    if (!isSuperAdmin()) {
+      query = query.neq('status', 'deleted');
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -122,20 +131,41 @@ export default function Projects() {
     setIsDialogOpen(true);
   };
 
+  // Soft delete: set status to 'deleted' instead of removing
   const handleDeleteProject = async (project: Project) => {
     try {
       const { error } = await supabase
         .from('projects')
-        .delete()
+        .update({ status: 'deleted' as ProjectStatus })
         .eq('id', project.id);
 
       if (error) throw error;
-      toast({ title: 'Success', description: 'Project deleted successfully' });
+      toast({ title: 'Success', description: 'Project moved to deleted' });
       fetchProjects();
     } catch (error: any) {
       toast({
         title: 'Error',
         description: error.message || 'Failed to delete project',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Restore a deleted project (Super Admin only)
+  const handleRestoreProject = async (project: Project) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ status: 'active' as ProjectStatus })
+        .eq('id', project.id);
+
+      if (error) throw error;
+      toast({ title: 'Success', description: 'Project restored successfully' });
+      fetchProjects();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to restore project',
         variant: 'destructive',
       });
     }
@@ -248,8 +278,10 @@ export default function Projects() {
               key={project.id}
               project={project}
               canEdit={isAdmin()}
+              canRestore={isSuperAdmin() && project.status === 'deleted'}
               onEdit={handleEditProject}
               onDelete={handleDeleteProject}
+              onRestore={handleRestoreProject}
               onClick={() => navigate(`/projects/${project.id}`)}
             />
           ))}
