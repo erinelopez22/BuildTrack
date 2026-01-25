@@ -7,9 +7,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { DollarSign, Calendar, MoreVertical, Pencil } from 'lucide-react';
+import { Calendar, MoreVertical, Pencil, MapPin } from 'lucide-react';
 import { differenceInDays, format } from 'date-fns';
-import type { Project, ProjectStatus } from '@/types/database';
+import type { Project } from '@/types/database';
 
 interface ProjectCardProps {
   project: Project;
@@ -18,34 +18,35 @@ interface ProjectCardProps {
   canEdit?: boolean;
 }
 
-const statusDisplayMap: Record<ProjectStatus, string> = {
-  active: 'In-progress',
-  on_hold: 'On hold',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
+// Format currency in Philippine Peso
+const formatPHP = (amount: number | null | undefined) => {
+  if (amount == null) return '₱0.00';
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
 };
 
 export function ProjectCard({ project, onEdit, onClick, canEdit }: ProjectCardProps) {
-  const getDurationDisplay = () => {
+  const getDurationDays = () => {
     if (project.start_date && project.end_date) {
-      const days = differenceInDays(new Date(project.end_date), new Date(project.start_date));
-      return `${days} days`;
+      return differenceInDays(new Date(project.end_date), new Date(project.start_date));
     }
-    if (project.start_date) {
-      return `Started ${format(new Date(project.start_date), 'MMM d, yyyy')}`;
-    }
-    return 'Not scheduled';
+    return null;
   };
 
-  const formatCurrency = (amount: number | null | undefined) => {
-    if (amount == null) return '$0';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+  const getDateRangeDisplay = () => {
+    if (project.start_date && project.end_date) {
+      const start = format(new Date(project.start_date), 'MMM dd, yyyy');
+      const end = format(new Date(project.end_date), 'MMM dd, yyyy');
+      return `${start} – ${end}`;
+    }
+    return 'No dates set';
   };
+
+  const durationDays = getDurationDays();
 
   const handleCardClick = (e: React.MouseEvent) => {
     // Prevent click if clicking on dropdown
@@ -62,13 +63,16 @@ export function ProjectCard({ project, onEdit, onClick, canEdit }: ProjectCardPr
     >
       <CardContent className="p-5">
         {/* Header with title and menu */}
-        <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex-1 min-w-0">
             <h3 className="font-semibold text-lg text-foreground truncate group-hover:text-primary transition-colors">
               {project.name}
             </h3>
-            {project.code && (
-              <p className="text-xs text-muted-foreground font-mono mt-0.5">{project.code}</p>
+            {project.location && (
+              <div className="flex items-center gap-1 mt-1 text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                <p className="text-xs truncate">{project.location}</p>
+              </div>
             )}
           </div>
           
@@ -107,27 +111,28 @@ export function ProjectCard({ project, onEdit, onClick, canEdit }: ProjectCardPr
           </p>
         )}
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="flex items-center gap-2 text-sm">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-success/10">
-              <DollarSign className="h-4 w-4 text-success" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Est. Cost</p>
-              <p className="font-medium text-foreground">
-                {formatCurrency(project.estimated_cost)}
-              </p>
-            </div>
+        {/* Stats */}
+        <div className="space-y-3 mb-4">
+          {/* Estimated Cost */}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Estimated Cost</span>
+            <span className="font-semibold text-foreground">
+              {formatPHP(project.estimated_cost)}
+            </span>
           </div>
+
+          {/* Duration */}
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Duration</span>
+            <span className="font-medium text-foreground">
+              {durationDays !== null ? `${durationDays} days` : '—'}
+            </span>
+          </div>
+
+          {/* Date Range */}
           <div className="flex items-center gap-2 text-sm">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-              <Calendar className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Duration</p>
-              <p className="font-medium text-foreground">{getDurationDisplay()}</p>
-            </div>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="text-muted-foreground">{getDateRangeDisplay()}</span>
           </div>
         </div>
 
