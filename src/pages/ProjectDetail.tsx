@@ -8,6 +8,13 @@ import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft,
@@ -17,12 +24,24 @@ import {
   Activity,
   MapPin,
   Calendar,
-  DollarSign,
   Pencil,
   ShoppingCart,
+  Clock,
+  ChevronsUpDown,
 } from 'lucide-react';
 import type { Project, ProjectInventory, Order, ProjectMember, InventoryTransaction, SKU, Profile, ProjectStatus } from '@/types/database';
 import { format, differenceInDays } from 'date-fns';
+
+// Format currency in Philippine Peso
+const formatPHP = (amount: number | null | undefined) => {
+  if (amount == null) return '₱0.00';
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+};
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +49,7 @@ export default function ProjectDetail() {
   const { toast } = useToast();
   const { isAdmin, user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [inventory, setInventory] = useState<(ProjectInventory & { sku: SKU })[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [members, setMembers] = useState<(ProjectMember & { profile: Profile })[]>([]);
@@ -37,6 +57,14 @@ export default function ProjectDetail() {
   const [loading, setLoading] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const fetchAllProjects = async () => {
+    const { data } = await supabase
+      .from('projects')
+      .select('id, name, status')
+      .order('name', { ascending: true });
+    setAllProjects((data || []) as Project[]);
+  };
 
   const fetchProjectData = async () => {
     if (!id) return;
@@ -125,15 +153,17 @@ export default function ProjectDetail() {
   };
 
   useEffect(() => {
+    fetchAllProjects();
     fetchProjectData();
   }, [id, navigate, toast]);
 
   const handleEditSubmit = async (data: {
     name: string;
     description?: string;
+    location: string;
     estimated_cost: number;
-    start_date?: string;
-    end_date?: string;
+    start_date: string;
+    end_date: string;
     status: ProjectStatus;
   }) => {
     if (!project) return;
@@ -145,9 +175,10 @@ export default function ProjectDetail() {
         .update({
           name: data.name,
           description: data.description || null,
+          location: data.location,
           estimated_cost: data.estimated_cost,
-          start_date: data.start_date || null,
-          end_date: data.end_date || null,
+          start_date: data.start_date,
+          end_date: data.end_date,
           status: data.status,
         })
         .eq('id', project.id);
@@ -174,23 +205,27 @@ export default function ProjectDetail() {
     });
   };
 
-  const formatCurrency = (amount: number | null | undefined) => {
-    if (amount == null) return '$0';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
+  const handleProjectSwitch = (projectId: string) => {
+    navigate(`/projects/${projectId}`);
   };
 
   const getDurationDisplay = () => {
-    if (!project) return '-';
+    if (!project) return '—';
     if (project.start_date && project.end_date) {
       const days = differenceInDays(new Date(project.end_date), new Date(project.start_date));
       return `${days} days`;
     }
-    return '-';
+    return '—';
+  };
+
+  const getDateRangeDisplay = () => {
+    if (!project) return '—';
+    if (project.start_date && project.end_date) {
+      const start = format(new Date(project.start_date), 'MMM dd, yyyy');
+      const end = format(new Date(project.end_date), 'MMM dd, yyyy');
+      return `${start} – ${end}`;
+    }
+    return 'No dates set';
   };
 
   if (loading || !project) {
@@ -209,22 +244,49 @@ export default function ProjectDetail() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div className="flex items-center gap-4">
+      {/* Header with Project Switcher */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate('/projects')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div className="flex-1">
-          <PageHeader
-            title={project.name}
-            description={project.description || undefined}
-          />
+
+        {/* Project Switcher Dropdown */}
+        <div className="flex-1 min-w-0">
+          <Select value={project.id} onValueChange={handleProjectSwitch}>
+            <SelectTrigger className="w-full max-w-xs bg-background">
+              <div className="flex items-center gap-2">
+                <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
+                <SelectValue placeholder="Select project" />
+              </div>
+            </SelectTrigger>
+            <SelectContent className="bg-popover z-50 max-h-64">
+              {allProjects.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate">{p.name}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <StatusBadge status={project.status} />
-        {isAdmin() && (
-          <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
+
+        <div className="flex items-center gap-2">
+          <StatusBadge status={project.status} />
+          {isAdmin() && (
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Project Title and Description */}
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
+        {project.description && (
+          <p className="mt-1 text-muted-foreground">{project.description}</p>
         )}
       </div>
 
@@ -235,29 +297,29 @@ export default function ProjectDetail() {
             <div className="rounded-lg bg-primary/10 p-2">
               <MapPin className="h-5 w-5 text-primary" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Location</p>
-              <p className="font-medium">{project.location || 'Not set'}</p>
+              <p className="font-medium truncate">{project.location || 'Not set'}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
             <div className="rounded-lg bg-success/10 p-2">
-              <DollarSign className="h-5 w-5 text-success" />
+              <span className="text-success font-bold text-lg">₱</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Estimated Cost</p>
-              <p className="font-medium">{formatCurrency(project.estimated_cost)}</p>
+              <p className="font-medium">{formatPHP(project.estimated_cost)}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
             <div className="rounded-lg bg-accent/10 p-2">
-              <Calendar className="h-5 w-5 text-accent" />
+              <Clock className="h-5 w-5 text-accent" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Duration</p>
               <p className="font-medium">{getDurationDisplay()}</p>
             </div>
@@ -266,11 +328,11 @@ export default function ProjectDetail() {
         <Card>
           <CardContent className="flex items-center gap-3 p-4">
             <div className="rounded-lg bg-primary/10 p-2">
-              <Package className="h-5 w-5 text-primary" />
+              <Calendar className="h-5 w-5 text-primary" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Inventory Items</p>
-              <p className="font-medium">{inventory.length}</p>
+            <div className="min-w-0">
+              <p className="text-xs text-muted-foreground">Date Range</p>
+              <p className="font-medium text-sm">{getDateRangeDisplay()}</p>
             </div>
           </CardContent>
         </Card>
@@ -279,7 +341,7 @@ export default function ProjectDetail() {
             <div className="rounded-lg bg-warning/10 p-2">
               <ClipboardList className="h-5 w-5 text-warning" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-muted-foreground">Open Orders</p>
               <p className="font-medium">
                 {orders.filter((o) => !['closed', 'cancelled'].includes(o.status)).length}
@@ -400,13 +462,11 @@ export default function ProjectDetail() {
                           </td>
                           <td className="py-3 pr-4 text-muted-foreground">
                             {order.expected_delivery_date
-                              ? format(new Date(order.expected_delivery_date), 'MMM d, yyyy')
+                              ? format(new Date(order.expected_delivery_date), 'MMM dd, yyyy')
                               : '-'}
                           </td>
                           <td className="py-3 text-right">
-                            {order.total_amount
-                              ? `$${order.total_amount.toLocaleString()}`
-                              : '-'}
+                            {order.total_amount ? formatPHP(order.total_amount) : '-'}
                           </td>
                         </tr>
                       ))}
@@ -474,33 +534,26 @@ export default function ProjectDetail() {
                       className="flex items-start gap-4 rounded-lg border p-4"
                     >
                       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10">
-                        <Package className="h-4 w-4 text-accent" />
+                        <Activity className="h-4 w-4 text-accent" />
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <p className="font-medium">
-                          {tx.transaction_type.replace('_', ' ').toUpperCase()}:{' '}
-                          {tx.sku?.name}
+                          {tx.transaction_type.replace('_', ' ').toUpperCase()}
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          Qty: {tx.quantity} | Before: {tx.quantity_before} → After:{' '}
-                          {tx.quantity_after}
+                        <p className="text-sm text-muted-foreground truncate">
+                          {tx.sku?.name} • Qty: {tx.quantity}
                         </p>
-                        {tx.notes && (
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            Note: {tx.notes}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground">
-                        <p>{tx.creator?.full_name || 'Unknown'}</p>
-                        <p>{format(new Date(tx.created_at), 'MMM d, h:mm a')}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          By {tx.creator?.full_name || 'Unknown'} •{' '}
+                          {format(new Date(tx.created_at), 'MMM dd, yyyy h:mm a')}
+                        </p>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className="py-8 text-center text-muted-foreground">
-                  No activity yet.
+                  No recent activity.
                 </p>
               )}
             </CardContent>
@@ -508,7 +561,6 @@ export default function ProjectDetail() {
         </TabsContent>
       </Tabs>
 
-      {/* Edit Project Modal */}
       <ProjectFormModal
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}

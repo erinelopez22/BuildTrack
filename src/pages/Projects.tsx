@@ -8,9 +8,24 @@ import { ProjectCard } from '@/components/projects/ProjectCard';
 import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, FolderKanban, Search } from 'lucide-react';
 import type { Project, ProjectStatus } from '@/types/database';
+
+const statusFilterOptions: { value: string; label: string }[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'on_hold', label: 'On hold' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
 
 export default function Projects() {
   const navigate = useNavigate();
@@ -19,6 +34,7 @@ export default function Projects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,9 +60,10 @@ export default function Projects() {
   const handleSubmit = async (data: {
     name: string;
     description?: string;
+    location: string;
     estimated_cost: number;
-    start_date?: string;
-    end_date?: string;
+    start_date: string;
+    end_date: string;
     status: ProjectStatus;
   }) => {
     setIsSubmitting(true);
@@ -59,9 +76,10 @@ export default function Projects() {
           .update({
             name: data.name,
             description: data.description || null,
+            location: data.location,
             estimated_cost: data.estimated_cost,
-            start_date: data.start_date || null,
-            end_date: data.end_date || null,
+            start_date: data.start_date,
+            end_date: data.end_date,
             status: data.status,
           })
           .eq('id', editingProject.id);
@@ -73,9 +91,10 @@ export default function Projects() {
         const { error } = await supabase.from('projects').insert({
           name: data.name,
           description: data.description || null,
+          location: data.location,
           estimated_cost: data.estimated_cost,
-          start_date: data.start_date || null,
-          end_date: data.end_date || null,
+          start_date: data.start_date,
+          end_date: data.end_date,
           status: data.status,
           created_by: user?.id,
         });
@@ -110,13 +129,18 @@ export default function Projects() {
     setIsDialogOpen(open);
   };
 
-  const filteredProjects = projects.filter(
-    (p) =>
+  // Filter by search and status
+  const filteredProjects = projects.filter((p) => {
+    const matchesSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.code?.toLowerCase().includes(search.toLowerCase()) ||
       p.location?.toLowerCase().includes(search.toLowerCase()) ||
-      p.description?.toLowerCase().includes(search.toLowerCase())
-  );
+      p.description?.toLowerCase().includes(search.toLowerCase());
+
+    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   if (loading) {
     return (
@@ -169,7 +193,8 @@ export default function Projects() {
         }
       />
 
-      <div className="flex items-center gap-4">
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -179,11 +204,23 @@ export default function Projects() {
             className="pl-9"
           />
         </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent className="bg-popover z-50">
+            {statusFilterOptions.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {filteredProjects.length === 0 ? (
         <div className="py-12 text-center">
-          <p className="text-muted-foreground">No projects match your search.</p>
+          <p className="text-muted-foreground">No projects match your search or filter.</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
