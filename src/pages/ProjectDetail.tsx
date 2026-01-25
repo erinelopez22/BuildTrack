@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { PageHeader } from '@/components/common/PageHeader';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
 import { Button } from '@/components/ui/button';
@@ -18,18 +17,17 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   ArrowLeft,
-  Package,
-  ClipboardList,
   Users,
   Activity,
   MapPin,
   Calendar,
   Pencil,
-  ShoppingCart,
   Clock,
   ChevronsUpDown,
+  FileText,
+  DollarSign,
 } from 'lucide-react';
-import type { Project, ProjectInventory, Order, ProjectMember, InventoryTransaction, SKU, Profile, ProjectStatus } from '@/types/database';
+import type { Project, ProjectMember, InventoryTransaction, SKU, Profile, ProjectStatus } from '@/types/database';
 import { format, differenceInDays } from 'date-fns';
 
 // Format currency in Philippine Peso
@@ -50,8 +48,6 @@ export default function ProjectDetail() {
   const { isAdmin, user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
-  const [inventory, setInventory] = useState<(ProjectInventory & { sku: SKU })[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [members, setMembers] = useState<(ProjectMember & { profile: Profile })[]>([]);
   const [transactions, setTransactions] = useState<(InventoryTransaction & { sku: SKU; creator: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,23 +79,6 @@ export default function ProjectDetail() {
     }
 
     setProject(projectData as Project);
-
-    // Fetch inventory
-    const { data: inventoryData } = await supabase
-      .from('project_inventory')
-      .select('*, sku:skus(*)')
-      .eq('project_id', id);
-
-    setInventory((inventoryData || []) as (ProjectInventory & { sku: SKU })[]);
-
-    // Fetch orders
-    const { data: ordersData } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('project_id', id)
-      .order('created_at', { ascending: false });
-
-    setOrders((ordersData || []) as Order[]);
 
     // Fetch members with profiles
     const { data: membersData } = await supabase
@@ -198,13 +177,6 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleCheckOrders = () => {
-    toast({
-      title: 'Coming Soon',
-      description: 'Order management functionality is coming soon!',
-    });
-  };
-
   const handleProjectSwitch = (projectId: string) => {
     navigate(`/projects/${projectId}`);
   };
@@ -218,14 +190,9 @@ export default function ProjectDetail() {
     return '—';
   };
 
-  const getDateRangeDisplay = () => {
-    if (!project) return '—';
-    if (project.start_date && project.end_date) {
-      const start = format(new Date(project.start_date), 'MMM dd, yyyy');
-      const end = format(new Date(project.end_date), 'MMM dd, yyyy');
-      return `${start} – ${end}`;
-    }
-    return 'No dates set';
+  const formatDate = (date: string | null | undefined) => {
+    if (!date) return '—';
+    return format(new Date(date), 'MMM dd, yyyy');
   };
 
   if (loading || !project) {
@@ -235,12 +202,6 @@ export default function ProjectDetail() {
       </div>
     );
   }
-
-  const getInventoryStatus = (item: ProjectInventory) => {
-    if (item.on_hand <= 0) return 'critical';
-    if (item.min_threshold && item.on_hand <= item.min_threshold) return 'low';
-    return 'ok';
-  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -283,93 +244,99 @@ export default function ProjectDetail() {
       </div>
 
       {/* Project Title and Description */}
-      <div>
+      <div className="space-y-2">
         <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
         {project.description && (
-          <p className="mt-1 text-muted-foreground">{project.description}</p>
+          <p className="text-muted-foreground whitespace-pre-wrap">{project.description}</p>
         )}
       </div>
 
-      {/* Project Info Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      {/* Project Info Cards - Full width layout for readability */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Location - Full text visible */}
         <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-primary/10 p-2">
+          <CardContent className="flex items-start gap-3 p-4">
+            <div className="rounded-lg bg-primary/10 p-2 flex-shrink-0">
               <MapPin className="h-5 w-5 text-primary" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">Location</p>
-              <p className="font-medium truncate">{project.location || 'Not set'}</p>
+              <p className="font-medium break-words">{project.location || 'Not set'}</p>
             </div>
           </CardContent>
         </Card>
+
+        {/* Estimated Cost */}
         <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-success/10 p-2">
-              <span className="text-success font-bold text-lg">₱</span>
+          <CardContent className="flex items-start gap-3 p-4">
+            <div className="rounded-lg bg-success/10 p-2 flex-shrink-0">
+              <DollarSign className="h-5 w-5 text-success" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">Estimated Cost</p>
               <p className="font-medium">{formatPHP(project.estimated_cost)}</p>
             </div>
           </CardContent>
         </Card>
+
+        {/* Duration */}
         <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-accent/10 p-2">
-              <Clock className="h-5 w-5 text-accent" />
+          <CardContent className="flex items-start gap-3 p-4">
+            <div className="rounded-lg bg-accent/10 p-2 flex-shrink-0">
+              <Clock className="h-5 w-5 text-accent-foreground" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">Duration</p>
               <p className="font-medium">{getDurationDisplay()}</p>
             </div>
           </CardContent>
         </Card>
+
+        {/* Start Date */}
         <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-primary/10 p-2">
+          <CardContent className="flex items-start gap-3 p-4">
+            <div className="rounded-lg bg-primary/10 p-2 flex-shrink-0">
               <Calendar className="h-5 w-5 text-primary" />
             </div>
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Date Range</p>
-              <p className="font-medium text-sm">{getDateRangeDisplay()}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground">Start Date</p>
+              <p className="font-medium">{formatDate(project.start_date)}</p>
             </div>
           </CardContent>
         </Card>
+
+        {/* End Date */}
         <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="rounded-lg bg-warning/10 p-2">
-              <ClipboardList className="h-5 w-5 text-warning" />
+          <CardContent className="flex items-start gap-3 p-4">
+            <div className="rounded-lg bg-warning/10 p-2 flex-shrink-0">
+              <Calendar className="h-5 w-5 text-warning" />
             </div>
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground">Open Orders</p>
-              <p className="font-medium">
-                {orders.filter((o) => !['closed', 'cancelled'].includes(o.status)).length}
-              </p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground">End Date</p>
+              <p className="font-medium">{formatDate(project.end_date)}</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Status */}
+        <Card>
+          <CardContent className="flex items-start gap-3 p-4">
+            <div className="rounded-lg bg-muted p-2 flex-shrink-0">
+              <FileText className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs text-muted-foreground">Status</p>
+              <div className="mt-1">
+                <StatusBadge status={project.status} />
+              </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Check Orders Button */}
-      <div className="flex justify-end">
-        <Button onClick={handleCheckOrders}>
-          <ShoppingCart className="mr-2 h-4 w-4" />
-          Check Orders
-        </Button>
-      </div>
-
-      {/* Tabs */}
-      <Tabs defaultValue="inventory" className="space-y-4">
+      {/* Tabs - Only Team and Activity */}
+      <Tabs defaultValue="team" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="inventory" className="gap-2">
-            <Package className="h-4 w-4" />
-            Inventory
-          </TabsTrigger>
-          <TabsTrigger value="orders" className="gap-2">
-            <ClipboardList className="h-4 w-4" />
-            Orders
-          </TabsTrigger>
           <TabsTrigger value="team" className="gap-2">
             <Users className="h-4 w-4" />
             Team
@@ -379,108 +346,6 @@ export default function ProjectDetail() {
             Activity
           </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="inventory">
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Inventory</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {inventory.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b text-left text-xs font-medium uppercase text-muted-foreground">
-                        <th className="pb-3 pr-4">SKU</th>
-                        <th className="pb-3 pr-4">Item Name</th>
-                        <th className="pb-3 pr-4">On Hand</th>
-                        <th className="pb-3 pr-4">Reserved</th>
-                        <th className="pb-3 pr-4">Available</th>
-                        <th className="pb-3 pr-4">Min Threshold</th>
-                        <th className="pb-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {inventory.map((item) => (
-                        <tr key={item.id} className="text-sm">
-                          <td className="py-3 pr-4 font-mono text-xs">
-                            {item.sku?.sku_code}
-                          </td>
-                          <td className="py-3 pr-4 font-medium">{item.sku?.name}</td>
-                          <td className="py-3 pr-4">{item.on_hand}</td>
-                          <td className="py-3 pr-4">{item.reserved}</td>
-                          <td className="py-3 pr-4">{item.on_hand - item.reserved}</td>
-                          <td className="py-3 pr-4">{item.min_threshold || '-'}</td>
-                          <td className="py-3">
-                            <StatusBadge status={getInventoryStatus(item)} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="py-8 text-center text-muted-foreground">
-                  No inventory items assigned to this project yet.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="orders">
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Orders</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {orders.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b text-left text-xs font-medium uppercase text-muted-foreground">
-                        <th className="pb-3 pr-4">Order #</th>
-                        <th className="pb-3 pr-4">Supplier</th>
-                        <th className="pb-3 pr-4">Status</th>
-                        <th className="pb-3 pr-4">Expected Delivery</th>
-                        <th className="pb-3 text-right">Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {orders.map((order) => (
-                        <tr
-                          key={order.id}
-                          className="cursor-pointer text-sm hover:bg-muted/50"
-                          onClick={() => navigate(`/orders/${order.id}`)}
-                        >
-                          <td className="py-3 pr-4 font-medium">{order.order_number}</td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {order.supplier_name || '-'}
-                          </td>
-                          <td className="py-3 pr-4">
-                            <StatusBadge status={order.status} />
-                          </td>
-                          <td className="py-3 pr-4 text-muted-foreground">
-                            {order.expected_delivery_date
-                              ? format(new Date(order.expected_delivery_date), 'MMM dd, yyyy')
-                              : '-'}
-                          </td>
-                          <td className="py-3 text-right">
-                            {order.total_amount ? formatPHP(order.total_amount) : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="py-8 text-center text-muted-foreground">
-                  No orders for this project yet.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="team">
           <Card>
@@ -533,14 +398,14 @@ export default function ProjectDetail() {
                       key={tx.id}
                       className="flex items-start gap-4 rounded-lg border p-4"
                     >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10">
-                        <Activity className="h-4 w-4 text-accent" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 flex-shrink-0">
+                        <Activity className="h-4 w-4 text-accent-foreground" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium">
                           {tx.transaction_type.replace('_', ' ').toUpperCase()}
                         </p>
-                        <p className="text-sm text-muted-foreground truncate">
+                        <p className="text-sm text-muted-foreground">
                           {tx.sku?.name} • Qty: {tx.quantity}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">

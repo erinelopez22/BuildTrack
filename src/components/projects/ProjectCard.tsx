@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
@@ -7,13 +8,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Calendar, MoreVertical, Pencil, MapPin } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Calendar, MoreVertical, Pencil, Trash2 } from 'lucide-react';
 import { differenceInDays, format } from 'date-fns';
 import type { Project } from '@/types/database';
 
 interface ProjectCardProps {
   project: Project;
   onEdit?: (project: Project) => void;
+  onDelete?: (project: Project) => void;
   onClick?: () => void;
   canEdit?: boolean;
 }
@@ -29,7 +41,9 @@ const formatPHP = (amount: number | null | undefined) => {
   }).format(amount);
 };
 
-export function ProjectCard({ project, onEdit, onClick, canEdit }: ProjectCardProps) {
+export function ProjectCard({ project, onEdit, onDelete, onClick, canEdit }: ProjectCardProps) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
   const getDurationDays = () => {
     if (project.start_date && project.end_date) {
       return differenceInDays(new Date(project.end_date), new Date(project.start_date));
@@ -56,91 +70,120 @@ export function ProjectCard({ project, onEdit, onClick, canEdit }: ProjectCardPr
     onClick?.();
   };
 
+  const handleDeleteConfirm = () => {
+    onDelete?.(project);
+    setShowDeleteDialog(false);
+  };
+
   return (
-    <Card
-      className="group relative cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary/30 bg-card"
-      onClick={handleCardClick}
-    >
-      <CardContent className="p-5">
-        {/* Header with title and menu */}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-lg text-foreground truncate group-hover:text-primary transition-colors">
-              {project.name}
-            </h3>
-            {project.location && (
-              <div className="flex items-center gap-1 mt-1 text-muted-foreground">
-                <MapPin className="h-3 w-3" />
-                <p className="text-xs truncate">{project.location}</p>
-              </div>
+    <>
+      <Card
+        className="group relative cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary/30 bg-card"
+        onClick={handleCardClick}
+      >
+        <CardContent className="p-5">
+          {/* Header with title and menu */}
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-lg text-foreground truncate group-hover:text-primary transition-colors">
+                {project.name}
+              </h3>
+            </div>
+            
+            {canEdit && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                    data-radix-dropdown-menu-trigger
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-popover z-50">
+                  {onEdit && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEdit(project);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit Project
+                    </DropdownMenuItem>
+                  )}
+                  {onDelete && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowDeleteDialog(true);
+                      }}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Project
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
-          
-          {canEdit && onEdit && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                  data-radix-dropdown-menu-trigger
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="bg-popover z-50">
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit(project);
-                  }}
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit Project
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
 
-        {/* Description if exists */}
-        {project.description && (
-          <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
-            {project.description}
-          </p>
-        )}
+          {/* Stats */}
+          <div className="space-y-3 mb-4">
+            {/* Estimated Cost */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Estimated Cost</span>
+              <span className="font-semibold text-foreground">
+                {formatPHP(project.estimated_cost)}
+              </span>
+            </div>
 
-        {/* Stats */}
-        <div className="space-y-3 mb-4">
-          {/* Estimated Cost */}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Estimated Cost</span>
-            <span className="font-semibold text-foreground">
-              {formatPHP(project.estimated_cost)}
-            </span>
+            {/* Duration */}
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Duration</span>
+              <span className="font-medium text-foreground">
+                {durationDays !== null ? `${durationDays} days` : '—'}
+              </span>
+            </div>
+
+            {/* Date Range */}
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground">{getDateRangeDisplay()}</span>
+            </div>
           </div>
 
-          {/* Duration */}
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Duration</span>
-            <span className="font-medium text-foreground">
-              {durationDays !== null ? `${durationDays} days` : '—'}
-            </span>
+          {/* Status Badge */}
+          <div className="pt-3 border-t border-border">
+            <StatusBadge status={project.status} />
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Date Range */}
-          <div className="flex items-center gap-2 text-sm">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <span className="text-muted-foreground">{getDateRangeDisplay()}</span>
-          </div>
-        </div>
-
-        {/* Status Badge */}
-        <div className="pt-3 border-t border-border">
-          <StatusBadge status={project.status} />
-        </div>
-      </CardContent>
-    </Card>
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{project.name}"? This action cannot be undone and will permanently remove the project and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
