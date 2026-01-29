@@ -18,16 +18,20 @@ interface OrderWorkflowBoardProps {
   onBack: () => void;
 }
 
-// Status lanes configuration for the workflow board (exclude 'closed' which is hidden)
-const STATUS_LANES: { key: OrderStatus; label: string; color: string }[] = [
+// Main workflow lanes (active orders flow)
+const MAIN_WORKFLOW_LANES: { key: OrderStatus; label: string; color: string }[] = [
   { key: 'for_approval', label: 'Order Requested', color: 'bg-warning/10 border-warning/30' },
   { key: 'approved', label: 'Order Approved', color: 'bg-[hsl(210,90%,50%)]/10 border-[hsl(210,90%,50%)]/30' },
   { key: 'submitted', label: 'Order Submitted', color: 'bg-[hsl(210,90%,50%)]/15 border-[hsl(210,80%,45%)]/30' },
   { key: 'preparing', label: 'Preparing for Tracking', color: 'bg-[hsl(220,75%,45%)]/10 border-[hsl(220,75%,45%)]/30' },
   { key: 'in_transit', label: 'On Transit', color: 'bg-amber-400/10 border-amber-400/30' },
   { key: 'delivered', label: 'Delivered', color: 'bg-success/10 border-success/30' },
-  { key: 'rejected', label: 'Rejected', color: 'bg-destructive/10 border-destructive/30' },
-  { key: 'on_hold', label: 'On-hold', color: 'bg-amber-500/10 border-amber-500/30' },
+];
+
+// Separated lanes for held/rejected orders
+const SPECIAL_STATUS_LANES: { key: OrderStatus; label: string; color: string; icon: 'hold' | 'reject' }[] = [
+  { key: 'on_hold', label: 'On-hold', color: 'bg-amber-500/10 border-amber-500/30', icon: 'hold' },
+  { key: 'rejected', label: 'Rejected', color: 'bg-destructive/10 border-destructive/30', icon: 'reject' },
 ];
 
 export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps) {
@@ -367,101 +371,166 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         </div>
       </div>
 
-      {/* Workflow Board - Status Lanes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4 overflow-x-auto">
-        {STATUS_LANES.map((lane) => {
+      {/* Main Workflow Board - Active Status Lanes */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium text-muted-foreground px-1">Active Workflow</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+          {MAIN_WORKFLOW_LANES.map((lane) => {
+            const laneOrders = getOrdersForLane(lane.key);
+            return (
+              <div
+                key={lane.key}
+                className={`rounded-xl border-2 ${lane.color} p-3 min-h-[200px] flex flex-col`}
+              >
+                <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                  <h3 className="font-semibold text-foreground text-xs sm:text-sm truncate">{lane.label}</h3>
+                  <span className="text-xs text-muted-foreground bg-background/80 px-2 py-0.5 rounded-full flex-shrink-0 ml-1">
+                    {laneOrders.length}
+                  </span>
+                </div>
+
+                <div className="space-y-2 flex-1 overflow-y-auto">
+                  {laneOrders.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-6">
+                      No orders
+                    </p>
+                  ) : (
+                    laneOrders.map((order) => (
+                      <div key={order.id} className="group relative">
+                        <OrderCard
+                          order={order}
+                          onClick={() => setSelectedOrderId(order.id)}
+                        />
+                        {/* Action buttons - show on hover if user has permissions */}
+                        {order.status === 'for_approval' && (
+                          <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                            {canMoveOrder && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="text-xs h-6 px-2 bg-success/20 hover:bg-success/30 text-success"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStatusChange(order, 'approved');
+                                }}
+                              >
+                                <Check className="h-3 w-3 mr-1" />
+                                Approve
+                              </Button>
+                            )}
+                            {canRejectOrder && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="text-xs h-6 px-2 bg-destructive/20 hover:bg-destructive/30 text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOrderToReject(order);
+                                }}
+                              >
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Reject
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                        {/* Move button for statuses that can progress */}
+                        {!['for_approval', 'rejected', 'delivered', 'on_hold'].includes(order.status) && canMoveOrder && getNextStatus(order.status) && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs h-6 px-2 z-10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const nextStatus = getNextStatus(order.status);
+                              if (nextStatus) handleStatusChange(order, nextStatus);
+                            }}
+                          >
+                            Move to Next →
+                          </Button>
+                        )}
+                        {/* Hide button for delivered orders */}
+                        {order.status === 'delivered' && canMoveOrder && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs h-6 px-2 bg-muted/80 hover:bg-muted z-10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleHideOrder(order);
+                            }}
+                          >
+                            <EyeOff className="h-3 w-3 mr-1" />
+                            Hide
+                          </Button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Separated Section for On-hold and Rejected */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+        {SPECIAL_STATUS_LANES.map((lane) => {
           const laneOrders = getOrdersForLane(lane.key);
           return (
             <div
               key={lane.key}
-              className={`rounded-xl border-2 ${lane.color} p-4 min-h-[300px] min-w-[200px]`}
+              className={`rounded-xl border-2 ${lane.color} p-4`}
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-foreground text-sm">{lane.label}</h3>
-                <span className="text-sm text-muted-foreground bg-background/80 px-2 py-0.5 rounded-full">
-                  {laneOrders.length}
+                <div className="flex items-center gap-2">
+                  {lane.icon === 'hold' ? (
+                    <div className="p-1.5 rounded-lg bg-amber-500/20">
+                      <Loader2 className="h-4 w-4 text-amber-600" />
+                    </div>
+                  ) : (
+                    <div className="p-1.5 rounded-lg bg-destructive/20">
+                      <XCircle className="h-4 w-4 text-destructive" />
+                    </div>
+                  )}
+                  <h3 className="font-semibold text-foreground">{lane.label}</h3>
+                </div>
+                <span className="text-sm text-muted-foreground bg-background/80 px-2.5 py-1 rounded-full">
+                  {laneOrders.length} {laneOrders.length === 1 ? 'order' : 'orders'}
                 </span>
               </div>
 
-              <div className="space-y-3">
-                {laneOrders.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">
-                    No orders
-                  </p>
-                ) : (
-                  laneOrders.map((order) => (
+              {laneOrders.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No {lane.label.toLowerCase()} orders
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {laneOrders.map((order) => (
                     <div key={order.id} className="group relative">
                       <OrderCard
                         order={order}
                         onClick={() => setSelectedOrderId(order.id)}
                       />
-                      {/* Action buttons - show on hover if user has permissions */}
-                      {order.status === 'for_approval' && (
-                        <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          {canMoveOrder && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="text-xs h-7 bg-success/20 hover:bg-success/30 text-success"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleStatusChange(order, 'approved');
-                              }}
-                            >
-                              <Check className="h-3 w-3 mr-1" />
-                              Approve
-                            </Button>
-                          )}
-                          {canRejectOrder && (
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              className="text-xs h-7 bg-destructive/20 hover:bg-destructive/30 text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOrderToReject(order);
-                              }}
-                            >
-                              <XCircle className="h-3 w-3 mr-1" />
-                              Reject
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                      {/* Move button for statuses that can progress */}
-                      {!['for_approval', 'rejected', 'delivered', 'on_hold'].includes(order.status) && canMoveOrder && getNextStatus(order.status) && (
+                      {/* Super Admin can move on-hold orders back */}
+                      {order.status === 'on_hold' && isSuperAdmin() && (
                         <Button
                           size="sm"
                           variant="secondary"
-                          className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs h-7"
+                          className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs h-6 px-2 bg-primary/20 hover:bg-primary/30 z-10"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const nextStatus = getNextStatus(order.status);
-                            if (nextStatus) handleStatusChange(order, nextStatus);
+                            handleStatusChange(order, 'for_approval');
                           }}
                         >
-                          Move to Next →
-                        </Button>
-                      )}
-                      {/* Hide button for delivered orders */}
-                      {order.status === 'delivered' && canMoveOrder && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-xs h-7 bg-muted/80 hover:bg-muted"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleHideOrder(order);
-                          }}
-                        >
-                          <EyeOff className="h-3 w-3 mr-1" />
-                          Hide
+                          Restore to Queue
                         </Button>
                       )}
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
