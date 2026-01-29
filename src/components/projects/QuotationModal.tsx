@@ -218,6 +218,11 @@ export function QuotationModal({
     }
   }, [open, projectId]);
 
+  // Normalize material name: trim and uppercase
+  const normalizeMaterialName = (name: string): string => {
+    return name.trim().toUpperCase();
+  };
+
   const addItem = () => {
     setItems([...items, { id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
   };
@@ -229,14 +234,68 @@ export function QuotationModal({
   };
 
   const updateItem = (id: string, field: keyof QuotationItem, value: string | number) => {
+    if (field === "material_name" && typeof value === "string") {
+      // Auto-convert to uppercase while typing
+      value = value.toUpperCase();
+    }
     setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+  };
+
+  // Merge duplicates and normalize material names before save
+  const consolidateItems = (): QuotationItem[] => {
+    const consolidated: Map<string, QuotationItem> = new Map();
+    const mergedMaterials: string[] = [];
+
+    items.forEach((item) => {
+      const normalizedName = normalizeMaterialName(item.material_name);
+      if (!normalizedName) return; // Skip empty names
+
+      if (consolidated.has(normalizedName)) {
+        // Merge quantity into existing item
+        const existing = consolidated.get(normalizedName)!;
+        existing.quantity += item.quantity || 0;
+        mergedMaterials.push(normalizedName);
+      } else {
+        // Add new consolidated item
+        consolidated.set(normalizedName, {
+          ...item,
+          material_name: normalizedName,
+        });
+      }
+    });
+
+    // Show toast for merged materials
+    if (mergedMaterials.length > 0) {
+      const uniqueMerged = [...new Set(mergedMaterials)];
+      toast({
+        title: "Materials Merged",
+        description: `${uniqueMerged.join(", ")} already exists — quantity added to existing item.`,
+      });
+    }
+
+    return Array.from(consolidated.values());
   };
 
   const handleSave = async () => {
     if (!user) return;
 
-    // Validate
-    const hasInvalidItem = items.some((item) => !item.material_name.trim() || item.quantity < 1 || !item.unit.trim());
+    // First consolidate and normalize items (merge duplicates)
+    const consolidatedItems = consolidateItems();
+
+    // Validate - check if we have at least one valid item
+    if (consolidatedItems.length === 0) {
+      toast({
+        title: "Validation Error",
+        description: "At least one material item with a valid name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate each consolidated item
+    const hasInvalidItem = consolidatedItems.some(
+      (item) => !item.material_name.trim() || item.quantity < 1 || !item.unit.trim()
+    );
     if (hasInvalidItem) {
       toast({
         title: "Validation Error",
@@ -246,14 +305,8 @@ export function QuotationModal({
       return;
     }
 
-    if (items.length === 0) {
-      toast({
-        title: "Validation Error",
-        description: "At least one material item is required",
-        variant: "destructive",
-      });
-      return;
-    }
+    // Update items state with consolidated version
+    setItems(consolidatedItems);
 
     setSaving(true);
     try {
@@ -280,10 +333,10 @@ export function QuotationModal({
         await supabase.from("quotation_items").delete().eq("quotation_id", quotation.id);
 
         const { error: itemsError } = await supabase.from("quotation_items").insert(
-          items.map((item) => ({
+          consolidatedItems.map((item) => ({
             quotation_id: quotation.id,
-            material_name: item.material_name.trim(),
-            unit: item.unit,
+            material_name: normalizeMaterialName(item.material_name),
+            unit: item.unit.trim(),
             quantity: item.quantity,
           })),
         );
@@ -297,7 +350,7 @@ export function QuotationModal({
           recordId: quotation.id,
           oldValues: null,
           newValues: {
-            items_count: items.length,
+            items_count: consolidatedItems.length,
             updated_by: userName,
             role: roleName,
           },
@@ -332,10 +385,10 @@ export function QuotationModal({
 
         // Insert items
         const { error: itemsError } = await supabase.from("quotation_items").insert(
-          items.map((item) => ({
+          consolidatedItems.map((item) => ({
             quotation_id: newQuotation.id,
-            material_name: item.material_name.trim(),
-            unit: item.unit,
+            material_name: normalizeMaterialName(item.material_name),
+            unit: item.unit.trim(),
             quantity: item.quantity,
           })),
         );
@@ -349,7 +402,7 @@ export function QuotationModal({
           recordId: newQuotation.id,
           oldValues: null,
           newValues: {
-            items_count: items.length,
+            items_count: consolidatedItems.length,
             created_by: userName,
             role: roleName,
           },
