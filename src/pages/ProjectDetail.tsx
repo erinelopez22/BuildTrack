@@ -7,6 +7,7 @@ import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
 import { ProjectTeamTab } from '@/components/projects/ProjectTeamTab';
 import { ProjectActivityTab } from '@/components/projects/ProjectActivityTab';
 import { QuotationModal } from '@/components/projects/QuotationModal';
+import { ProjectProgressModal } from '@/components/projects/ProjectProgressModal';
 import { ActiveOrdersModal } from '@/components/projects/ActiveOrdersModal';
 import { DeliveredMaterialsModal } from '@/components/projects/DeliveredMaterialsModal';
 import { Button } from '@/components/ui/button';
@@ -50,6 +51,7 @@ export default function ProjectDetail() {
   const [isQuotationOpen, setIsQuotationOpen] = useState(false);
   const [isActiveOrdersOpen, setIsActiveOrdersOpen] = useState(false);
   const [isDeliveredMaterialsOpen, setIsDeliveredMaterialsOpen] = useState(false);
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userProjectRole, setUserProjectRole] = useState<AppRole | null>(null);
   const [hasQuotation, setHasQuotation] = useState(false);
@@ -282,8 +284,11 @@ export default function ProjectDetail() {
         </Card>
       </div>
 
-      {/* Progress Section */}
-      <Card>
+      {/* Progress Section - Clickable to open Project Progress Modal */}
+      <Card 
+        className="cursor-pointer transition-colors hover:bg-muted/50" 
+        onClick={() => setIsProgressModalOpen(true)}
+      >
         <CardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -303,6 +308,7 @@ export default function ProjectDetail() {
               No quotation set. Create a quotation to track progress.
             </p>
           )}
+          <p className="text-xs text-muted-foreground">Click to view detailed progress</p>
         </CardContent>
       </Card>
 
@@ -375,6 +381,14 @@ export default function ProjectDetail() {
         onOpenChange={setIsDeliveredMaterialsOpen}
         projectId={project.id}
         projectName={project.name}
+      />
+
+      <ProjectProgressModal
+        open={isProgressModalOpen}
+        onOpenChange={setIsProgressModalOpen}
+        projectId={project.id}
+        projectName={project.name}
+        refreshKey={progressKey}
       />
     </div>
   );
