@@ -98,7 +98,11 @@ export default function Dashboard() {
 
       setRecentOrders((ordersData || []) as Order[]);
       setOrdersByStatus(
-        Object.entries(statusCounts).map(([name, value]) => ({ name: name.replace(/_/g, ' '), value }))
+        Object.entries(statusCounts).map(([status, value]) => ({ 
+          name: status.replace(/_/g, ' '), 
+          value,
+          status // Keep original status for color mapping
+        }))
       );
 
       setLoading(false);
@@ -107,7 +111,26 @@ export default function Dashboard() {
     fetchDashboardData();
   }, [user, isAdmin]);
 
-  const COLORS = ['hsl(38, 92%, 50%)', 'hsl(210, 90%, 50%)', 'hsl(142, 71%, 45%)', 'hsl(0, 72%, 51%)', 'hsl(270, 50%, 60%)', 'hsl(220, 75%, 45%)'];
+  // Status-based color mapping for the pie chart
+  const getStatusColor = (status: string): string => {
+    const colorMap: Record<string, string> = {
+      rejected: 'hsl(0, 72%, 51%)',           // Red
+      cancelled: 'hsl(0, 72%, 51%)',          // Red
+      for_approval: 'hsl(38, 92%, 50%)',      // Amber/Orange
+      approved: 'hsl(210, 90%, 50%)',         // Blue
+      submitted: 'hsl(210, 80%, 45%)',        // Blue (slightly darker)
+      preparing: 'hsl(220, 75%, 45%)',        // Blue (darker shade)
+      ordered: 'hsl(220, 65%, 40%)',          // Blue (darkest shade)
+      in_transit: 'hsl(45, 93%, 47%)',        // Yellow
+      on_hold: 'hsl(38, 80%, 50%)',           // Amber
+      delivered: 'hsl(142, 71%, 45%)',        // Green
+      fully_received: 'hsl(142, 71%, 45%)',   // Green
+      partially_received: 'hsl(38, 92%, 50%)',// Amber
+      closed: 'hsl(215, 16%, 47%)',           // Muted gray
+      draft: 'hsl(215, 16%, 60%)',            // Light gray
+    };
+    return colorMap[status] || 'hsl(270, 50%, 60%)'; // Fallback purple
+  };
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -167,8 +190,8 @@ export default function Dashboard() {
                   dataKey="value"
                   label={({ name, value }) => `${name}: ${value}`}
                 >
-                  {ordersByStatus.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  {ordersByStatus.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={getStatusColor((entry as any).status || entry.name.replace(/ /g, '_'))} />
                   ))}
                 </Pie>
                 <Tooltip
