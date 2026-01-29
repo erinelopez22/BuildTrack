@@ -1,44 +1,32 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { PageHeader } from '@/components/common/PageHeader';
-import { DataTable, Column } from '@/components/common/DataTable';
-import { StatusBadge } from '@/components/common/StatusBadge';
-import { EmptyState } from '@/components/common/EmptyState';
-import { OrderDetailModal } from '@/components/orders/OrderDetailModal';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
-import { Plus, ClipboardList, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
-import type { Order, Project, OrderStatus } from '@/types/database';
-import { format } from 'date-fns';
+import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { PageHeader } from "@/components/common/PageHeader";
+import { DataTable, Column } from "@/components/common/DataTable";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { EmptyState } from "@/components/common/EmptyState";
+import { OrderDetailModal } from "@/components/orders/OrderDetailModal";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { Plus, ClipboardList, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import type { Order, Project, OrderStatus } from "@/types/database";
+import { format } from "date-fns";
 
 interface OrderWithProject extends Order {
   project: Project;
 }
 
-type SortField = 'created_at' | 'expected_delivery_date' | 'total_amount';
-type SortDirection = 'asc' | 'desc';
+type SortField = "created_at" | "expected_delivery_date" | "total_amount";
+type SortDirection = "asc" | "desc";
 
 // Active statuses for filtering
-const ACTIVE_STATUSES: OrderStatus[] = ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'on_hold'];
+const ACTIVE_STATUSES: OrderStatus[] = ["for_approval", "approved", "submitted", "preparing", "in_transit", "on_hold"];
 
 export default function Orders() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -47,30 +35,30 @@ export default function Orders() {
   const [orders, setOrders] = useState<OrderWithProject[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  
+  const [search, setSearch] = useState("");
+
   // Initialize status filter from URL params
-  const urlStatus = searchParams.get('status');
-  const [statusFilter, setStatusFilter] = useState<string>(urlStatus || 'all');
-  
-  const [sortField, setSortField] = useState<SortField>('created_at');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const urlStatus = searchParams.get("status");
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatus || "all");
+
+  const [sortField, setSortField] = useState<SortField>("created_at");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
-    project_id: '',
-    supplier_name: '',
-    supplier_contact: '',
-    expected_delivery_date: '',
-    notes: '',
+    project_id: "",
+    supplier_name: "",
+    supplier_contact: "",
+    expected_delivery_date: "",
+    notes: "",
   });
 
   // Update URL when filter changes
   useEffect(() => {
-    if (statusFilter === 'all') {
-      searchParams.delete('status');
+    if (statusFilter === "all") {
+      searchParams.delete("status");
     } else {
-      searchParams.set('status', statusFilter);
+      searchParams.set("status", statusFilter);
     }
     setSearchParams(searchParams, { replace: true });
   }, [statusFilter, searchParams, setSearchParams]);
@@ -78,22 +66,26 @@ export default function Orders() {
   const fetchData = async () => {
     // Fetch orders with project info, then filter by active projects
     const { data: ordersData } = await supabase
-      .from('orders')
-      .select('*, project:projects(*)')
-      .in('status', ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'delivered', 'rejected', 'on_hold'])
-      .order('created_at', { ascending: false });
+      .from("orders")
+      .select("*, project:projects(*)")
+      .in("status", [
+        "for_approval",
+        "approved",
+        "submitted",
+        "preparing",
+        "in_transit",
+        "delivered",
+        "rejected",
+        "on_hold",
+      ])
+      .order("created_at", { ascending: false });
 
     // Filter to only show orders from active projects
-    const activeProjectOrders = (ordersData || []).filter(
-      (order: any) => order.project?.status === 'active'
-    );
+    const activeProjectOrders = (ordersData || []).filter((order: any) => order.project?.status === "active");
 
     setOrders(activeProjectOrders as OrderWithProject[]);
 
-    const { data: projectsData } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('status', 'active');
+    const { data: projectsData } = await supabase.from("projects").select("*").eq("status", "active");
 
     setProjects((projectsData || []) as Project[]);
 
@@ -109,27 +101,27 @@ export default function Orders() {
 
     if (!user) return;
 
-    const { error } = await supabase.from('orders').insert({
+    const { error } = await supabase.from("orders").insert({
       project_id: formData.project_id,
       supplier_name: formData.supplier_name || null,
       supplier_contact: formData.supplier_contact || null,
       expected_delivery_date: formData.expected_delivery_date || null,
       notes: formData.notes || null,
       created_by: user.id,
-      order_number: '', // Will be auto-generated by trigger
+      order_number: "", // Will be auto-generated by trigger
     });
 
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: 'Success', description: 'Order created successfully' });
+      toast({ title: "Success", description: "Order created successfully" });
       setIsDialogOpen(false);
       setFormData({
-        project_id: '',
-        supplier_name: '',
-        supplier_contact: '',
-        expected_delivery_date: '',
-        notes: '',
+        project_id: "",
+        supplier_name: "",
+        supplier_contact: "",
+        expected_delivery_date: "",
+        notes: "",
       });
       fetchData();
     }
@@ -137,10 +129,10 @@ export default function Orders() {
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       setSortField(field);
-      setSortDirection('desc');
+      setSortDirection("desc");
     }
   };
 
@@ -148,9 +140,11 @@ export default function Orders() {
     if (sortField !== field) {
       return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
     }
-    return sortDirection === 'asc' 
-      ? <ArrowUp className="h-4 w-4 text-primary" />
-      : <ArrowDown className="h-4 w-4 text-primary" />;
+    return sortDirection === "asc" ? (
+      <ArrowUp className="h-4 w-4 text-primary" />
+    ) : (
+      <ArrowDown className="h-4 w-4 text-primary" />
+    );
   };
 
   const filteredAndSortedOrders = useMemo(() => {
@@ -162,9 +156,9 @@ export default function Orders() {
 
       // Handle 'active' filter specially - includes all active statuses
       let matchesStatus = false;
-      if (statusFilter === 'all') {
+      if (statusFilter === "all") {
         matchesStatus = true;
-      } else if (statusFilter === 'active') {
+      } else if (statusFilter === "active") {
         matchesStatus = ACTIVE_STATUSES.includes(order.status);
       } else {
         matchesStatus = order.status === statusFilter;
@@ -179,25 +173,25 @@ export default function Orders() {
       let bVal: number | string | null = null;
 
       switch (sortField) {
-        case 'created_at':
+        case "created_at":
           aVal = a.created_at;
           bVal = b.created_at;
           break;
-        case 'expected_delivery_date':
-          aVal = a.expected_delivery_date || '';
-          bVal = b.expected_delivery_date || '';
+        case "expected_delivery_date":
+          aVal = a.expected_delivery_date || "";
+          bVal = b.expected_delivery_date || "";
           break;
-        case 'total_amount':
+        case "total_amount":
           aVal = a.total_amount ?? 0;
           bVal = b.total_amount ?? 0;
           break;
       }
 
-      if (aVal === null || aVal === '') return sortDirection === 'asc' ? 1 : -1;
-      if (bVal === null || bVal === '') return sortDirection === 'asc' ? -1 : 1;
+      if (aVal === null || aVal === "") return sortDirection === "asc" ? 1 : -1;
+      if (bVal === null || bVal === "") return sortDirection === "asc" ? -1 : 1;
 
-      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
 
@@ -206,104 +200,93 @@ export default function Orders() {
 
   const columns: Column<OrderWithProject>[] = [
     {
-      key: 'order_number',
-      header: 'Order #',
-      render: (order) => (
-        <span className="font-medium">{order.order_number}</span>
-      ),
+      key: "order_number",
+      header: "Order #",
+      render: (order) => <span className="font-medium">{order.order_number}</span>,
     },
     {
-      key: 'project',
-      header: 'Project',
-      render: (order) => (
-        <span className="text-muted-foreground">{order.project?.name}</span>
-      ),
+      key: "project",
+      header: "Project",
+      render: (order) => <span className="text-muted-foreground">{order.project?.name}</span>,
     },
     {
-      key: 'supplier',
-      header: 'Supplier',
-      render: (order) => order.supplier_name || '-',
+      key: "supplier",
+      header: "Supplier",
+      render: (order) => order.supplier_name || "-",
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (order) => <StatusBadge status={order.status} />,
     },
     {
-      key: 'expected_delivery',
+      key: "expected_delivery",
       header: (
-        <button 
+        <button
           className="flex items-center gap-1 hover:text-primary transition-colors"
-          onClick={() => handleSort('expected_delivery_date')}
+          onClick={() => handleSort("expected_delivery_date")}
         >
           Expected Delivery
-          {getSortIcon('expected_delivery_date')}
+          {getSortIcon("expected_delivery_date")}
         </button>
       ) as unknown as string,
       render: (order) =>
-        order.expected_delivery_date
-          ? format(new Date(order.expected_delivery_date), 'MMM d, yyyy')
-          : '-',
+        order.expected_delivery_date ? format(new Date(order.expected_delivery_date), "MMM d, yyyy") : "-",
     },
     {
-      key: 'total',
+      key: "total",
       header: (
-        <button 
+        <button
           className="flex items-center gap-1 hover:text-primary transition-colors"
-          onClick={() => handleSort('total_amount')}
+          onClick={() => handleSort("total_amount")}
         >
           Amount
-          {getSortIcon('total_amount')}
+          {getSortIcon("total_amount")}
         </button>
       ) as unknown as string,
       render: (order) =>
-        order.total_amount 
-          ? `₱${order.total_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` 
-          : '-',
-      className: 'text-right',
+        order.total_amount ? `₱${order.total_amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "-",
+      className: "text-right",
     },
     {
-      key: 'created',
+      key: "created",
       header: (
-        <button 
+        <button
           className="flex items-center gap-1 hover:text-primary transition-colors"
-          onClick={() => handleSort('created_at')}
+          onClick={() => handleSort("created_at")}
         >
           Created
-          {getSortIcon('created_at')}
+          {getSortIcon("created_at")}
         </button>
       ) as unknown as string,
-      render: (order) => format(new Date(order.created_at), 'MMM d, yyyy'),
+      render: (order) => format(new Date(order.created_at), "MMM d, yyyy"),
     },
   ];
 
   // Updated status options with new statuses
   const statusOptions: { value: string; label: string }[] = [
-    { value: 'all', label: 'All Statuses' },
-    { value: 'active', label: 'Active Orders' },
-    { value: 'for_approval', label: 'Order Requested' },
-    { value: 'approved', label: 'Approved' },
-    { value: 'submitted', label: 'Submitted' },
-    { value: 'preparing', label: 'Preparing for Tracking' },
-    { value: 'in_transit', label: 'On Transit' },
-    { value: 'delivered', label: 'Delivered' },
-    { value: 'rejected', label: 'Rejected' },
-    { value: 'on_hold', label: 'On-hold' },
+    { value: "all", label: "All Statuses" },
+    { value: "active", label: "Active Orders" },
+    { value: "for_approval", label: "Order Requested" },
+    { value: "approved", label: "Approved" },
+    { value: "submitted", label: "Submitted" },
+    { value: "preparing", label: "Preparing for Tracking" },
+    { value: "in_transit", label: "On Transit" },
+    { value: "delivered", label: "Delivered" },
+    { value: "rejected", label: "Rejected" },
+    { value: "on_hold", label: "On-hold" },
   ];
 
   if (!loading && orders.length === 0) {
     return (
       <div className="animate-fade-in">
-        <PageHeader
-          title="Orders"
-          description="Manage purchase orders and track deliveries"
-        />
+        <PageHeader title="View Orders" description="Manage purchase orders and track deliveries" />
         <EmptyState
           icon={ClipboardList}
           title="No orders yet"
           description="Create your first purchase order to start tracking procurement."
           action={{
-            label: 'Create Order',
+            label: "Create Order",
             onClick: () => setIsDialogOpen(true),
           }}
         />
@@ -333,9 +316,7 @@ export default function Orders() {
                   <Label>Project *</Label>
                   <Select
                     value={formData.project_id}
-                    onValueChange={(value) =>
-                      setFormData({ ...formData, project_id: value })
-                    }
+                    onValueChange={(value) => setFormData({ ...formData, project_id: value })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select project" />
@@ -354,9 +335,7 @@ export default function Orders() {
                   <Label>Supplier Name</Label>
                   <Input
                     value={formData.supplier_name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, supplier_name: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, supplier_name: e.target.value })}
                     placeholder="Acme Supplies Inc."
                   />
                 </div>
@@ -365,9 +344,7 @@ export default function Orders() {
                   <Label>Supplier Contact</Label>
                   <Input
                     value={formData.supplier_contact}
-                    onChange={(e) =>
-                      setFormData({ ...formData, supplier_contact: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, supplier_contact: e.target.value })}
                     placeholder="Email or phone"
                   />
                 </div>
@@ -390,19 +367,13 @@ export default function Orders() {
                   <Label>Notes</Label>
                   <Textarea
                     value={formData.notes}
-                    onChange={(e) =>
-                      setFormData({ ...formData, notes: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                     rows={3}
                   />
                 </div>
 
                 <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
                   <Button type="submit">Create Order</Button>
