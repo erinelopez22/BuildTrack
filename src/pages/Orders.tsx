@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -36,14 +37,22 @@ interface OrderWithProject extends Order {
 type SortField = 'created_at' | 'expected_delivery_date' | 'total_amount';
 type SortDirection = 'asc' | 'desc';
 
+// Active statuses for filtering
+const ACTIVE_STATUSES: OrderStatus[] = ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'on_hold'];
+
 export default function Orders() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<OrderWithProject[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  
+  // Initialize status filter from URL params
+  const urlStatus = searchParams.get('status');
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatus || 'all');
+  
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -56,12 +65,22 @@ export default function Orders() {
     notes: '',
   });
 
+  // Update URL when filter changes
+  useEffect(() => {
+    if (statusFilter === 'all') {
+      searchParams.delete('status');
+    } else {
+      searchParams.set('status', statusFilter);
+    }
+    setSearchParams(searchParams, { replace: true });
+  }, [statusFilter, searchParams, setSearchParams]);
+
   const fetchData = async () => {
-    // Fetch orders with only the 5 main statuses (exclude closed, draft, etc.)
+    // Fetch orders with all visible statuses
     const { data: ordersData } = await supabase
       .from('orders')
       .select('*, project:projects(*)')
-      .in('status', ['for_approval', 'approved', 'ordered', 'delivered', 'rejected'])
+      .in('status', ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'delivered', 'rejected', 'on_hold'])
       .order('created_at', { ascending: false });
 
     setOrders((ordersData || []) as OrderWithProject[]);
@@ -136,7 +155,15 @@ export default function Orders() {
         order.supplier_name?.toLowerCase().includes(search.toLowerCase()) ||
         order.project?.name?.toLowerCase().includes(search.toLowerCase());
 
-      const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+      // Handle 'active' filter specially - includes all active statuses
+      let matchesStatus = false;
+      if (statusFilter === 'all') {
+        matchesStatus = true;
+      } else if (statusFilter === 'active') {
+        matchesStatus = ACTIVE_STATUSES.includes(order.status);
+      } else {
+        matchesStatus = order.status === statusFilter;
+      }
 
       return matchesSearch && matchesStatus;
     });
@@ -245,14 +272,18 @@ export default function Orders() {
     },
   ];
 
-  // Simplified status options - only 5 statuses
+  // Updated status options with new statuses
   const statusOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'All Statuses' },
-    { value: 'for_approval', label: 'Order Request' },
+    { value: 'active', label: 'Active Orders' },
+    { value: 'for_approval', label: 'Order Requested' },
     { value: 'approved', label: 'Approved' },
-    { value: 'ordered', label: 'Ordered' },
+    { value: 'submitted', label: 'Submitted' },
+    { value: 'preparing', label: 'Preparing for Tracking' },
+    { value: 'in_transit', label: 'On Transit' },
     { value: 'delivered', label: 'Delivered' },
     { value: 'rejected', label: 'Rejected' },
+    { value: 'on_hold', label: 'On-hold' },
   ];
 
   if (!loading && orders.length === 0) {
@@ -388,7 +419,7 @@ export default function Orders() {
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[200px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -20,11 +20,14 @@ interface OrderWorkflowBoardProps {
 
 // Status lanes configuration for the workflow board (exclude 'closed' which is hidden)
 const STATUS_LANES: { key: OrderStatus; label: string; color: string }[] = [
-  { key: 'for_approval', label: 'Order Request', color: 'bg-warning/10 border-warning/30' },
-  { key: 'approved', label: 'Approved', color: 'bg-success/10 border-success/30' },
-  { key: 'ordered', label: 'Ordered', color: 'bg-primary/10 border-primary/30' },
+  { key: 'for_approval', label: 'Order Requested', color: 'bg-warning/10 border-warning/30' },
+  { key: 'approved', label: 'Order Approved', color: 'bg-[hsl(210,90%,50%)]/10 border-[hsl(210,90%,50%)]/30' },
+  { key: 'submitted', label: 'Order Submitted', color: 'bg-[hsl(210,90%,50%)]/15 border-[hsl(210,80%,45%)]/30' },
+  { key: 'preparing', label: 'Preparing for Tracking', color: 'bg-[hsl(220,75%,45%)]/10 border-[hsl(220,75%,45%)]/30' },
+  { key: 'in_transit', label: 'On Transit', color: 'bg-amber-400/10 border-amber-400/30' },
   { key: 'delivered', label: 'Delivered', color: 'bg-success/10 border-success/30' },
   { key: 'rejected', label: 'Rejected', color: 'bg-destructive/10 border-destructive/30' },
+  { key: 'on_hold', label: 'On-hold', color: 'bg-amber-500/10 border-amber-500/30' },
 ];
 
 export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps) {
@@ -157,13 +160,16 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     // Validate transition rules (non-Super Admin)
     if (!isSuperAdmin()) {
       const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-        for_approval: ['approved', 'rejected'],
-        approved: ['ordered'],
-        ordered: ['delivered'],
-        delivered: [],
+        for_approval: ['approved', 'rejected', 'on_hold'],
+        approved: ['submitted', 'rejected', 'on_hold'],
+        submitted: ['preparing', 'on_hold'],
+        preparing: ['in_transit', 'on_hold'],
+        in_transit: ['delivered', 'on_hold'],
+        delivered: ['closed'],
         rejected: [],
+        on_hold: [], // Admin only can move back
         draft: ['for_approval'],
-        in_transit: ['delivered'],
+        ordered: ['delivered'],
         partially_received: ['fully_received'],
         fully_received: ['closed'],
         closed: [],
@@ -280,7 +286,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
   // Get the next status in the workflow
   const getNextStatus = (currentStatus: OrderStatus): OrderStatus | null => {
-    const statusOrder: OrderStatus[] = ['for_approval', 'approved', 'ordered', 'delivered'];
+    const statusOrder: OrderStatus[] = ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'delivered'];
     const currentIndex = statusOrder.indexOf(currentStatus);
     if (currentIndex >= 0 && currentIndex < statusOrder.length - 1) {
       return statusOrder[currentIndex + 1];
@@ -362,16 +368,16 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       </div>
 
       {/* Workflow Board - Status Lanes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-4 overflow-x-auto">
         {STATUS_LANES.map((lane) => {
           const laneOrders = getOrdersForLane(lane.key);
           return (
             <div
               key={lane.key}
-              className={`rounded-xl border-2 ${lane.color} p-4 min-h-[300px]`}
+              className={`rounded-xl border-2 ${lane.color} p-4 min-h-[300px] min-w-[200px]`}
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-foreground">{lane.label}</h3>
+                <h3 className="font-semibold text-foreground text-sm">{lane.label}</h3>
                 <span className="text-sm text-muted-foreground bg-background/80 px-2 py-0.5 rounded-full">
                   {laneOrders.length}
                 </span>
@@ -422,8 +428,8 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                           )}
                         </div>
                       )}
-                      {/* Move button for approved/ordered statuses */}
-                      {order.status !== 'for_approval' && order.status !== 'rejected' && order.status !== 'delivered' && canMoveOrder && getNextStatus(order.status) && (
+                      {/* Move button for statuses that can progress */}
+                      {!['for_approval', 'rejected', 'delivered', 'on_hold'].includes(order.status) && canMoveOrder && getNextStatus(order.status) && (
                         <Button
                           size="sm"
                           variant="secondary"

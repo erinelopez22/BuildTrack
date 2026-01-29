@@ -15,6 +15,7 @@ import SKUs from "./pages/SKUs";
 import Users from "./pages/Users";
 import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
+import Members from "./pages/Members";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,7 @@ const App = () => (
               <Route path="/users" element={<Users />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/members" element={<Members />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
