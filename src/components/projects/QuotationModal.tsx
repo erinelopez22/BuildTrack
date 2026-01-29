@@ -646,12 +646,6 @@ export function QuotationModal({
                 <Label className="text-sm font-medium">
                   Initial Quotation {isEditMode && <span className="text-destructive">*</span>}
                 </Label>
-                {isViewMode && canEdit && (
-                  <Button type="button" variant="outline" size="sm" onClick={handleEnterEditMode}>
-                    <Pencil className="h-4 w-4 mr-1" />
-                    Update Quotation
-                  </Button>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -780,42 +774,59 @@ export function QuotationModal({
             </div>
 
             {/* Actions */}
-            <div className="flex justify-between items-center gap-2 pt-2">
-              {/* Delete button - only visible in view mode for authorized users */}
-              <div>
-                {isViewMode && quotation && canDelete && (
-                  <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} className="gap-2">
-                    <Trash2 className="h-4 w-4" />
-                    Delete Quotation
+            <div className="flex justify-between items-center gap-2 pt-4 border-t">
+              {isEditMode ? (
+                <>
+                  {/* Edit mode: Cancel on left, Save on right */}
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    Cancel
                   </Button>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                {isEditMode ? (
-                  <>
-                    <Button variant="outline" onClick={handleCancelEdit}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSave} disabled={saving}>
-                      {saving ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : quotation ? (
-                        "Save Changes"
-                      ) : (
-                        "Create Quotation"
-                      )}
-                    </Button>
-                  </>
-                ) : (
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : quotation ? (
+                      "Save Changes"
+                    ) : (
+                      "Create Quotation"
+                    )}
+                  </Button>
+                </>
+              ) : isViewMode && quotation ? (
+                <>
+                  {/* View mode with existing quotation: Delete left, Update right (for authorized users) */}
+                  <div className="flex gap-3">
+                    {canDelete && (
+                      <Button 
+                        variant="destructive" 
+                        onClick={() => setShowDeleteConfirm(true)} 
+                        className="gap-2"
+                        tabIndex={1}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete Quotation
+                      </Button>
+                    )}
+                    {canEdit && (
+                      <Button onClick={handleEnterEditMode} className="gap-2">
+                        <Pencil className="h-4 w-4" />
+                        Update Quotation
+                      </Button>
+                    )}
+                  </div>
                   <Button variant="outline" onClick={() => onOpenChange(false)}>
                     Close
                   </Button>
-                )}
-              </div>
+                </>
+              ) : (
+                <div className="ml-auto">
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    Close
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}
