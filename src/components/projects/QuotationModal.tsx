@@ -1,28 +1,31 @@
-import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { Plus, Trash2, Loader2, Clock, Package, Pencil, TruckIcon, ChevronDown, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect } from "react";
+import { format } from "date-fns";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { logActivity } from '@/lib/activityLogger';
-import { notifyProjectMembers, formatManilaTime } from '@/lib/notificationService';
+  Plus,
+  Trash2,
+  Loader2,
+  Clock,
+  Package,
+  Pencil,
+  TruckIcon,
+  ChevronDown,
+  ChevronRight,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { logActivity } from "@/lib/activityLogger";
+import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 
 interface QuotationItem {
   id: string;
@@ -88,10 +91,10 @@ export function QuotationModal({
   const [saving, setSaving] = useState(false);
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [items, setItems] = useState<QuotationItem[]>([]);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
-  const [creatorName, setCreatorName] = useState<string>('');
-  
+  const [creatorName, setCreatorName] = useState<string>("");
+
   // Delivered materials tracking
   const [materialProgress, setMaterialProgress] = useState<MaterialDeliveryProgress[]>([]);
   const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrderInfo[]>([]);
@@ -102,52 +105,52 @@ export function QuotationModal({
     try {
       // Fetch quotation
       const { data: quotationData, error: quotationError } = await supabase
-        .from('project_quotations')
-        .select('*')
-        .eq('project_id', projectId)
+        .from("project_quotations")
+        .select("*")
+        .eq("project_id", projectId)
         .maybeSingle();
 
       if (quotationError) throw quotationError;
 
       if (quotationData) {
         setQuotation(quotationData);
-        setNotes(quotationData.notes || '');
+        setNotes(quotationData.notes || "");
         setIsEditMode(false);
 
         // Fetch creator name
         const { data: profileData } = await supabase
-          .from('profiles')
-          .select('full_name')
-          .eq('id', quotationData.created_by)
+          .from("profiles")
+          .select("full_name")
+          .eq("id", quotationData.created_by)
           .maybeSingle();
-        
-        setCreatorName(profileData?.full_name || 'Unknown');
+
+        setCreatorName(profileData?.full_name || "Unknown");
 
         // Fetch quotation items
         const { data: itemsData, error: itemsError } = await supabase
-          .from('quotation_items')
-          .select('*')
-          .eq('quotation_id', quotationData.id)
-          .order('created_at', { ascending: true });
+          .from("quotation_items")
+          .select("*")
+          .eq("quotation_id", quotationData.id)
+          .order("created_at", { ascending: true });
 
         if (itemsError) throw itemsError;
         setItems(itemsData || []);
-
+        console.log(itemsData);
         // Fetch delivered materials progress
         await fetchDeliveredMaterials(quotationData.id, itemsData || []);
       } else {
         setQuotation(null);
-        setItems([{ id: crypto.randomUUID(), material_name: '', unit: 'pcs', quantity: 0 }]);
-        setNotes('');
+        setItems([{ id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
+        setNotes("");
         setIsEditMode(true);
         setMaterialProgress([]);
         setDeliveredOrders([]);
       }
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to load quotation',
-        variant: 'destructive',
+        title: "Error",
+        description: error.message || "Failed to load quotation",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -158,17 +161,17 @@ export function QuotationModal({
     try {
       // Get only DELIVERED orders for this project
       const { data: orders, error: ordersError } = await supabase
-        .from('orders')
-        .select('id, order_number, updated_at')
-        .eq('project_id', projectId)
-        .eq('status', 'delivered')
-        .order('updated_at', { ascending: false });
+        .from("orders")
+        .select("id, order_number, updated_at")
+        .eq("project_id", projectId)
+        .eq("status", "delivered")
+        .order("updated_at", { ascending: false });
 
       if (ordersError) throw ordersError;
 
       if (!orders || orders.length === 0) {
         // No delivered orders - set empty progress
-        const emptyProgress = quotationItems.map(qItem => ({
+        const emptyProgress = quotationItems.map((qItem) => ({
           quotationItemId: qItem.id,
           materialName: qItem.material_name,
           unit: qItem.unit,
@@ -185,19 +188,22 @@ export function QuotationModal({
 
       // Get order items with quotation_item_id reference and SKU info
       const { data: orderItems, error: itemsError } = await supabase
-        .from('order_items')
-        .select('order_id, quotation_item_id, quantity_ordered, quantity_received, sku:skus(name, unit_of_measure)')
-        .in('order_id', orders.map(o => o.id));
+        .from("order_items")
+        .select("order_id, quotation_item_id, quantity_ordered, quantity_received, sku:skus(name, unit_of_measure)")
+        .in(
+          "order_id",
+          orders.map((o) => o.id),
+        );
 
       if (itemsError) throw itemsError;
 
       // Build delivered quantities map by quotation_item_id
       const deliveredByQuotationItemId: Record<string, number> = {};
-      
+
       orderItems?.forEach((item: any) => {
         if (item.quotation_item_id) {
           const qty = item.quantity_received ?? item.quantity_ordered ?? 0;
-          deliveredByQuotationItemId[item.quotation_item_id] = 
+          deliveredByQuotationItemId[item.quotation_item_id] =
             (deliveredByQuotationItemId[item.quotation_item_id] || 0) + qty;
         }
       });
@@ -206,9 +212,7 @@ export function QuotationModal({
       const progress: MaterialDeliveryProgress[] = quotationItems.map((qItem) => {
         const deliveredQty = deliveredByQuotationItemId[qItem.id] || 0;
         const remainingQty = Math.max(0, qItem.quantity - deliveredQty);
-        const percentage = qItem.quantity > 0 
-          ? Math.min(100, (deliveredQty / qItem.quantity) * 100) 
-          : 0;
+        const percentage = qItem.quantity > 0 ? Math.min(100, (deliveredQty / qItem.quantity) * 100) : 0;
 
         return {
           quotationItemId: qItem.id,
@@ -231,15 +235,15 @@ export function QuotationModal({
           order_number: order.order_number,
           delivered_at: order.updated_at,
           items: orderItemsList.map((item: any) => ({
-            material_name: item.sku?.name || 'Unknown Material',
-            unit: item.sku?.unit_of_measure || 'pcs',
+            material_name: item.sku?.name || "Unknown Material",
+            unit: item.sku?.unit_of_measure || "pcs",
             quantity: item.quantity_received ?? item.quantity_ordered ?? 0,
           })),
         };
       });
-      setDeliveredOrders(ordersInfo.filter(o => o.items.length > 0));
+      setDeliveredOrders(ordersInfo.filter((o) => o.items.length > 0));
     } catch (error) {
-      console.error('Error fetching delivered materials:', error);
+      console.error("Error fetching delivered materials:", error);
     }
   };
 
@@ -250,7 +254,7 @@ export function QuotationModal({
   }, [open, projectId]);
 
   const addItem = () => {
-    setItems([...items, { id: crypto.randomUUID(), material_name: '', unit: 'pcs', quantity: 0 }]);
+    setItems([...items, { id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
   };
 
   const removeItem = (id: string) => {
@@ -260,32 +264,28 @@ export function QuotationModal({
   };
 
   const updateItem = (id: string, field: keyof QuotationItem, value: string | number) => {
-    setItems(
-      items.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      )
-    );
+    setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
   const handleSave = async () => {
     if (!user) return;
-    
+
     // Validate
     const hasInvalidItem = items.some((item) => !item.material_name.trim() || item.quantity < 1 || !item.unit.trim());
     if (hasInvalidItem) {
       toast({
-        title: 'Validation Error',
-        description: 'All materials must have a name, unit, and quantity of at least 1',
-        variant: 'destructive',
+        title: "Validation Error",
+        description: "All materials must have a name, unit, and quantity of at least 1",
+        variant: "destructive",
       });
       return;
     }
 
     if (items.length === 0) {
       toast({
-        title: 'Validation Error',
-        description: 'At least one material item is required',
-        variant: 'destructive',
+        title: "Validation Error",
+        description: "At least one material item is required",
+        variant: "destructive",
       });
       return;
     }
@@ -293,53 +293,45 @@ export function QuotationModal({
     setSaving(true);
     try {
       // Get user profile for activity log
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .maybeSingle();
+      const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
 
-      const userName = userProfile?.full_name || 'User';
+      const userName = userProfile?.full_name || "User";
 
       // Get user role
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      const { data: userRole } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
 
-      const roleName = userRole?.role || 'member';
+      const roleName = userRole?.role || "member";
 
       if (quotation) {
         // Update existing quotation
         const { error: updateError } = await supabase
-          .from('project_quotations')
+          .from("project_quotations")
           .update({ notes, updated_at: new Date().toISOString() })
-          .eq('id', quotation.id);
+          .eq("id", quotation.id);
 
         if (updateError) throw updateError;
 
         // Delete existing items and insert new ones
-        await supabase.from('quotation_items').delete().eq('quotation_id', quotation.id);
+        await supabase.from("quotation_items").delete().eq("quotation_id", quotation.id);
 
-        const { error: itemsError } = await supabase.from('quotation_items').insert(
+        const { error: itemsError } = await supabase.from("quotation_items").insert(
           items.map((item) => ({
             quotation_id: quotation.id,
             material_name: item.material_name.trim(),
             unit: item.unit,
             quantity: item.quantity,
-          }))
+          })),
         );
 
         if (itemsError) throw itemsError;
 
         // Log activity
         await logActivity({
-          action: 'update',
-          tableName: 'project_quotations',
+          action: "update",
+          tableName: "project_quotations",
           recordId: quotation.id,
           oldValues: null,
-          newValues: { 
+          newValues: {
             items_count: items.length,
             updated_by: userName,
             role: roleName,
@@ -350,19 +342,19 @@ export function QuotationModal({
         // Notify project members
         await notifyProjectMembers({
           projectId,
-          title: 'Quotation Updated',
+          title: "Quotation Updated",
           message: `${userName} (${roleName}) updated the quotation for ${projectName} on ${formatManilaTime(new Date())}`,
-          type: 'project',
-          referenceType: 'project_quotations',
+          type: "project",
+          referenceType: "project_quotations",
           referenceId: quotation.id,
           excludeUserId: user.id,
         });
 
-        toast({ title: 'Success', description: 'Quotation updated successfully' });
+        toast({ title: "Success", description: "Quotation updated successfully" });
       } else {
         // Create new quotation
         const { data: newQuotation, error: createError } = await supabase
-          .from('project_quotations')
+          .from("project_quotations")
           .insert({
             project_id: projectId,
             created_by: user.id,
@@ -374,24 +366,24 @@ export function QuotationModal({
         if (createError) throw createError;
 
         // Insert items
-        const { error: itemsError } = await supabase.from('quotation_items').insert(
+        const { error: itemsError } = await supabase.from("quotation_items").insert(
           items.map((item) => ({
             quotation_id: newQuotation.id,
             material_name: item.material_name.trim(),
             unit: item.unit,
             quantity: item.quantity,
-          }))
+          })),
         );
 
         if (itemsError) throw itemsError;
 
         // Log activity
         await logActivity({
-          action: 'create',
-          tableName: 'project_quotations',
+          action: "create",
+          tableName: "project_quotations",
           recordId: newQuotation.id,
           oldValues: null,
-          newValues: { 
+          newValues: {
             items_count: items.length,
             created_by: userName,
             role: roleName,
@@ -402,15 +394,15 @@ export function QuotationModal({
         // Notify project members
         await notifyProjectMembers({
           projectId,
-          title: 'Quotation Created',
+          title: "Quotation Created",
           message: `${userName} (${roleName}) created a quotation for ${projectName} on ${formatManilaTime(new Date())}`,
-          type: 'project',
-          referenceType: 'project_quotations',
+          type: "project",
+          referenceType: "project_quotations",
           referenceId: newQuotation.id,
           excludeUserId: user.id,
         });
 
-        toast({ title: 'Success', description: 'Quotation created successfully' });
+        toast({ title: "Success", description: "Quotation created successfully" });
       }
 
       setIsEditMode(false);
@@ -418,9 +410,9 @@ export function QuotationModal({
       onQuotationChange?.();
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to save quotation',
-        variant: 'destructive',
+        title: "Error",
+        description: error.message || "Failed to save quotation",
+        variant: "destructive",
       });
     } finally {
       setSaving(false);
@@ -457,7 +449,7 @@ export function QuotationModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            {!quotation ? 'Add Quotation' : isEditMode ? 'Update Quotation' : 'View Quotation'} - {projectName}
+            {!quotation ? "Add Quotation" : isEditMode ? "Update Quotation" : "View Quotation"} - {projectName}
           </DialogTitle>
         </DialogHeader>
 
@@ -472,14 +464,14 @@ export function QuotationModal({
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
-                  <span>Created: {format(new Date(quotation.created_at), 'MMM dd, yyyy h:mm a')}</span>
+                  <span>Created: {format(new Date(quotation.created_at), "MMM dd, yyyy h:mm a")}</span>
                 </div>
                 <span className="hidden sm:inline">•</span>
                 <span>By: {creatorName}</span>
                 {quotation.updated_at !== quotation.created_at && (
                   <>
                     <span className="hidden sm:inline">•</span>
-                    <span>Updated: {format(new Date(quotation.updated_at), 'MMM dd, yyyy h:mm a')}</span>
+                    <span>Updated: {format(new Date(quotation.updated_at), "MMM dd, yyyy h:mm a")}</span>
                   </>
                 )}
               </div>
@@ -493,9 +485,7 @@ export function QuotationModal({
                   <span className="text-lg font-bold text-primary">{getTotalProgress().toFixed(0)}%</span>
                 </div>
                 <Progress value={getTotalProgress()} className="h-3" />
-                <p className="text-xs text-muted-foreground">
-                  Based on materials delivered vs. quoted quantities
-                </p>
+                <p className="text-xs text-muted-foreground">Based on materials delivered vs. quoted quantities</p>
               </div>
             )}
 
@@ -520,7 +510,7 @@ export function QuotationModal({
                       <Input
                         placeholder="Material name"
                         value={item.material_name}
-                        onChange={(e) => updateItem(item.id, 'material_name', e.target.value)}
+                        onChange={(e) => updateItem(item.id, "material_name", e.target.value)}
                         disabled={!isEditMode}
                       />
                     </div>
@@ -528,7 +518,7 @@ export function QuotationModal({
                       <Input
                         placeholder="Unit"
                         value={item.unit}
-                        onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
+                        onChange={(e) => updateItem(item.id, "unit", e.target.value)}
                         disabled={!isEditMode}
                       />
                     </div>
@@ -537,8 +527,8 @@ export function QuotationModal({
                         type="number"
                         min={1}
                         placeholder="Qty"
-                        value={item.quantity || ''}
-                        onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                        value={item.quantity || ""}
+                        onChange={(e) => updateItem(item.id, "quantity", parseInt(e.target.value) || 0)}
                         disabled={!isEditMode}
                       />
                     </div>
@@ -646,16 +636,16 @@ export function QuotationModal({
                           <div className="flex items-center justify-between mb-2">
                             <span className="font-medium text-sm">{order.order_number}</span>
                             <span className="text-xs text-muted-foreground">
-                              {order.delivered_at 
-                                ? formatManilaTime(new Date(order.delivered_at))
-                                : 'Unknown date'}
+                              {order.delivered_at ? formatManilaTime(new Date(order.delivered_at)) : "Unknown date"}
                             </span>
                           </div>
                           <div className="space-y-1">
                             {order.items.map((item, idx) => (
                               <div key={idx} className="flex items-center justify-between text-xs">
                                 <span className="text-muted-foreground">{item.material_name}</span>
-                                <span className="font-medium">{item.quantity} {item.unit}</span>
+                                <span className="font-medium">
+                                  {item.quantity} {item.unit}
+                                </span>
                               </div>
                             ))}
                           </div>
@@ -693,9 +683,9 @@ export function QuotationModal({
                         Saving...
                       </>
                     ) : quotation ? (
-                      'Save Changes'
+                      "Save Changes"
                     ) : (
-                      'Create Quotation'
+                      "Create Quotation"
                     )}
                   </Button>
                 </>
