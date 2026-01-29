@@ -233,6 +233,7 @@ export function QuotationModal({
       // Build delivered orders info for expandable section
       const ordersInfo: DeliveredOrderInfo[] = orders.map((order) => {
         const orderItemsList = orderItems?.filter((item: any) => item.order_id === order.id) || [];
+        console.log(orderItemsList);
         return {
           id: order.id,
           order_number: order.order_number,
@@ -498,7 +499,14 @@ export function QuotationModal({
                 <Label className="text-sm font-medium">
                   Initial Quotation {isEditMode && <span className="text-destructive">*</span>}
                 </Label>
+                 {isViewMode && canEdit && (
+                  <Button type="button" variant="outline" size="sm" onClick={handleEnterEditMode}>
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Delete Quotation
+                  </Button>
+                 )}
                 {isViewMode && canEdit && (
+                 
                   <Button type="button" variant="outline" size="sm" onClick={handleEnterEditMode}>
                     <Pencil className="h-4 w-4 mr-1" />
                     Update Quotation
