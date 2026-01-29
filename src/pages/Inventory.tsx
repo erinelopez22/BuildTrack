@@ -1,37 +1,34 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { PageHeader } from '@/components/common/PageHeader';
-import { EmptyState } from '@/components/common/EmptyState';
-import { ProjectCard } from '@/components/projects/ProjectCard';
-import { OrderWorkflowBoard } from '@/components/orders/OrderWorkflowBoard';
-import { Input } from '@/components/ui/input';
-import { useToast } from '@/hooks/use-toast';
-import { Package, Search } from 'lucide-react';
-import type { Project } from '@/types/database';
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { PageHeader } from "@/components/common/PageHeader";
+import { EmptyState } from "@/components/common/EmptyState";
+import { ProjectCard } from "@/components/projects/ProjectCard";
+import { OrderWorkflowBoard } from "@/components/orders/OrderWorkflowBoard";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+import { Package, Search } from "lucide-react";
+import type { Project } from "@/types/database";
 
 export default function Inventory() {
   const { isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState("");
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
   const fetchProjects = async () => {
     // Fetch all non-deleted projects (deleted projects hidden unless Super Admin)
-    let query = supabase
-      .from('projects')
-      .select('*')
-      .order('name', { ascending: true });
+    let query = supabase.from("projects").select("*").order("name", { ascending: true });
 
     // Never show deleted projects in inventory view
-    query = query.neq('status', 'deleted');
+    query = query.neq("status", "deleted");
 
     const { data, error } = await query;
 
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       setProjects(data as Project[]);
     }
@@ -43,20 +40,18 @@ export default function Inventory() {
   }, []);
 
   // Filter by search
-  const filteredProjects = projects.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.code?.toLowerCase().includes(search.toLowerCase()) ||
-    p.location?.toLowerCase().includes(search.toLowerCase())
+  const filteredProjects = projects.filter(
+    (p) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.code?.toLowerCase().includes(search.toLowerCase()) ||
+      p.location?.toLowerCase().includes(search.toLowerCase()),
   );
 
   // If a project is selected, show the order workflow board
   if (selectedProject) {
     return (
       <div className="animate-fade-in">
-        <OrderWorkflowBoard
-          project={selectedProject}
-          onBack={() => setSelectedProject(null)}
-        />
+        <OrderWorkflowBoard project={selectedProject} onBack={() => setSelectedProject(null)} />
       </div>
     );
   }
@@ -72,10 +67,7 @@ export default function Inventory() {
   if (projects.length === 0) {
     return (
       <div className="animate-fade-in">
-        <PageHeader 
-          title="Inventory" 
-          description="Select a project to view and manage orders" 
-        />
+        <PageHeader title="Inventory" description="Select a project to view and manage orders" />
         <EmptyState
           icon={Package}
           title="No projects available"
@@ -87,10 +79,7 @@ export default function Inventory() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <PageHeader
-        title="Inventory"
-        description="Select a project to view and manage orders"
-      />
+      <PageHeader title="Order & Tracking" description="Select a project to view and manage orders" />
 
       {/* Search */}
       <div className="relative max-w-sm">
@@ -111,11 +100,7 @@ export default function Inventory() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredProjects.map((project) => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onClick={() => setSelectedProject(project)}
-            />
+            <ProjectCard key={project.id} project={project} onClick={() => setSelectedProject(project)} />
           ))}
         </div>
       )}
