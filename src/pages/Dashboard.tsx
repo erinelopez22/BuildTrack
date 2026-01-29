@@ -60,16 +60,18 @@ export default function Dashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true);
 
-      // Fetch orders
+      // Fetch active orders count (proper count query)
+      const { count: activeOrdersCount } = await supabase
+        .from('orders')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'on_hold']);
+
+      // Fetch recent orders for the table and chart
       const { data: ordersData } = await supabase
         .from('orders')
         .select('*, project:projects(name)')
         .order('created_at', { ascending: false })
         .limit(10);
-
-      // Active order statuses (excluding closed, cancelled, rejected)
-      const activeOrderStatuses = ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'on_hold'];
-      const activeOrders = (ordersData || []).filter((o) => activeOrderStatuses.includes(o.status));
 
       // Count orders by status for the pie chart
       const statusCounts: Record<string, number> = {};
@@ -90,7 +92,7 @@ export default function Dashboard() {
       setStats({
         activeProjects: projectCount || 0,
         totalSkus: skuCount || 0,
-        activeOrders: activeOrders.length,
+        activeOrders: activeOrdersCount || 0,
         activeMembers: membersCount,
       });
 
