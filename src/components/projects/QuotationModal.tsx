@@ -701,66 +701,6 @@ export function QuotationModal({
               )}
             </div>
 
-            {/* Progress Tracking Section (View Mode Only) */}
-            {isViewMode && materialProgress && materialProgress.length > 0 && (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Package className="h-4 w-4 text-primary" />
-                  <Label className="text-sm font-medium">Quotation Progress</Label>
-                </div>
-
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-muted/50">
-                      <tr>
-                        <th className="text-left p-2 font-medium">Material</th>
-                        <th className="text-center p-2 font-medium w-16">Unit</th>
-                        <th className="text-center p-2 font-medium w-20">Quoted</th>
-                        <th className="text-center p-2 font-medium w-20">Received</th>
-                        <th className="text-center p-2 font-medium w-20">Remaining</th>
-                        <th className="text-center p-2 font-medium w-28">Progress</th>
-                        <th className="text-center p-2 font-medium w-20">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {materialProgress.map((material) => (
-                        <tr key={material.quotationItemId} className="hover:bg-muted/30">
-                          <td className="p-2 font-medium">{material.materialName}</td>
-                          <td className="p-2 text-center text-muted-foreground">{material.unit}</td>
-                          <td className="p-2 text-center">{material.quotedQty}</td>
-                          <td className="p-2 text-center font-medium text-primary">{material.deliveredQty}</td>
-                          <td className="p-2 text-center text-muted-foreground">{material.remainingQty}</td>
-                          <td className="p-2">
-                            <div className="flex items-center gap-2">
-                              <Progress value={material.percentage} className="h-2 flex-1" />
-                              <span className="text-xs font-medium w-10 text-right">{material.percentage}%</span>
-                            </div>
-                          </td>
-                          <td className="p-2 text-center">
-                            {material.isFullyDelivered ? (
-                              <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-xs">
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Complete
-                              </Badge>
-                            ) : material.deliveredQty > 0 ? (
-                              <Badge variant="secondary" className="text-xs">
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                Partial
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-xs text-muted-foreground">
-                                Pending
-                              </Badge>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
             {/* Notes */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Notes</Label>
