@@ -646,6 +646,15 @@ export function QuotationModal({
                 <Label className="text-sm font-medium">
                   Initial Quotation {isEditMode && <span className="text-destructive">*</span>}
                 </Label>
+                {/* Delete button - only visible in view mode for authorized users */}
+
+                {isViewMode && quotation && canDelete && (
+                  <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} className="gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Delete Quotation
+                  </Button>
+                )}
+
                 {isViewMode && canEdit && (
                   <Button type="button" variant="outline" size="sm" onClick={handleEnterEditMode}>
                     <Pencil className="h-4 w-4 mr-1" />
@@ -781,16 +790,6 @@ export function QuotationModal({
 
             {/* Actions */}
             <div className="flex justify-between items-center gap-2 pt-2">
-              {/* Delete button - only visible in view mode for authorized users */}
-              <div>
-                {isViewMode && quotation && canDelete && (
-                  <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} className="gap-2">
-                    <Trash2 className="h-4 w-4" />
-                    Delete Quotation
-                  </Button>
-                )}
-              </div>
-
               <div className="flex gap-2">
                 {isEditMode ? (
                   <>
