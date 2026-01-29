@@ -9,9 +9,20 @@ import {
   Pencil,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -74,14 +85,56 @@ export function QuotationModal({
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [items, setItems] = useState<QuotationItem[]>([]);
   const [notes, setNotes] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
   const [creatorName, setCreatorName] = useState<string>("");
+  const [canDelete, setCanDelete] = useState(false);
 
   // Delivery progress tracking (for progress bars only)
-  const [materialProgress, setMaterialProgress] = useState<MaterialDeliveryProgress[]>([]);
+  const [materialProgress, setMaterialProgress] = useState<MaterialDeliveryProgress[]>();
+
+  // Check if user can delete quotation (Project Engineer, Admin, Super Admin)
+  useEffect(() => {
+    const checkDeletePermission = async () => {
+      if (!user) {
+        setCanDelete(false);
+        return;
+      }
+
+      // Check global roles (admin, super_admin)
+      const { data: userRoles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      const hasAdminRole = userRoles?.some(
+        (r) => r.role === "admin" || r.role === "super_admin"
+      );
+
+      if (hasAdminRole) {
+        setCanDelete(true);
+        return;
+      }
+
+      // Check project role (project_manager = Project Engineer)
+      const { data: projectRole } = await supabase
+        .from("project_members")
+        .select("role")
+        .eq("project_id", projectId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      setCanDelete(projectRole?.role === "project_manager");
+    };
+
+    if (open) {
+      checkDeletePermission();
+    }
+  }, [open, user, projectId]);
 
   const fetchQuotation = async () => {
     setLoading(true);
@@ -450,7 +503,93 @@ export function QuotationModal({
     }
   };
 
+  const handleDeleteQuotation = async () => {
+    if (!user || !quotation) return;
+
+    setDeleting(true);
+    try {
+      // Get user profile for activity log
+      const { data: userProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const userName = userProfile?.full_name || "User";
+
+      // Get user role
+      const { data: userRole } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const roleName = userRole?.role || "member";
+
+      const quotationId = quotation.id;
+      const itemsCount = items.length;
+
+      // Delete quotation items first (child records)
+      const { error: deleteItemsError } = await supabase
+        .from("quotation_items")
+        .delete()
+        .eq("quotation_id", quotationId);
+
+      if (deleteItemsError) throw deleteItemsError;
+
+      // Delete the quotation
+      const { error: deleteQuotationError } = await supabase
+        .from("project_quotations")
+        .delete()
+        .eq("id", quotationId);
+
+      if (deleteQuotationError) throw deleteQuotationError;
+
+      // Log activity
+      await logActivity({
+        action: "delete",
+        tableName: "project_quotations",
+        recordId: quotationId,
+        oldValues: {
+          items_count: itemsCount,
+        },
+        newValues: null,
+        userId: user.id,
+      });
+
+      // Notify project members
+      await notifyProjectMembers({
+        projectId,
+        title: "Quotation Deleted",
+        message: `${userName} (${roleName}) deleted the quotation for ${projectName} on ${formatManilaTime(new Date())}`,
+        type: "project",
+        referenceType: "project_quotations",
+        referenceId: quotationId,
+        excludeUserId: user.id,
+      });
+
+      toast({
+        title: "Quotation Deleted",
+        description: "The quotation has been permanently deleted",
+      });
+
+      // Close modal and refresh parent
+      setShowDeleteConfirm(false);
+      onOpenChange(false);
+      onQuotationChange?.();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete quotation",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const getTotalProgress = () => {
+    if (!materialProgress) return 0;
     const totalQuoted = materialProgress.reduce((sum, item) => sum + item.quotedQty, 0);
     const totalDelivered = materialProgress.reduce((sum, item) => {
       // Cap delivered at quoted amount for percentage calculation
@@ -496,7 +635,7 @@ export function QuotationModal({
             )}
 
             {/* Overall Progress Summary */}
-            {isViewMode && materialProgress.length > 0 && (
+            {isViewMode && materialProgress && materialProgress.length > 0 && (
               <div className="space-y-3 p-4 bg-primary/5 rounded-lg border">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Overall Project Progress</span>
@@ -589,7 +728,7 @@ export function QuotationModal({
             </div>
 
             {/* Progress Tracking Section (View Mode Only) */}
-            {isViewMode && materialProgress.length > 0 && (
+            {isViewMode && materialProgress && materialProgress.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Package className="h-4 w-4 text-primary" />
@@ -661,34 +800,87 @@ export function QuotationModal({
             </div>
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 pt-2">
-              {isEditMode ? (
-                <>
-                  <Button variant="outline" onClick={handleCancelEdit}>
-                    Cancel
+            <div className="flex justify-between items-center gap-2 pt-2">
+              {/* Delete button - only visible in view mode for authorized users */}
+              <div>
+                {isViewMode && quotation && canDelete && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Quotation
                   </Button>
-                  <Button onClick={handleSave} disabled={saving}>
-                    {saving ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
-                      </>
-                    ) : quotation ? (
-                      "Save Changes"
-                    ) : (
-                      "Create Quotation"
-                    )}
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                {isEditMode ? (
+                  <>
+                    <Button variant="outline" onClick={handleCancelEdit}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSave} disabled={saving}>
+                      {saving ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Saving...
+                        </>
+                      ) : quotation ? (
+                        "Save Changes"
+                      ) : (
+                        "Create Quotation"
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    Close
                   </Button>
-                </>
-              ) : (
-                <Button variant="outline" onClick={() => onOpenChange(false)}>
-                  Close
-                </Button>
-              )}
+                )}
+              </div>
             </div>
           </div>
         )}
       </DialogContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Quotation
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                You are about to permanently delete the existing quotation for this project.
+              </p>
+              <p className="font-medium text-destructive">
+                This action cannot be undone and will affect project progress tracking.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteQuotation}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "OK"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
