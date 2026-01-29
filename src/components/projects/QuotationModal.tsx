@@ -122,12 +122,12 @@ export function QuotationModal({
 
   const fetchReceivedQuantities = async () => {
     try {
-      // Get all orders for this project that are delivered/received
+      // Get only DELIVERED orders for this project (strict: only 'delivered' status)
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select('id')
         .eq('project_id', projectId)
-        .in('status', ['delivered', 'partially_received', 'fully_received', 'closed']);
+        .eq('status', 'delivered');
 
       if (ordersError) throw ordersError;
       if (!orders || orders.length === 0) {

@@ -79,12 +79,12 @@ export function ProjectCard({
 
         const totalQuoted = quotationItems.reduce((sum, item) => sum + item.quantity, 0);
 
-        // Get all delivered orders for this project
+        // Get only DELIVERED orders for this project (strict: only 'delivered' status)
         const { data: orders } = await supabase
           .from('orders')
           .select('id')
           .eq('project_id', project.id)
-          .in('status', ['delivered', 'partially_received', 'fully_received', 'closed']);
+          .eq('status', 'delivered');
 
         if (!orders || orders.length === 0) {
           setProgress({ percentage: 0, hasQuotation: true });

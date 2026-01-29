@@ -88,7 +88,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   }, [project.id]);
 
   const handleCreateOrder = async (data: {
-    materials: { name: string; quantity: number }[];
+    materials: { materialId: string; name: string; unit: string; quantity: number }[];
     expectedDeliveryDate: Date | null;
     notes: string;
   }) => {
@@ -98,7 +98,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
     // Format materials as notes content (including the materials list in the notes)
     const materialsDescription = data.materials
-      .map((m) => `• ${m.name} (Qty: ${m.quantity})`)
+      .map((m) => `• ${m.name} (${m.unit}) - Qty: ${m.quantity}`)
       .join('\n');
     
     const fullNotes = `Materials:\n${materialsDescription}\n\n${data.notes}`;
@@ -540,6 +540,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       <CreateOrderModal
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
+        projectId={project.id}
         projectName={project.name}
         onSubmit={handleCreateOrder}
         isSubmitting={isCreating}
