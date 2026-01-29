@@ -8,6 +8,7 @@ import { ProjectTeamTab } from '@/components/projects/ProjectTeamTab';
 import { ProjectActivityTab } from '@/components/projects/ProjectActivityTab';
 import { QuotationModal } from '@/components/projects/QuotationModal';
 import { ActiveOrdersModal } from '@/components/projects/ActiveOrdersModal';
+import { DeliveredMaterialsModal } from '@/components/projects/DeliveredMaterialsModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -32,6 +33,7 @@ import {
   FileText,
   ClipboardList,
   Package,
+  TruckIcon,
 } from 'lucide-react';
 import type { Project, ProjectStatus, AppRole } from '@/types/database';
 import { format } from 'date-fns';
@@ -47,6 +49,7 @@ export default function ProjectDetail() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isQuotationOpen, setIsQuotationOpen] = useState(false);
   const [isActiveOrdersOpen, setIsActiveOrdersOpen] = useState(false);
+  const [isDeliveredMaterialsOpen, setIsDeliveredMaterialsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userProjectRole, setUserProjectRole] = useState<AppRole | null>(null);
   const [hasQuotation, setHasQuotation] = useState(false);
@@ -313,6 +316,10 @@ export default function ProjectDetail() {
           <Package className="mr-2 h-4 w-4" />
           View Active Orders
         </Button>
+        <Button variant="outline" onClick={() => setIsDeliveredMaterialsOpen(true)}>
+          <TruckIcon className="mr-2 h-4 w-4" />
+          Delivered Materials
+        </Button>
       </div>
 
       {/* Tabs - Team and Activity */}
@@ -359,6 +366,13 @@ export default function ProjectDetail() {
       <ActiveOrdersModal
         open={isActiveOrdersOpen}
         onOpenChange={setIsActiveOrdersOpen}
+        projectId={project.id}
+        projectName={project.name}
+      />
+
+      <DeliveredMaterialsModal
+        open={isDeliveredMaterialsOpen}
+        onOpenChange={setIsDeliveredMaterialsOpen}
         projectId={project.id}
         projectName={project.name}
       />
