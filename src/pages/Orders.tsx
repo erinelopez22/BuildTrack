@@ -64,7 +64,7 @@ export default function Orders() {
   }, [statusFilter, searchParams, setSearchParams]);
 
   const fetchData = async () => {
-    // Fetch orders with project info, then filter by active projects
+    // Fetch all orders with project info, including closed orders
     const { data: ordersData } = await supabase
       .from("orders")
       .select("*, project:projects(*)")
@@ -77,6 +77,7 @@ export default function Orders() {
         "delivered",
         "rejected",
         "on_hold",
+        "closed",
       ])
       .order("created_at", { ascending: false });
 
@@ -263,7 +264,7 @@ export default function Orders() {
     },
   ];
 
-  // Updated status options with new statuses
+  // Updated status options with all statuses including closed
   const statusOptions: { value: string; label: string }[] = [
     { value: "all", label: "All Statuses" },
     { value: "active", label: "Active Orders" },
@@ -273,6 +274,7 @@ export default function Orders() {
     { value: "preparing", label: "Preparing for Tracking" },
     { value: "in_transit", label: "On Transit" },
     { value: "delivered", label: "Delivered" },
+    { value: "closed", label: "Completed" },
     { value: "rejected", label: "Rejected" },
     { value: "on_hold", label: "On-hold" },
   ];
