@@ -184,6 +184,8 @@ export function QuotationModal({
         setMaterialProgress(emptyProgress);
         setDeliveredOrders([]);
         return;
+      } else {
+        console.log(orders);
       }
 
       // Get order items with quotation_item_id reference and SKU info
