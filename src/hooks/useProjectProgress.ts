@@ -66,39 +66,37 @@ export function useProjectProgress(projectId: string, refreshKey: number = 0): P
           return;
         }
 
-        // Get only DELIVERED orders for this project (strict: only 'delivered' status)
+        // Get DELIVERED orders for this project
         const { data: orders } = await supabase
           .from('orders')
           .select('id')
           .eq('project_id', projectId)
           .eq('status', 'delivered');
 
-        // Build delivered quantities map by material name
-        const deliveredByMaterial: Record<string, number> = {};
+        // Build delivered quantities map by quotation_item_id for accurate tracking
+        const deliveredByQuotationItemId: Record<string, number> = {};
 
         if (orders && orders.length > 0) {
-          // Get order items with quantity_ordered (using it as delivered quantity for delivered orders)
-          // Note: In a full implementation, you'd track quantity_received separately
+          // Get order items with quotation_item_id reference
           const { data: orderItems } = await supabase
             .from('order_items')
-            .select('quantity_ordered, quantity_received, sku:skus(name)')
-            .in('order_id', orders.map(o => o.id));
+            .select('quotation_item_id, quantity_ordered, quantity_received')
+            .in('order_id', orders.map(o => o.id))
+            .not('quotation_item_id', 'is', null);
 
-          orderItems?.forEach((item: any) => {
-            const name = item.sku?.name?.toLowerCase() || '';
-            if (name) {
-              // Use quantity_received if available, otherwise use quantity_ordered for delivered orders
+          orderItems?.forEach((item) => {
+            if (item.quotation_item_id) {
+              // Use quantity_received if available, otherwise use quantity_ordered
               const qty = item.quantity_received ?? item.quantity_ordered ?? 0;
-              deliveredByMaterial[name] = (deliveredByMaterial[name] || 0) + qty;
+              deliveredByQuotationItemId[item.quotation_item_id] = 
+                (deliveredByQuotationItemId[item.quotation_item_id] || 0) + qty;
             }
           });
         }
 
-        // Calculate per-material progress
+        // Calculate per-material progress using quotation_item_id
         const materialProgress: MaterialProgress[] = quotationItems.map((qItem) => {
-          const materialKey = qItem.material_name.toLowerCase();
-          const deliveredQty = deliveredByMaterial[materialKey] || 0;
-          const cappedDelivered = Math.min(deliveredQty, qItem.quantity);
+          const deliveredQty = deliveredByQuotationItemId[qItem.id] || 0;
           const remainingQty = Math.max(0, qItem.quantity - deliveredQty);
           const percentage = qItem.quantity > 0 
             ? Math.min(100, (deliveredQty / qItem.quantity) * 100) 
@@ -119,8 +117,7 @@ export function useProjectProgress(projectId: string, refreshKey: number = 0): P
         let totalDelivered = 0;
         
         quotationItems.forEach((qItem) => {
-          const materialKey = qItem.material_name.toLowerCase();
-          const delivered = deliveredByMaterial[materialKey] || 0;
+          const delivered = deliveredByQuotationItemId[qItem.id] || 0;
           // Cap delivered at quoted amount for percentage calculation
           totalDelivered += Math.min(delivered, qItem.quantity);
         });
