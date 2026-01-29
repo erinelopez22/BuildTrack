@@ -663,6 +663,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         projectName={project.name}
         open={isCompletedModalOpen}
         onOpenChange={setIsCompletedModalOpen}
+        onOrderDeleted={fetchOrders}
       />
     </div>
   );
