@@ -140,18 +140,18 @@ export function QuotationModal({
 
   const fetchDeliveredMaterials = async (quotationId: string, quotationItems: QuotationItem[]) => {
     try {
-      // Get only DELIVERED orders for this project
+      // Get DELIVERED and CLOSED orders for this project (Received + Completed)
       const { data: orders, error: ordersError } = await supabase
         .from("orders")
         .select("id, order_number, updated_at")
         .eq("project_id", projectId)
-        .eq("status", "delivered")
+        .in("status", ["delivered", "closed"])
         .order("updated_at", { ascending: false });
 
       if (ordersError) throw ordersError;
 
       if (!orders || orders.length === 0) {
-        // No delivered orders - set empty progress
+        // No received orders - set empty progress
         const emptyProgress = quotationItems.map((qItem) => ({
           quotationItemId: qItem.id,
           materialName: qItem.material_name,
@@ -166,10 +166,10 @@ export function QuotationModal({
         return;
       }
 
-      // Get order items with quotation_item_id reference and SKU info
+      // Get order items with quotation_item_id reference
       const { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
-        .select("order_id, quotation_item_id, quantity_ordered, quantity_received, sku:skus(name, unit_of_measure)")
+        .select("order_id, quotation_item_id, quantity_received")
         .in(
           "order_id",
           orders.map((o) => o.id),
@@ -177,29 +177,30 @@ export function QuotationModal({
 
       if (itemsError) throw itemsError;
 
-      // Build delivered quantities map by quotation_item_id
-      const deliveredByQuotationItemId: Record<string, number> = {};
+      // Build received quantities map by quotation_item_id - use ONLY quantity_received
+      const receivedByQuotationItemId: Record<string, number> = {};
 
       orderItems?.forEach((item: any) => {
         if (item.quotation_item_id) {
-          const qty = item.quantity_received ?? item.quantity_ordered ?? 0;
-          deliveredByQuotationItemId[item.quotation_item_id] =
-            (deliveredByQuotationItemId[item.quotation_item_id] || 0) + qty;
+          // Use ONLY quantity_received (not quantity_ordered)
+          const qty = item.quantity_received ?? 0;
+          receivedByQuotationItemId[item.quotation_item_id] =
+            (receivedByQuotationItemId[item.quotation_item_id] || 0) + qty;
         }
       });
 
       // Calculate per-material progress using quotation_item_id
       const progress: MaterialDeliveryProgress[] = quotationItems.map((qItem) => {
-        const deliveredQty = deliveredByQuotationItemId[qItem.id] || 0;
-        const remainingQty = Math.max(0, qItem.quantity - deliveredQty);
-        const percentage = qItem.quantity > 0 ? Math.min(100, (deliveredQty / qItem.quantity) * 100) : 0;
+        const receivedQty = receivedByQuotationItemId[qItem.id] || 0;
+        const remainingQty = Math.max(0, qItem.quantity - receivedQty);
+        const percentage = qItem.quantity > 0 ? Math.min(100, (receivedQty / qItem.quantity) * 100) : 0;
 
         return {
           quotationItemId: qItem.id,
           materialName: qItem.material_name,
           unit: qItem.unit,
           quotedQty: qItem.quantity,
-          deliveredQty: deliveredQty,
+          deliveredQty: receivedQty,
           remainingQty: remainingQty,
           percentage: Math.round(percentage * 10) / 10,
           isFullyDelivered: percentage >= 100,
@@ -207,7 +208,7 @@ export function QuotationModal({
       });
       setMaterialProgress(progress);
     } catch (error) {
-      console.error("Error fetching delivered materials:", error);
+      console.error("Error fetching received materials:", error);
     }
   };
 
@@ -443,13 +444,27 @@ export function QuotationModal({
 
             {/* Overall Progress Summary */}
             {isViewMode && materialProgress.length > 0 && (
-              <div className="space-y-2 p-4 bg-primary/5 rounded-lg border">
+              <div className="space-y-3 p-4 bg-primary/5 rounded-lg border">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Overall Project Progress</span>
                   <span className="text-lg font-bold text-primary">{getTotalProgress().toFixed(0)}%</span>
                 </div>
                 <Progress value={getTotalProgress()} className="h-3" />
-                <p className="text-xs text-muted-foreground">Based on materials delivered vs. quoted quantities</p>
+                <div className="grid grid-cols-3 gap-4 text-center text-sm">
+                  <div>
+                    <div className="font-semibold">{materialProgress.reduce((sum, m) => sum + m.quotedQty, 0)}</div>
+                    <div className="text-xs text-muted-foreground">Total Quoted</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-primary">{materialProgress.reduce((sum, m) => sum + m.deliveredQty, 0)}</div>
+                    <div className="text-xs text-muted-foreground">Total Received</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-orange-600">{materialProgress.reduce((sum, m) => sum + m.remainingQty, 0)}</div>
+                    <div className="text-xs text-muted-foreground">Remaining</div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Based on quantity_received from Delivered + Closed orders</p>
               </div>
             )}
 

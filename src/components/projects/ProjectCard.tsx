@@ -66,10 +66,10 @@ export function ProjectCard({
           return;
         }
 
-        // Fetch quotation items
+        // Fetch quotation items with IDs for accurate matching
         const { data: quotationItems } = await supabase
           .from('quotation_items')
-          .select('material_name, quantity')
+          .select('id, material_name, quantity')
           .eq('quotation_id', quotation.id);
 
         if (!quotationItems || quotationItems.length === 0) {
@@ -79,37 +79,40 @@ export function ProjectCard({
 
         const totalQuoted = quotationItems.reduce((sum, item) => sum + item.quantity, 0);
 
-        // Get only DELIVERED orders for this project (strict: only 'delivered' status)
+        // Get DELIVERED and CLOSED orders for this project (Received + Completed)
         const { data: orders } = await supabase
           .from('orders')
           .select('id')
           .eq('project_id', project.id)
-          .eq('status', 'delivered');
+          .in('status', ['delivered', 'closed']);
 
         if (!orders || orders.length === 0) {
           setProgress({ percentage: 0, hasQuotation: true });
           return;
         }
 
-        // Get order items with received quantities
+        // Get order items with quotation_item_id reference - use ONLY quantity_received
         const { data: orderItems } = await supabase
           .from('order_items')
-          .select('quantity_received, sku:skus(name)')
-          .in('order_id', orders.map(o => o.id));
+          .select('quotation_item_id, quantity_received')
+          .in('order_id', orders.map(o => o.id))
+          .not('quotation_item_id', 'is', null);
 
-        // Match received quantities to quotation items
-        const receivedByMaterial: Record<string, number> = {};
+        // Build received quantities map by quotation_item_id
+        const receivedByQuotationItemId: Record<string, number> = {};
         orderItems?.forEach((item: any) => {
-          const name = item.sku?.name?.toLowerCase() || '';
-          if (name) {
-            receivedByMaterial[name] = (receivedByMaterial[name] || 0) + (item.quantity_received || 0);
+          if (item.quotation_item_id) {
+            // Use ONLY quantity_received (not quantity_ordered)
+            const qty = item.quantity_received ?? 0;
+            receivedByQuotationItemId[item.quotation_item_id] = 
+              (receivedByQuotationItemId[item.quotation_item_id] || 0) + qty;
           }
         });
 
+        // Calculate total received, capped at quoted amounts
         let totalReceived = 0;
         quotationItems.forEach((qItem) => {
-          const materialKey = qItem.material_name.toLowerCase();
-          const received = receivedByMaterial[materialKey] || 0;
+          const received = receivedByQuotationItemId[qItem.id] || 0;
           totalReceived += Math.min(received, qItem.quantity);
         });
 
