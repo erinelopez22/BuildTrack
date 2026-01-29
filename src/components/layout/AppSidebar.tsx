@@ -32,8 +32,8 @@ import { cn } from '@/lib/utils';
 const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Projects', url: '/projects', icon: FolderKanban },
-  { title: 'Inventory', url: '/inventory', icon: Package },
-  { title: 'Orders', url: '/orders', icon: ClipboardList },
+  { title: 'Order & Tracking', url: '/inventory', icon: Package },
+  { title: 'View Orders', url: '/orders', icon: ClipboardList },
   { title: 'SKU Catalog', url: '/skus', icon: Boxes },
 ];
 
