@@ -49,8 +49,10 @@ export default function ProjectDetail() {
   const [isActiveOrdersOpen, setIsActiveOrdersOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userProjectRole, setUserProjectRole] = useState<AppRole | null>(null);
+  const [hasQuotation, setHasQuotation] = useState(false);
+  const [progressKey, setProgressKey] = useState(0);
 
-  const progress = useProjectProgress(id || '');
+  const progress = useProjectProgress(id || '', progressKey);
 
   const fetchAllProjects = async () => {
     const { data } = await supabase
@@ -78,6 +80,15 @@ export default function ProjectDetail() {
 
     setProject(projectData as Project);
 
+    // Check if quotation exists
+    const { data: quotationData } = await supabase
+      .from('project_quotations')
+      .select('id')
+      .eq('project_id', id)
+      .maybeSingle();
+    
+    setHasQuotation(!!quotationData);
+
     // Fetch user's role in this project
     if (user) {
       const { data: memberData } = await supabase
@@ -102,6 +113,12 @@ export default function ProjectDetail() {
 
   // Check if user can edit quotation (admin or project_manager role)
   const canEditQuotation = isAdmin() || userProjectRole === 'project_manager';
+
+  // Refresh progress when quotation changes
+  const handleQuotationChange = () => {
+    setProgressKey((prev) => prev + 1);
+    fetchProjectData();
+  };
 
   const handleEditSubmit = async (data: {
     name: string;
@@ -290,7 +307,7 @@ export default function ProjectDetail() {
       <div className="flex flex-wrap gap-3">
         <Button variant="outline" onClick={() => setIsQuotationOpen(true)}>
           <ClipboardList className="mr-2 h-4 w-4" />
-          Quotation
+          {hasQuotation ? 'View Quotation' : 'Add Quotation'}
         </Button>
         <Button variant="outline" onClick={() => setIsActiveOrdersOpen(true)}>
           <Package className="mr-2 h-4 w-4" />
@@ -335,6 +352,8 @@ export default function ProjectDetail() {
         projectId={project.id}
         projectName={project.name}
         canEdit={canEditQuotation}
+        hasExistingQuotation={hasQuotation}
+        onQuotationChange={handleQuotationChange}
       />
 
       <ActiveOrdersModal

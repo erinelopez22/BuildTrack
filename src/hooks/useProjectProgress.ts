@@ -8,7 +8,8 @@ interface ProjectProgress {
   hasQuotation: boolean;
 }
 
-export function useProjectProgress(projectId: string): ProjectProgress {
+// Added refreshKey parameter to force re-fetch when quotation changes
+export function useProjectProgress(projectId: string, refreshKey: number = 0): ProjectProgress {
   const [progress, setProgress] = useState<ProjectProgress>({
     totalQuoted: 0,
     totalReceived: 0,
@@ -111,7 +112,7 @@ export function useProjectProgress(projectId: string): ProjectProgress {
     if (projectId) {
       fetchProgress();
     }
-  }, [projectId]);
+  }, [projectId, refreshKey]);
 
   return progress;
 }

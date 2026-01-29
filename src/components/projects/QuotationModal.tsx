@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Plus, Trash2, Loader2, Clock, Package } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Plus, Trash2, Loader2, Clock, Package, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,6 +15,8 @@ import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/lib/activityLogger';
+import { notifyProjectMembers, formatManilaTime } from '@/lib/notificationService';
 
 interface QuotationItem {
   id: string;
@@ -40,6 +41,8 @@ interface QuotationModalProps {
   projectId: string;
   projectName: string;
   canEdit: boolean;
+  hasExistingQuotation: boolean;
+  onQuotationChange?: () => void;
 }
 
 export function QuotationModal({
@@ -48,6 +51,8 @@ export function QuotationModal({
   projectId,
   projectName,
   canEdit,
+  hasExistingQuotation,
+  onQuotationChange,
 }: QuotationModalProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -57,6 +62,8 @@ export function QuotationModal({
   const [items, setItems] = useState<QuotationItem[]>([]);
   const [notes, setNotes] = useState('');
   const [receivedByMaterial, setReceivedByMaterial] = useState<Record<string, number>>({});
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [creatorName, setCreatorName] = useState<string>('');
 
   const fetchQuotation = async () => {
     setLoading(true);
@@ -73,6 +80,16 @@ export function QuotationModal({
       if (quotationData) {
         setQuotation(quotationData);
         setNotes(quotationData.notes || '');
+        setIsEditMode(false);
+
+        // Fetch creator name
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', quotationData.created_by)
+          .maybeSingle();
+        
+        setCreatorName(profileData?.full_name || 'Unknown');
 
         // Fetch quotation items
         const { data: itemsData, error: itemsError } = await supabase
@@ -90,6 +107,7 @@ export function QuotationModal({
         setQuotation(null);
         setItems([{ id: crypto.randomUUID(), material_name: '', unit: 'pcs', quantity: 0 }]);
         setNotes('');
+        setIsEditMode(true);
       }
     } catch (error: any) {
       toast({
@@ -167,11 +185,20 @@ export function QuotationModal({
     if (!user) return;
     
     // Validate
-    const hasInvalidItem = items.some((item) => !item.material_name.trim() || item.quantity < 1);
+    const hasInvalidItem = items.some((item) => !item.material_name.trim() || item.quantity < 1 || !item.unit.trim());
     if (hasInvalidItem) {
       toast({
         title: 'Validation Error',
-        description: 'All materials must have a name and quantity of at least 1',
+        description: 'All materials must have a name, unit, and quantity of at least 1',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (items.length === 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'At least one material item is required',
         variant: 'destructive',
       });
       return;
@@ -179,6 +206,24 @@ export function QuotationModal({
 
     setSaving(true);
     try {
+      // Get user profile for activity log
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const userName = userProfile?.full_name || 'User';
+
+      // Get user role
+      const { data: userRole } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      const roleName = userRole?.role || 'member';
+
       if (quotation) {
         // Update existing quotation
         const { error: updateError } = await supabase
@@ -201,6 +246,33 @@ export function QuotationModal({
         );
 
         if (itemsError) throw itemsError;
+
+        // Log activity
+        await logActivity({
+          action: 'update',
+          tableName: 'project_quotations',
+          recordId: quotation.id,
+          oldValues: null,
+          newValues: { 
+            items_count: items.length,
+            updated_by: userName,
+            role: roleName,
+          },
+          userId: user.id,
+        });
+
+        // Notify project members
+        await notifyProjectMembers({
+          projectId,
+          title: 'Quotation Updated',
+          message: `${userName} (${roleName}) updated the quotation for ${projectName} on ${formatManilaTime(new Date())}`,
+          type: 'project',
+          referenceType: 'project_quotations',
+          referenceId: quotation.id,
+          excludeUserId: user.id,
+        });
+
+        toast({ title: 'Success', description: 'Quotation updated successfully' });
       } else {
         // Create new quotation
         const { data: newQuotation, error: createError } = await supabase
@@ -226,10 +298,38 @@ export function QuotationModal({
         );
 
         if (itemsError) throw itemsError;
+
+        // Log activity
+        await logActivity({
+          action: 'create',
+          tableName: 'project_quotations',
+          recordId: newQuotation.id,
+          oldValues: null,
+          newValues: { 
+            items_count: items.length,
+            created_by: userName,
+            role: roleName,
+          },
+          userId: user.id,
+        });
+
+        // Notify project members
+        await notifyProjectMembers({
+          projectId,
+          title: 'Quotation Created',
+          message: `${userName} (${roleName}) created a quotation for ${projectName} on ${formatManilaTime(new Date())}`,
+          type: 'project',
+          referenceType: 'project_quotations',
+          referenceId: newQuotation.id,
+          excludeUserId: user.id,
+        });
+
+        toast({ title: 'Success', description: 'Quotation created successfully' });
       }
 
-      toast({ title: 'Success', description: 'Quotation saved successfully' });
+      setIsEditMode(false);
       fetchQuotation();
+      onQuotationChange?.();
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -241,21 +341,38 @@ export function QuotationModal({
     }
   };
 
+  const handleEnterEditMode = () => {
+    setIsEditMode(true);
+  };
+
+  const handleCancelEdit = () => {
+    if (quotation) {
+      setIsEditMode(false);
+      fetchQuotation();
+    } else {
+      onOpenChange(false);
+    }
+  };
+
   const getItemProgress = (item: QuotationItem) => {
     const materialKey = item.material_name.toLowerCase();
     const received = receivedByMaterial[materialKey] || 0;
-    const percentage = item.quantity > 0 ? Math.min(100, (received / item.quantity) * 100) : 0;
-    return { received, percentage, remaining: Math.max(0, item.quantity - received) };
+    const cappedReceived = Math.min(received, item.quantity);
+    const percentage = item.quantity > 0 ? Math.min(100, (cappedReceived / item.quantity) * 100) : 0;
+    return { received, cappedReceived, percentage, remaining: Math.max(0, item.quantity - received) };
   };
 
   const getTotalProgress = () => {
     const totalQuoted = items.reduce((sum, item) => sum + item.quantity, 0);
     const totalReceived = items.reduce((sum, item) => {
       const materialKey = item.material_name.toLowerCase();
-      return sum + (receivedByMaterial[materialKey] || 0);
+      const received = receivedByMaterial[materialKey] || 0;
+      return sum + Math.min(received, item.quantity); // Cap at quoted quantity
     }, 0);
     return totalQuoted > 0 ? Math.min(100, (totalReceived / totalQuoted) * 100) : 0;
   };
+
+  const isViewMode = !isEditMode && quotation !== null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -263,7 +380,7 @@ export function QuotationModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Quotation - {projectName}
+            {!quotation ? 'Add Quotation' : isEditMode ? 'Update Quotation' : 'View Quotation'} - {projectName}
           </DialogTitle>
         </DialogHeader>
 
@@ -275,30 +392,49 @@ export function QuotationModal({
           <div className="space-y-6">
             {/* Metadata */}
             {quotation && (
-              <div className="flex items-center gap-4 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
                   <span>Created: {format(new Date(quotation.created_at), 'MMM dd, yyyy h:mm a')}</span>
                 </div>
+                <span className="hidden sm:inline">•</span>
+                <span>By: {creatorName}</span>
+                {quotation.updated_at !== quotation.created_at && (
+                  <>
+                    <span className="hidden sm:inline">•</span>
+                    <span>Updated: {format(new Date(quotation.updated_at), 'MMM dd, yyyy h:mm a')}</span>
+                  </>
+                )}
               </div>
             )}
 
-            {/* Overall Progress */}
-            {items.length > 0 && items.some(i => i.material_name) && (
+            {/* Overall Progress Summary */}
+            {isViewMode && items.length > 0 && items.some(i => i.material_name) && (
               <div className="space-y-2 p-4 bg-primary/5 rounded-lg border">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Overall Progress</span>
-                  <span className="text-sm font-bold text-primary">{getTotalProgress().toFixed(0)}%</span>
+                  <span className="text-sm font-medium">Overall Project Progress</span>
+                  <span className="text-lg font-bold text-primary">{getTotalProgress().toFixed(0)}%</span>
                 </div>
                 <Progress value={getTotalProgress()} className="h-3" />
+                <p className="text-xs text-muted-foreground">
+                  Based on materials received vs. quoted quantities
+                </p>
               </div>
             )}
 
             {/* Materials List */}
             <div className="space-y-3">
-              <Label className="text-sm font-medium">
-                Materials List {canEdit && <span className="text-destructive">*</span>}
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">
+                  Materials List {isEditMode && <span className="text-destructive">*</span>}
+                </Label>
+                {isViewMode && canEdit && (
+                  <Button type="button" variant="outline" size="sm" onClick={handleEnterEditMode}>
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Update Quotation
+                  </Button>
+                )}
+              </div>
 
               <div className="space-y-3">
                 {items.map((item, index) => {
@@ -311,7 +447,7 @@ export function QuotationModal({
                             placeholder="Material name"
                             value={item.material_name}
                             onChange={(e) => updateItem(item.id, 'material_name', e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!isEditMode}
                           />
                         </div>
                         <div className="w-24">
@@ -319,20 +455,20 @@ export function QuotationModal({
                             placeholder="Unit"
                             value={item.unit}
                             onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!isEditMode}
                           />
                         </div>
                         <div className="w-24">
                           <Input
                             type="number"
-                            min={0}
+                            min={1}
                             placeholder="Qty"
                             value={item.quantity || ''}
                             onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
-                            disabled={!canEdit}
+                            disabled={!isEditMode}
                           />
                         </div>
-                        {canEdit && (
+                        {isEditMode && (
                           <Button
                             type="button"
                             variant="ghost"
@@ -346,8 +482,8 @@ export function QuotationModal({
                         )}
                       </div>
                       
-                      {/* Item Progress */}
-                      {item.material_name && item.quantity > 0 && (
+                      {/* Item Progress (only in view mode) */}
+                      {isViewMode && item.material_name && item.quantity > 0 && (
                         <div className="space-y-1 pt-2 border-t">
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground">
@@ -366,7 +502,7 @@ export function QuotationModal({
                 })}
               </div>
 
-              {canEdit && (
+              {isEditMode && (
                 <Button type="button" variant="outline" size="sm" onClick={addItem} className="w-full">
                   <Plus className="h-4 w-4 mr-1" />
                   Add Material
@@ -382,27 +518,33 @@ export function QuotationModal({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
-                disabled={!canEdit}
+                disabled={!isEditMode}
               />
             </div>
 
             {/* Actions */}
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                {canEdit ? 'Cancel' : 'Close'}
-              </Button>
-              {canEdit && (
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : quotation ? (
-                    'Update Quotation'
-                  ) : (
-                    'Create Quotation'
-                  )}
+              {isEditMode ? (
+                <>
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : quotation ? (
+                      'Save Changes'
+                    ) : (
+                      'Create Quotation'
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  Close
                 </Button>
               )}
             </div>
