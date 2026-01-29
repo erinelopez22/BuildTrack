@@ -66,47 +66,47 @@ export function useProjectProgress(projectId: string, refreshKey: number = 0): P
           return;
         }
 
-        // Get DELIVERED orders for this project
+        // Get DELIVERED and CLOSED orders for this project (Received + Completed)
         const { data: orders } = await supabase
           .from('orders')
           .select('id')
           .eq('project_id', projectId)
-          .eq('status', 'delivered');
+          .in('status', ['delivered', 'closed']);
 
-        // Build delivered quantities map by quotation_item_id for accurate tracking
-        const deliveredByQuotationItemId: Record<string, number> = {};
+        // Build received quantities map by quotation_item_id for accurate tracking
+        const receivedByQuotationItemId: Record<string, number> = {};
 
         if (orders && orders.length > 0) {
           // Get order items with quotation_item_id reference
           const { data: orderItems } = await supabase
             .from('order_items')
-            .select('quotation_item_id, quantity_ordered, quantity_received')
+            .select('quotation_item_id, quantity_received')
             .in('order_id', orders.map(o => o.id))
             .not('quotation_item_id', 'is', null);
 
           orderItems?.forEach((item) => {
             if (item.quotation_item_id) {
-              // Use quantity_received if available, otherwise use quantity_ordered
-              const qty = item.quantity_received ?? item.quantity_ordered ?? 0;
-              deliveredByQuotationItemId[item.quotation_item_id] = 
-                (deliveredByQuotationItemId[item.quotation_item_id] || 0) + qty;
+              // Use ONLY quantity_received (not quantity_ordered)
+              const qty = item.quantity_received ?? 0;
+              receivedByQuotationItemId[item.quotation_item_id] = 
+                (receivedByQuotationItemId[item.quotation_item_id] || 0) + qty;
             }
           });
         }
 
         // Calculate per-material progress using quotation_item_id
         const materialProgress: MaterialProgress[] = quotationItems.map((qItem) => {
-          const deliveredQty = deliveredByQuotationItemId[qItem.id] || 0;
-          const remainingQty = Math.max(0, qItem.quantity - deliveredQty);
+          const receivedQty = receivedByQuotationItemId[qItem.id] || 0;
+          const remainingQty = Math.max(0, qItem.quantity - receivedQty);
           const percentage = qItem.quantity > 0 
-            ? Math.min(100, (deliveredQty / qItem.quantity) * 100) 
+            ? Math.min(100, (receivedQty / qItem.quantity) * 100) 
             : 0;
 
           return {
             materialName: qItem.material_name,
             unit: qItem.unit,
             quotedQty: qItem.quantity,
-            deliveredQty: deliveredQty,
+            deliveredQty: receivedQty,
             remainingQty: remainingQty,
             percentage: Math.round(percentage * 10) / 10,
           };
@@ -114,21 +114,21 @@ export function useProjectProgress(projectId: string, refreshKey: number = 0): P
 
         // Calculate overall progress
         const totalQuoted = quotationItems.reduce((sum, item) => sum + item.quantity, 0);
-        let totalDelivered = 0;
+        let totalReceived = 0;
         
         quotationItems.forEach((qItem) => {
-          const delivered = deliveredByQuotationItemId[qItem.id] || 0;
-          // Cap delivered at quoted amount for percentage calculation
-          totalDelivered += Math.min(delivered, qItem.quantity);
+          const received = receivedByQuotationItemId[qItem.id] || 0;
+          // Cap received at quoted amount for percentage calculation
+          totalReceived += Math.min(received, qItem.quantity);
         });
 
         const percentage = totalQuoted > 0 
-          ? Math.min(100, (totalDelivered / totalQuoted) * 100) 
+          ? Math.min(100, (totalReceived / totalQuoted) * 100) 
           : 0;
 
         setProgress({
           totalQuoted,
-          totalDelivered,
+          totalDelivered: totalReceived,
           percentage: Math.round(percentage * 10) / 10,
           hasQuotation: true,
           materialProgress,
