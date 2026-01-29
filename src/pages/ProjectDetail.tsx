@@ -6,9 +6,12 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
 import { ProjectTeamTab } from '@/components/projects/ProjectTeamTab';
 import { ProjectActivityTab } from '@/components/projects/ProjectActivityTab';
+import { QuotationModal } from '@/components/projects/QuotationModal';
+import { ActiveOrdersModal } from '@/components/projects/ActiveOrdersModal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -17,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useProjectProgress } from '@/hooks/useProjectProgress';
 import {
   ArrowLeft,
   Users,
@@ -24,35 +28,29 @@ import {
   MapPin,
   Calendar,
   Pencil,
-  Clock,
   ChevronsUpDown,
   FileText,
-  DollarSign,
+  ClipboardList,
+  Package,
 } from 'lucide-react';
-import type { Project, ProjectStatus } from '@/types/database';
-import { format, differenceInDays } from 'date-fns';
-
-// Format currency in Philippine Peso
-const formatPHP = (amount: number | null | undefined) => {
-  if (amount == null) return '₱0.00';
-  return new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-};
+import type { Project, ProjectStatus, AppRole } from '@/types/database';
+import { format } from 'date-fns';
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isQuotationOpen, setIsQuotationOpen] = useState(false);
+  const [isActiveOrdersOpen, setIsActiveOrdersOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [userProjectRole, setUserProjectRole] = useState<AppRole | null>(null);
+
+  const progress = useProjectProgress(id || '');
 
   const fetchAllProjects = async () => {
     const { data } = await supabase
@@ -79,19 +77,36 @@ export default function ProjectDetail() {
     }
 
     setProject(projectData as Project);
+
+    // Fetch user's role in this project
+    if (user) {
+      const { data: memberData } = await supabase
+        .from('project_members')
+        .select('role')
+        .eq('project_id', id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (memberData) {
+        setUserProjectRole(memberData.role as AppRole);
+      }
+    }
+
     setLoading(false);
   };
 
   useEffect(() => {
     fetchAllProjects();
     fetchProjectData();
-  }, [id, navigate, toast]);
+  }, [id, navigate, toast, user]);
+
+  // Check if user can edit quotation (admin or project_manager role)
+  const canEditQuotation = isAdmin() || userProjectRole === 'project_manager';
 
   const handleEditSubmit = async (data: {
     name: string;
     description?: string;
     location: string;
-    estimated_cost: number;
     start_date: string;
     end_date: string;
     status: ProjectStatus;
@@ -106,7 +121,6 @@ export default function ProjectDetail() {
           name: data.name,
           description: data.description || null,
           location: data.location,
-          estimated_cost: data.estimated_cost,
           start_date: data.start_date,
           end_date: data.end_date,
           status: data.status,
@@ -133,13 +147,14 @@ export default function ProjectDetail() {
     navigate(`/projects/${projectId}`);
   };
 
-  const getDurationDisplay = () => {
+  const getDateRangeDisplay = () => {
     if (!project) return '—';
     if (project.start_date && project.end_date) {
-      const days = differenceInDays(new Date(project.end_date), new Date(project.start_date));
-      return `${days} days`;
+      const start = format(new Date(project.start_date), 'MMM dd, yyyy');
+      const end = format(new Date(project.end_date), 'MMM dd, yyyy');
+      return `${start} – ${end}`;
     }
-    return '—';
+    return 'No dates set';
   };
 
   const formatDate = (date: string | null | undefined) => {
@@ -185,7 +200,7 @@ export default function ProjectDetail() {
         </div>
 
         <div className="flex items-center gap-2">
-          <StatusBadge status={project.status} />
+          <StatusBadge status={project.status} className="text-sm px-4 py-1.5 font-semibold" />
           {isAdmin() && (
             <Button variant="outline" onClick={() => setIsEditDialogOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" />
@@ -203,9 +218,9 @@ export default function ProjectDetail() {
         )}
       </div>
 
-      {/* Project Info Cards - Full width layout for readability */}
+      {/* Project Info Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Location - Full text visible */}
+        {/* Location */}
         <Card>
           <CardContent className="flex items-start gap-3 p-4">
             <div className="rounded-lg bg-primary/10 p-2 flex-shrink-0">
@@ -218,54 +233,15 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
 
-        {/* Estimated Cost */}
-        <Card>
-          <CardContent className="flex items-start gap-3 p-4">
-            <div className="rounded-lg bg-success/10 p-2 flex-shrink-0">
-              <DollarSign className="h-5 w-5 text-success" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">Estimated Cost</p>
-              <p className="font-medium">{formatPHP(project.estimated_cost)}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Duration */}
+        {/* Duration (Date Range) */}
         <Card>
           <CardContent className="flex items-start gap-3 p-4">
             <div className="rounded-lg bg-accent/10 p-2 flex-shrink-0">
-              <Clock className="h-5 w-5 text-accent-foreground" />
+              <Calendar className="h-5 w-5 text-accent-foreground" />
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">Duration</p>
-              <p className="font-medium">{getDurationDisplay()}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Start Date */}
-        <Card>
-          <CardContent className="flex items-start gap-3 p-4">
-            <div className="rounded-lg bg-primary/10 p-2 flex-shrink-0">
-              <Calendar className="h-5 w-5 text-primary" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">Start Date</p>
-              <p className="font-medium">{formatDate(project.start_date)}</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* End Date */}
-        <Card>
-          <CardContent className="flex items-start gap-3 p-4">
-            <div className="rounded-lg bg-warning/10 p-2 flex-shrink-0">
-              <Calendar className="h-5 w-5 text-warning" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">End Date</p>
-              <p className="font-medium">{formatDate(project.end_date)}</p>
+              <p className="font-medium">{getDateRangeDisplay()}</p>
             </div>
           </CardContent>
         </Card>
@@ -284,6 +260,42 @@ export default function ProjectDetail() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Progress Section */}
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="rounded-lg bg-success/10 p-2">
+                <ClipboardList className="h-5 w-5 text-success" />
+              </div>
+              <div>
+                <p className="font-medium">Project Progress</p>
+                <p className="text-sm text-muted-foreground">Based on quotation materials received</p>
+              </div>
+            </div>
+            <span className="text-2xl font-bold text-primary">{progress.percentage.toFixed(0)}%</span>
+          </div>
+          <Progress value={progress.percentage} className="h-3" />
+          {!progress.hasQuotation && (
+            <p className="text-sm text-muted-foreground">
+              No quotation set. Create a quotation to track progress.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Action Buttons */}
+      <div className="flex flex-wrap gap-3">
+        <Button variant="outline" onClick={() => setIsQuotationOpen(true)}>
+          <ClipboardList className="mr-2 h-4 w-4" />
+          Quotation
+        </Button>
+        <Button variant="outline" onClick={() => setIsActiveOrdersOpen(true)}>
+          <Package className="mr-2 h-4 w-4" />
+          View Active Orders
+        </Button>
       </div>
 
       {/* Tabs - Team and Activity */}
@@ -308,12 +320,28 @@ export default function ProjectDetail() {
         </TabsContent>
       </Tabs>
 
+      {/* Modals */}
       <ProjectFormModal
         open={isEditDialogOpen}
         onOpenChange={setIsEditDialogOpen}
         project={project}
         onSubmit={handleEditSubmit}
         isSubmitting={isSubmitting}
+      />
+
+      <QuotationModal
+        open={isQuotationOpen}
+        onOpenChange={setIsQuotationOpen}
+        projectId={project.id}
+        projectName={project.name}
+        canEdit={canEditQuotation}
+      />
+
+      <ActiveOrdersModal
+        open={isActiveOrdersOpen}
+        onOpenChange={setIsActiveOrdersOpen}
+        projectId={project.id}
+        projectName={project.name}
       />
     </div>
   );

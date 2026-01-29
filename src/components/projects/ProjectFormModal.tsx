@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { differenceInDays, format } from 'date-fns';
+import { format } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -42,9 +42,6 @@ const projectFormSchema = z.object({
   name: z.string().min(1, 'Project name is required').max(200, 'Name must be less than 200 characters'),
   description: z.string().max(2000, 'Description must be less than 2000 characters').optional(),
   location: z.string().min(1, 'Location is required').max(500, 'Location must be less than 500 characters'),
-  estimated_cost: z.coerce
-    .number({ invalid_type_error: 'Please enter a valid number' })
-    .min(0, 'Estimated cost must be 0 or greater'),
   start_date: z.date({ required_error: 'Start date is required' }),
   end_date: z.date({ required_error: 'End date is required' }),
   status: z.enum(['active', 'on_hold', 'completed', 'cancelled'] as const),
@@ -67,7 +64,6 @@ interface ProjectFormModalProps {
     name: string;
     description?: string;
     location: string;
-    estimated_cost: number;
     start_date: string;
     end_date: string;
     status: ProjectStatus;
@@ -81,16 +77,6 @@ const statusOptions: { value: FormStatusType; label: string }[] = [
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
-
-// Format currency in Philippine Peso
-const formatPHP = (amount: number) => {
-  return new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-};
 
 export function ProjectFormModal({
   open,
@@ -107,7 +93,6 @@ export function ProjectFormModal({
       name: '',
       description: '',
       location: '',
-      estimated_cost: 0,
       start_date: undefined,
       end_date: undefined,
       status: 'active',
@@ -125,7 +110,6 @@ export function ProjectFormModal({
           name: project.name,
           description: project.description || '',
           location: project.location || '',
-          estimated_cost: project.estimated_cost || 0,
           start_date: project.start_date ? new Date(project.start_date) : undefined,
           end_date: project.end_date ? new Date(project.end_date) : undefined,
           status: safeStatus,
@@ -135,7 +119,6 @@ export function ProjectFormModal({
           name: '',
           description: '',
           location: '',
-          estimated_cost: 0,
           start_date: undefined,
           end_date: undefined,
           status: 'active',
@@ -146,18 +129,21 @@ export function ProjectFormModal({
 
   const watchStartDate = form.watch('start_date');
   const watchEndDate = form.watch('end_date');
-  const watchCost = form.watch('estimated_cost');
 
-  const calculatedDuration = watchStartDate && watchEndDate
-    ? differenceInDays(watchEndDate, watchStartDate)
-    : null;
+  const getDateRangePreview = () => {
+    if (watchStartDate && watchEndDate) {
+      const start = format(watchStartDate, 'MMM dd, yyyy');
+      const end = format(watchEndDate, 'MMM dd, yyyy');
+      return `${start} – ${end}`;
+    }
+    return 'Select start and end dates';
+  };
 
   const handleFormSubmit = async (data: ProjectFormValues) => {
     await onSubmit({
       name: data.name,
       description: data.description,
       location: data.location,
-      estimated_cost: data.estimated_cost,
       start_date: format(data.start_date, 'yyyy-MM-dd'),
       end_date: format(data.end_date, 'yyyy-MM-dd'),
       status: data.status,
@@ -216,37 +202,6 @@ export function ProjectFormModal({
                   <FormControl>
                     <Input placeholder="Enter project location" {...field} />
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="estimated_cost"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Estimated Cost *</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                        ₱
-                      </span>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                        className="pl-7"
-                        {...field}
-                      />
-                    </div>
-                  </FormControl>
-                  {watchCost > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Formatted: {formatPHP(watchCost)}
-                    </p>
-                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -337,13 +292,11 @@ export function ProjectFormModal({
               />
             </div>
 
-            {/* Duration (read-only, auto-calculated) */}
+            {/* Duration Preview (read-only, auto-calculated) */}
             <div className="rounded-lg border bg-muted/30 p-3">
-              <p className="text-sm text-muted-foreground">Duration (auto-calculated)</p>
+              <p className="text-sm text-muted-foreground">Duration (date range)</p>
               <p className="font-medium text-foreground">
-                {calculatedDuration !== null && calculatedDuration >= 0
-                  ? `${calculatedDuration} days`
-                  : 'Select start and end dates'}
+                {getDateRangePreview()}
               </p>
             </div>
 
