@@ -76,14 +76,19 @@ export default function Orders() {
   }, [statusFilter, searchParams, setSearchParams]);
 
   const fetchData = async () => {
-    // Fetch orders with all visible statuses
+    // Fetch orders with project info, then filter by active projects
     const { data: ordersData } = await supabase
       .from('orders')
       .select('*, project:projects(*)')
       .in('status', ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'delivered', 'rejected', 'on_hold'])
       .order('created_at', { ascending: false });
 
-    setOrders((ordersData || []) as OrderWithProject[]);
+    // Filter to only show orders from active projects
+    const activeProjectOrders = (ordersData || []).filter(
+      (order: any) => order.project?.status === 'active'
+    );
+
+    setOrders(activeProjectOrders as OrderWithProject[]);
 
     const { data: projectsData } = await supabase
       .from('projects')
