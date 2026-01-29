@@ -71,6 +71,19 @@ export function formatActivityDescription(log: {
     case 'project_inventory':
       if (action === 'adjustment') return `Inventory adjusted`;
       return `Inventory ${action}`;
+
+    case 'project_quotations':
+      if (action === 'create') {
+        const createdBy = newVals?.created_by || 'User';
+        const role = newVals?.role || '';
+        return `Quotation created by ${createdBy}${role ? ` (${role})` : ''}`;
+      }
+      if (action === 'update') {
+        const updatedBy = newVals?.updated_by || 'User';
+        const role = newVals?.role || '';
+        return `Quotation updated by ${updatedBy}${role ? ` (${role})` : ''}`;
+      }
+      return `Quotation ${action}`;
       
     default:
       return `${table_name} ${action}`;
