@@ -7,6 +7,8 @@ import {
   Clock,
   Package,
   Pencil,
+  CheckCircle2,
+  AlertCircle,
   AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +39,7 @@ interface QuotationItem {
   material_name: string;
   unit: string;
   quantity: number;
+  received_quantity?: number;
 }
 
 interface Quotation {
@@ -44,6 +49,17 @@ interface Quotation {
   created_at: string;
   updated_at: string;
   notes: string | null;
+}
+
+interface MaterialDeliveryProgress {
+  quotationItemId: string;
+  materialName: string;
+  unit: string;
+  quotedQty: number;
+  deliveredQty: number;
+  remainingQty: number;
+  percentage: number;
+  isFullyDelivered: boolean;
 }
 
 interface QuotationModalProps {
@@ -77,6 +93,9 @@ export function QuotationModal({
   const [isEditMode, setIsEditMode] = useState(false);
   const [creatorName, setCreatorName] = useState<string>("");
   const [canDelete, setCanDelete] = useState(false);
+
+  // Delivery progress tracking (for progress bars only)
+  const [materialProgress, setMaterialProgress] = useState<MaterialDeliveryProgress[]>();
 
   // Check if user can delete quotation (Project Engineer, Admin, Super Admin)
   useEffect(() => {
@@ -152,11 +171,14 @@ export function QuotationModal({
 
         if (itemsError) throw itemsError;
         setItems(itemsData || []);
+        // Fetch delivered materials progress
+        await fetchDeliveredMaterials(quotationData.id, itemsData || []);
       } else {
         setQuotation(null);
         setItems([{ id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
         setNotes("");
         setIsEditMode(true);
+        setMaterialProgress([]);
       }
     } catch (error: any) {
       toast({
@@ -166,6 +188,80 @@ export function QuotationModal({
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDeliveredMaterials = async (quotationId: string, quotationItems: QuotationItem[]) => {
+    try {
+      // Get DELIVERED and CLOSED orders for this project (Received + Completed)
+      const { data: orders, error: ordersError } = await supabase
+        .from("orders")
+        .select("id, order_number, updated_at")
+        .eq("project_id", projectId)
+        .in("status", ["delivered", "closed"])
+        .order("updated_at", { ascending: false });
+
+      if (ordersError) throw ordersError;
+
+      if (!orders || orders.length === 0) {
+        // No received orders - set empty progress
+        const emptyProgress = quotationItems.map((qItem) => ({
+          quotationItemId: qItem.id,
+          materialName: qItem.material_name,
+          unit: qItem.unit,
+          quotedQty: qItem.quantity,
+          deliveredQty: 0,
+          remainingQty: qItem.quantity,
+          percentage: 0,
+          isFullyDelivered: false,
+        }));
+        setMaterialProgress(emptyProgress);
+        return;
+      }
+
+      // Get order items with quotation_item_id reference
+      const { data: orderItems, error: itemsError } = await supabase
+        .from("order_items")
+        .select("order_id, quotation_item_id, quantity_received")
+        .in(
+          "order_id",
+          orders.map((o) => o.id),
+        );
+
+      if (itemsError) throw itemsError;
+
+      // Build received quantities map by quotation_item_id - use ONLY quantity_received
+      const receivedByQuotationItemId: Record<string, number> = {};
+
+      orderItems?.forEach((item: any) => {
+        if (item.quotation_item_id) {
+          // Use ONLY quantity_received (not quantity_ordered)
+          const qty = item.quantity_received ?? 0;
+          receivedByQuotationItemId[item.quotation_item_id] =
+            (receivedByQuotationItemId[item.quotation_item_id] || 0) + qty;
+        }
+      });
+
+      // Calculate per-material progress using quotation_item_id
+      const progress: MaterialDeliveryProgress[] = quotationItems.map((qItem) => {
+        const receivedQty = receivedByQuotationItemId[qItem.id] || 0;
+        const remainingQty = Math.max(0, qItem.quantity - receivedQty);
+        const percentage = qItem.quantity > 0 ? Math.min(100, (receivedQty / qItem.quantity) * 100) : 0;
+
+        return {
+          quotationItemId: qItem.id,
+          materialName: qItem.material_name,
+          unit: qItem.unit,
+          quotedQty: qItem.quantity,
+          deliveredQty: receivedQty,
+          remainingQty: remainingQty,
+          percentage: Math.round(percentage * 10) / 10,
+          isFullyDelivered: percentage >= 100,
+        };
+      });
+      setMaterialProgress(progress);
+    } catch (error) {
+      console.error("Error fetching received materials:", error);
     }
   };
 
@@ -492,6 +588,16 @@ export function QuotationModal({
     }
   };
 
+  const getTotalProgress = () => {
+    if (!materialProgress) return 0;
+    const totalQuoted = materialProgress.reduce((sum, item) => sum + item.quotedQty, 0);
+    const totalDelivered = materialProgress.reduce((sum, item) => {
+      // Cap delivered at quoted amount for percentage calculation
+      return sum + Math.min(item.deliveredQty, item.quotedQty);
+    }, 0);
+    return totalQuoted > 0 ? Math.min(100, (totalDelivered / totalQuoted) * 100) : 0;
+  };
+
   const isViewMode = !isEditMode && quotation !== null;
 
   return (
@@ -528,6 +634,31 @@ export function QuotationModal({
               </div>
             )}
 
+            {/* Overall Progress Summary */}
+            {isViewMode && materialProgress && materialProgress.length > 0 && (
+              <div className="space-y-3 p-4 bg-primary/5 rounded-lg border">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Overall Project Progress</span>
+                  <span className="text-lg font-bold text-primary">{getTotalProgress().toFixed(0)}%</span>
+                </div>
+                <Progress value={getTotalProgress()} className="h-3" />
+                <div className="grid grid-cols-3 gap-4 text-center text-sm">
+                  <div>
+                    <div className="font-semibold">{materialProgress.reduce((sum, m) => sum + m.quotedQty, 0)}</div>
+                    <div className="text-xs text-muted-foreground">Total Quoted</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-primary">{materialProgress.reduce((sum, m) => sum + m.deliveredQty, 0)}</div>
+                    <div className="text-xs text-muted-foreground">Total Received</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-orange-600">{materialProgress.reduce((sum, m) => sum + m.remainingQty, 0)}</div>
+                    <div className="text-xs text-muted-foreground">Remaining</div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">Based on quantity_received from Delivered + Closed orders</p>
+              </div>
+            )}
 
             {/* Initial Quotation List */}
             <div className="space-y-3">
@@ -536,6 +667,18 @@ export function QuotationModal({
                   Initial Quotation {isEditMode && <span className="text-destructive">*</span>}
                 </Label>
                 {isViewMode && canEdit && (
+                <div>
+                {isViewMode && quotation && canDelete && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="gap-2"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete Quotation
+                  </Button>
+                )}
+              </div>
                   <Button type="button" variant="outline" size="sm" onClick={handleEnterEditMode}>
                     <Pencil className="h-4 w-4 mr-1" />
                     Update Quotation
@@ -596,6 +739,65 @@ export function QuotationModal({
               )}
             </div>
 
+            {/* Progress Tracking Section (View Mode Only) */}
+            {isViewMode && materialProgress && materialProgress.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-medium">Quotation Progress</Label>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left p-2 font-medium">Material</th>
+                        <th className="text-center p-2 font-medium w-16">Unit</th>
+                        <th className="text-center p-2 font-medium w-20">Quoted</th>
+                        <th className="text-center p-2 font-medium w-20">Received</th>
+                        <th className="text-center p-2 font-medium w-20">Remaining</th>
+                        <th className="text-center p-2 font-medium w-28">Progress</th>
+                        <th className="text-center p-2 font-medium w-20">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {materialProgress.map((material) => (
+                        <tr key={material.quotationItemId} className="hover:bg-muted/30">
+                          <td className="p-2 font-medium">{material.materialName}</td>
+                          <td className="p-2 text-center text-muted-foreground">{material.unit}</td>
+                          <td className="p-2 text-center">{material.quotedQty}</td>
+                          <td className="p-2 text-center font-medium text-primary">{material.deliveredQty}</td>
+                          <td className="p-2 text-center text-muted-foreground">{material.remainingQty}</td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-2">
+                              <Progress value={material.percentage} className="h-2 flex-1" />
+                              <span className="text-xs font-medium w-10 text-right">{material.percentage}%</span>
+                            </div>
+                          </td>
+                          <td className="p-2 text-center">
+                            {material.isFullyDelivered ? (
+                              <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-xs">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Complete
+                              </Badge>
+                            ) : material.deliveredQty > 0 ? (
+                              <Badge variant="secondary" className="text-xs">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                Partial
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs text-muted-foreground">
+                                Pending
+                              </Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Notes */}
             <div className="space-y-2">
@@ -612,18 +814,7 @@ export function QuotationModal({
             {/* Actions */}
             <div className="flex justify-between items-center gap-2 pt-2">
               {/* Delete button - only visible in view mode for authorized users */}
-              <div>
-                {isViewMode && quotation && canDelete && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="gap-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Quotation
-                  </Button>
-                )}
-              </div>
+              
 
               <div className="flex gap-2">
                 {isEditMode ? (
