@@ -492,6 +492,41 @@ export type Database = {
           },
         ]
       }
+      project_quotations: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          notes: string | null
+          project_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          notes?: string | null
+          project_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          notes?: string | null
+          project_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_quotations_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           code: string | null
@@ -539,6 +574,44 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      quotation_items: {
+        Row: {
+          created_at: string
+          id: string
+          material_name: string
+          quantity: number
+          quotation_id: string
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          material_name: string
+          quantity?: number
+          quotation_id: string
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          material_name?: string
+          quantity?: number
+          quotation_id?: string
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotation_items_quotation_id_fkey"
+            columns: ["quotation_id"]
+            isOneToOne: false
+            referencedRelation: "project_quotations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       skus: {
         Row: {

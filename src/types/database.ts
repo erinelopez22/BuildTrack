@@ -240,6 +240,25 @@ export interface SMSSettings {
   updated_at: string;
 }
 
+export interface ProjectQuotation {
+  id: string;
+  project_id: string;
+  created_by: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QuotationItem {
+  id: string;
+  quotation_id: string;
+  material_name: string;
+  unit: string;
+  quantity: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AuditLog {
   id: string;
   table_name: string;

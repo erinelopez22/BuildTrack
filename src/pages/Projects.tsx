@@ -81,7 +81,6 @@ export default function Projects() {
     name: string;
     description?: string;
     location: string;
-    estimated_cost: number;
     start_date: string;
     end_date: string;
     status: ProjectStatus;
@@ -97,7 +96,6 @@ export default function Projects() {
             name: data.name,
             description: data.description || null,
             location: data.location,
-            estimated_cost: data.estimated_cost,
             start_date: data.start_date,
             end_date: data.end_date,
             status: data.status,
@@ -112,7 +110,6 @@ export default function Projects() {
           name: data.name,
           description: data.description || null,
           location: data.location,
-          estimated_cost: data.estimated_cost,
           start_date: data.start_date,
           end_date: data.end_date,
           status: data.status,

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,8 +19,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Calendar, MoreVertical, Pencil, Trash2, RotateCcw } from 'lucide-react';
-import { differenceInDays, format } from 'date-fns';
+import { Calendar, MapPin, MoreVertical, Pencil, Trash2, RotateCcw } from 'lucide-react';
+import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 import type { Project } from '@/types/database';
 
 interface ProjectCardProps {
@@ -32,16 +34,10 @@ interface ProjectCardProps {
   canRestore?: boolean;
 }
 
-// Format currency in Philippine Peso
-const formatPHP = (amount: number | null | undefined) => {
-  if (amount == null) return '₱0.00';
-  return new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
-};
+interface ProjectProgress {
+  percentage: number;
+  hasQuotation: boolean;
+}
 
 export function ProjectCard({ 
   project, 
@@ -53,13 +49,79 @@ export function ProjectCard({
   canRestore 
 }: ProjectCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [progress, setProgress] = useState<ProjectProgress>({ percentage: 0, hasQuotation: false });
 
-  const getDurationDays = () => {
-    if (project.start_date && project.end_date) {
-      return differenceInDays(new Date(project.end_date), new Date(project.start_date));
-    }
-    return null;
-  };
+  useEffect(() => {
+    const fetchProgress = async () => {
+      try {
+        // Check if project has a quotation
+        const { data: quotation } = await supabase
+          .from('project_quotations')
+          .select('id')
+          .eq('project_id', project.id)
+          .maybeSingle();
+
+        if (!quotation) {
+          setProgress({ percentage: 0, hasQuotation: false });
+          return;
+        }
+
+        // Fetch quotation items
+        const { data: quotationItems } = await supabase
+          .from('quotation_items')
+          .select('material_name, quantity')
+          .eq('quotation_id', quotation.id);
+
+        if (!quotationItems || quotationItems.length === 0) {
+          setProgress({ percentage: 0, hasQuotation: true });
+          return;
+        }
+
+        const totalQuoted = quotationItems.reduce((sum, item) => sum + item.quantity, 0);
+
+        // Get all delivered orders for this project
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('project_id', project.id)
+          .in('status', ['delivered', 'partially_received', 'fully_received', 'closed']);
+
+        if (!orders || orders.length === 0) {
+          setProgress({ percentage: 0, hasQuotation: true });
+          return;
+        }
+
+        // Get order items with received quantities
+        const { data: orderItems } = await supabase
+          .from('order_items')
+          .select('quantity_received, sku:skus(name)')
+          .in('order_id', orders.map(o => o.id));
+
+        // Match received quantities to quotation items
+        const receivedByMaterial: Record<string, number> = {};
+        orderItems?.forEach((item: any) => {
+          const name = item.sku?.name?.toLowerCase() || '';
+          if (name) {
+            receivedByMaterial[name] = (receivedByMaterial[name] || 0) + (item.quantity_received || 0);
+          }
+        });
+
+        let totalReceived = 0;
+        quotationItems.forEach((qItem) => {
+          const materialKey = qItem.material_name.toLowerCase();
+          const received = receivedByMaterial[materialKey] || 0;
+          totalReceived += Math.min(received, qItem.quantity);
+        });
+
+        const percentage = totalQuoted > 0 ? Math.min(100, (totalReceived / totalQuoted) * 100) : 0;
+        setProgress({ percentage, hasQuotation: true });
+      } catch (error) {
+        console.error('Error fetching project progress:', error);
+      }
+    };
+
+    fetchProgress();
+  }, [project.id]);
 
   const getDateRangeDisplay = () => {
     if (project.start_date && project.end_date) {
@@ -70,11 +132,9 @@ export function ProjectCard({
     return 'No dates set';
   };
 
-  const durationDays = getDurationDays();
   const isDeleted = project.status === 'deleted';
 
   const handleCardClick = (e: React.MouseEvent) => {
-    // Prevent click if clicking on dropdown
     if ((e.target as HTMLElement).closest('[data-radix-dropdown-menu-trigger]')) {
       return;
     }
@@ -157,34 +217,40 @@ export function ProjectCard({
             )}
           </div>
 
-          {/* Stats */}
-          <div className="space-y-3 mb-4">
-            {/* Estimated Cost */}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Estimated Cost</span>
-              <span className="font-semibold text-foreground">
-                {formatPHP(project.estimated_cost)}
-              </span>
+          {/* Location */}
+          {project.location && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+              <MapPin className="h-4 w-4 flex-shrink-0" />
+              <span className="truncate">{project.location}</span>
             </div>
+          )}
 
-            {/* Duration */}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Duration</span>
-              <span className="font-medium text-foreground">
-                {durationDays !== null ? `${durationDays} days` : '—'}
-              </span>
-            </div>
-
-            {/* Date Range */}
-            <div className="flex items-center gap-2 text-sm">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground">{getDateRangeDisplay()}</span>
-            </div>
+          {/* Date Range */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4">
+            <Calendar className="h-4 w-4 flex-shrink-0" />
+            <span>{getDateRangeDisplay()}</span>
           </div>
 
-          {/* Status Badge */}
+          {/* Status Badge - Larger */}
+          <div className="mb-4">
+            <StatusBadge status={project.status} className="text-sm px-3 py-1" />
+          </div>
+
+          {/* Progress Bar */}
           <div className="pt-3 border-t border-border">
-            <StatusBadge status={project.status} />
+            {progress.hasQuotation ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">Progress</span>
+                  <span className="font-semibold text-primary">{progress.percentage.toFixed(0)}%</span>
+                </div>
+                <Progress value={progress.percentage} className="h-2" />
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground text-center py-1">
+                No quotation set
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
