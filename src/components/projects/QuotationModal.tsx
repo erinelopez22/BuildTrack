@@ -646,21 +646,6 @@ export function QuotationModal({
                 <Label className="text-sm font-medium">
                   Initial Quotation {isEditMode && <span className="text-destructive">*</span>}
                 </Label>
-                {/* Delete button - only visible in view mode for authorized users */}
-
-                {isViewMode && quotation && canDelete && (
-                  <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} className="gap-2">
-                    <Trash2 className="h-4 w-4" />
-                    Delete Quotation
-                  </Button>
-                )}
-
-                {isViewMode && canEdit && (
-                  <Button type="button" variant="outline" size="sm" onClick={handleEnterEditMode}>
-                    <Pencil className="h-4 w-4 mr-1" />
-                    Update Quotation
-                  </Button>
-                )}
               </div>
 
               <div className="space-y-2">
@@ -789,32 +774,46 @@ export function QuotationModal({
             </div>
 
             {/* Actions */}
-            <div className="flex justify-between items-center gap-2 pt-2">
-              <div className="flex gap-2">
-                {isEditMode ? (
-                  <>
-                    <Button variant="outline" onClick={handleCancelEdit}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleSave} disabled={saving}>
-                      {saving ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Saving...
-                        </>
-                      ) : quotation ? (
-                        "Save Changes"
-                      ) : (
-                        "Create Quotation"
-                      )}
-                    </Button>
-                  </>
-                ) : (
+            <div className="flex justify-between items-center gap-2 pt-4 border-t">
+              {isEditMode ? (
+                <>
+                  <Button variant="outline" onClick={handleCancelEdit}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSave} disabled={saving}>
+                    {saving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : quotation ? (
+                      "Save Changes"
+                    ) : (
+                      "Create Quotation"
+                    )}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="flex gap-3">
+                    {quotation && canDelete && (
+                      <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} tabIndex={1}>
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Delete Quotation
+                      </Button>
+                    )}
+                    {quotation && canEdit && (
+                      <Button onClick={handleEnterEditMode}>
+                        <Pencil className="h-4 w-4 mr-1" />
+                        Update Quotation
+                      </Button>
+                    )}
+                  </div>
                   <Button variant="outline" onClick={() => onOpenChange(false)}>
                     Close
                   </Button>
-                )}
-              </div>
+                </>
+              )}
             </div>
           </div>
         )}
