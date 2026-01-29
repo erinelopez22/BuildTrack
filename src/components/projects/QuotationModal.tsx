@@ -186,6 +186,7 @@ export function QuotationModal({
         return;
       } else {
         console.log(orders);
+        console.log(deliveredOrders);
       }
 
       // Get order items with quotation_item_id reference and SKU info
