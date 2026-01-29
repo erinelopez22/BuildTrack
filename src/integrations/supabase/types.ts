@@ -733,6 +733,9 @@ export type Database = {
         | "closed"
         | "cancelled"
         | "rejected"
+        | "submitted"
+        | "preparing"
+        | "on_hold"
       project_status:
         | "active"
         | "on_hold"
@@ -895,6 +898,9 @@ export const Constants = {
         "closed",
         "cancelled",
         "rejected",
+        "submitted",
+        "preparing",
+        "on_hold",
       ],
       project_status: [
         "active",

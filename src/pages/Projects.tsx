@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -21,12 +21,13 @@ import type { Project, ProjectStatus } from '@/types/database';
 
 export default function Projects() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAdmin, isSuperAdmin, user } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -40,6 +41,16 @@ export default function Projects() {
     { value: 'cancelled', label: 'Cancelled' },
     ...(isSuperAdmin() ? [{ value: 'deleted', label: 'Deleted' }] : []),
   ];
+
+  // Update URL when filter changes
+  useEffect(() => {
+    if (statusFilter === 'all') {
+      searchParams.delete('status');
+    } else {
+      searchParams.set('status', statusFilter);
+    }
+    setSearchParams(searchParams, { replace: true });
+  }, [statusFilter, searchParams, setSearchParams]);
 
   const fetchProjects = async () => {
     let query = supabase

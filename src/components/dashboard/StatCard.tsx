@@ -1,5 +1,6 @@
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 interface StatCardProps {
   title: string;
@@ -10,6 +11,8 @@ interface StatCardProps {
     label: string;
   };
   variant?: 'default' | 'warning' | 'success' | 'danger';
+  href?: string;
+  onClick?: () => void;
 }
 
 const variantStyles = {
@@ -26,9 +29,31 @@ const iconStyles = {
   danger: 'bg-destructive/10 text-destructive',
 };
 
-export function StatCard({ title, value, icon: Icon, trend, variant = 'default' }: StatCardProps) {
+export function StatCard({ title, value, icon: Icon, trend, variant = 'default', href, onClick }: StatCardProps) {
+  const navigate = useNavigate();
+  
+  const isClickable = !!(href || onClick);
+  
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    } else if (href) {
+      navigate(href);
+    }
+  };
+
   return (
-    <div className={cn('stat-card', variantStyles[variant])}>
+    <div 
+      className={cn(
+        'stat-card', 
+        variantStyles[variant],
+        isClickable && 'cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200'
+      )}
+      onClick={isClickable ? handleClick : undefined}
+      role={isClickable ? 'button' : undefined}
+      tabIndex={isClickable ? 0 : undefined}
+      onKeyDown={isClickable ? (e) => e.key === 'Enter' && handleClick() : undefined}
+    >
       <div className="flex items-start justify-between">
         <div className="space-y-2">
           <p className="text-sm font-medium text-muted-foreground">{title}</p>

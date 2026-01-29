@@ -7,9 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   ClipboardList,
-  TruckIcon,
   FolderKanban,
   Package,
+  Users,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import type { Order } from '@/types/database';
@@ -26,19 +26,19 @@ const formatPHP = (amount: number | null | undefined) => {
 };
 
 interface DashboardStats {
-  totalProjects: number;
+  activeProjects: number;
   totalSkus: number;
-  openOrders: number;
-  deliveriesThisWeek: number;
+  activeOrders: number;
+  activeMembers: number;
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
-    totalProjects: 0,
+    activeProjects: 0,
     totalSkus: 0,
-    openOrders: 0,
-    deliveriesThisWeek: 0,
+    activeOrders: 0,
+    activeMembers: 0,
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [ordersByStatus, setOrdersByStatus] = useState<{ name: string; value: number }[]>([]);
@@ -48,10 +48,11 @@ export default function Dashboard() {
     async function fetchDashboardData() {
       if (!user) return;
 
-      // Fetch projects count
+      // Fetch active projects count
       const { count: projectCount } = await supabase
         .from('projects')
-        .select('*', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'active');
 
       // Fetch SKUs count
       const { count: skuCount } = await supabase
@@ -66,34 +67,45 @@ export default function Dashboard() {
         .order('created_at', { ascending: false })
         .limit(10);
 
-      const openOrderStatuses = ['draft', 'for_approval', 'approved', 'ordered', 'in_transit', 'delivered', 'partially_received'];
-      const openOrders = (ordersData || []).filter((o) => openOrderStatuses.includes(o.status));
+      // Active order statuses (excluding closed, cancelled, rejected)
+      const activeOrderStatuses = ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'on_hold'];
+      const activeOrders = (ordersData || []).filter((o) => activeOrderStatuses.includes(o.status));
 
-      // Count orders by status
+      // Count orders by status for the pie chart
       const statusCounts: Record<string, number> = {};
       (ordersData || []).forEach((order) => {
         statusCounts[order.status] = (statusCounts[order.status] || 0) + 1;
       });
 
+      // Fetch active members count (only if admin)
+      let membersCount = 0;
+      if (isAdmin()) {
+        const { count } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true);
+        membersCount = count || 0;
+      }
+
       setStats({
-        totalProjects: projectCount || 0,
+        activeProjects: projectCount || 0,
         totalSkus: skuCount || 0,
-        openOrders: openOrders.length,
-        deliveriesThisWeek: 0, // Would require more complex query
+        activeOrders: activeOrders.length,
+        activeMembers: membersCount,
       });
 
       setRecentOrders((ordersData || []) as Order[]);
       setOrdersByStatus(
-        Object.entries(statusCounts).map(([name, value]) => ({ name: name.replace('_', ' '), value }))
+        Object.entries(statusCounts).map(([name, value]) => ({ name: name.replace(/_/g, ' '), value }))
       );
 
       setLoading(false);
     }
 
     fetchDashboardData();
-  }, [user]);
+  }, [user, isAdmin]);
 
-  const COLORS = ['hsl(38, 92%, 50%)', 'hsl(215, 25%, 45%)', 'hsl(142, 71%, 45%)', 'hsl(0, 72%, 51%)', 'hsl(270, 50%, 60%)'];
+  const COLORS = ['hsl(38, 92%, 50%)', 'hsl(210, 90%, 50%)', 'hsl(142, 71%, 45%)', 'hsl(0, 72%, 51%)', 'hsl(270, 50%, 60%)', 'hsl(220, 75%, 45%)'];
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -102,19 +114,21 @@ export default function Dashboard() {
         description="Overview of your construction inventory and orders"
       />
 
-      {/* Stats Grid - 3 columns on desktop */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Stats Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Active Projects"
-          value={stats.totalProjects}
+          value={stats.activeProjects}
           icon={FolderKanban}
           variant="default"
+          href="/projects?status=active"
         />
         <StatCard
-          title="Open Orders"
-          value={stats.openOrders}
+          title="Active Orders"
+          value={stats.activeOrders}
           icon={ClipboardList}
           variant="default"
+          href="/orders?status=active"
         />
         <StatCard
           title="Total SKUs"
@@ -122,6 +136,15 @@ export default function Dashboard() {
           icon={Package}
           variant="default"
         />
+        {isAdmin() && (
+          <StatCard
+            title="Active Members"
+            value={stats.activeMembers}
+            icon={Users}
+            variant="default"
+            href="/members"
+          />
+        )}
       </div>
 
       {/* Orders by Status Chart */}

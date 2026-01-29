@@ -12,6 +12,8 @@ export type OrderStatus =
   | 'draft'
   | 'for_approval'
   | 'approved'
+  | 'submitted'
+  | 'preparing'
   | 'ordered'
   | 'in_transit'
   | 'delivered'
@@ -19,7 +21,8 @@ export type OrderStatus =
   | 'fully_received'
   | 'closed'
   | 'cancelled'
-  | 'rejected';
+  | 'rejected'
+  | 'on_hold';
 
 export type ProjectStatus = 'active' | 'on_hold' | 'completed' | 'cancelled' | 'deleted';
 
