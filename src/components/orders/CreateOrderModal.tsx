@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useToast } from '@/hooks/use-toast';
 
 interface QuotationMaterial {
   id: string;
@@ -41,6 +42,10 @@ interface MaterialItem {
   materialName: string;
   unit: string;
   quantity: number;
+}
+
+interface AlreadyOrderedQty {
+  [quotationItemId: string]: number;
 }
 
 interface CreateOrderModalProps {
@@ -68,15 +73,38 @@ export function CreateOrderModal({
   onAddQuotation,
   canAddQuotation = false,
 }: CreateOrderModalProps) {
+  const { toast } = useToast();
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [quotationMaterials, setQuotationMaterials] = useState<QuotationMaterial[]>([]);
+  const [alreadyOrderedQty, setAlreadyOrderedQty] = useState<AlreadyOrderedQty>({});
   const [loadingQuotation, setLoadingQuotation] = useState(true);
   const [hasQuotation, setHasQuotation] = useState(false);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<Date | undefined>();
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<{ materials?: string; notes?: string }>({});
 
-  // Fetch quotation materials when modal opens
+  // Calculate remaining allowed quantity for a material
+  const getRemainingAllowedQty = (quotationItemId: string): number => {
+    const quotationItem = quotationMaterials.find(m => m.id === quotationItemId);
+    if (!quotationItem) return 0;
+    
+    const quotedQty = quotationItem.quantity;
+    const orderedQty = alreadyOrderedQty[quotationItemId] || 0;
+    return Math.max(quotedQty - orderedQty, 0);
+  };
+
+  // Get quotation quantity for a material
+  const getQuotedQty = (quotationItemId: string): number => {
+    const quotationItem = quotationMaterials.find(m => m.id === quotationItemId);
+    return quotationItem?.quantity || 0;
+  };
+
+  // Get already ordered quantity for a material
+  const getAlreadyOrderedQty = (quotationItemId: string): number => {
+    return alreadyOrderedQty[quotationItemId] || 0;
+  };
+
+  // Fetch quotation materials and already ordered quantities when modal opens
   useEffect(() => {
     if (open && projectId) {
       fetchQuotationMaterials();
@@ -96,6 +124,7 @@ export function CreateOrderModal({
       if (!quotation) {
         setHasQuotation(false);
         setQuotationMaterials([]);
+        setAlreadyOrderedQty({});
         setLoadingQuotation(false);
         return;
       }
@@ -109,6 +138,34 @@ export function CreateOrderModal({
 
       setHasQuotation(true);
       setQuotationMaterials(items || []);
+
+      // Fetch already ordered quantities for each quotation item
+      // Sum quantity_ordered from all order_items where order is not cancelled/deleted
+      const { data: orderItems } = await supabase
+        .from('order_items')
+        .select(`
+          quotation_item_id,
+          quantity_ordered,
+          orders!inner(
+            id,
+            project_id,
+            status
+          )
+        `)
+        .eq('orders.project_id', projectId)
+        .not('orders.status', 'eq', 'cancelled');
+
+      // Calculate already ordered quantities per quotation item
+      const orderedQtyMap: AlreadyOrderedQty = {};
+      if (orderItems) {
+        for (const item of orderItems) {
+          if (item.quotation_item_id) {
+            orderedQtyMap[item.quotation_item_id] = 
+              (orderedQtyMap[item.quotation_item_id] || 0) + item.quantity_ordered;
+          }
+        }
+      }
+      setAlreadyOrderedQty(orderedQtyMap);
       
       // Initialize with one empty row if we have materials
       if (items && items.length > 0) {
@@ -134,6 +191,17 @@ export function CreateOrderModal({
     const quotationItem = quotationMaterials.find(m => m.id === quotationItemId);
     if (!quotationItem) return;
 
+    const remainingAllowed = getRemainingAllowedQty(quotationItemId);
+    
+    // If no remaining quantity, show warning and set quantity to 0
+    if (remainingAllowed <= 0) {
+      toast({
+        title: "No remaining quantity",
+        description: `No remaining quantity available for "${quotationItem.material_name}" based on quotation.`,
+        variant: "destructive",
+      });
+    }
+
     setMaterials(
       materials.map((m) =>
         m.id === rowId
@@ -142,6 +210,7 @@ export function CreateOrderModal({
               materialId: quotationItemId,
               materialName: quotationItem.material_name,
               unit: quotationItem.unit,
+              quantity: Math.min(m.quantity, Math.max(remainingAllowed, 1)),
             }
           : m
       )
@@ -149,19 +218,61 @@ export function CreateOrderModal({
   };
 
   const updateQuantity = (id: string, value: number) => {
+    const material = materials.find(m => m.id === id);
+    if (!material || !material.materialId) {
+      setMaterials(
+        materials.map((m) =>
+          m.id === id ? { ...m, quantity: Math.max(1, value) } : m
+        )
+      );
+      return;
+    }
+
+    const quotedQty = getQuotedQty(material.materialId);
+    const orderedQty = getAlreadyOrderedQty(material.materialId);
+    const remainingAllowed = getRemainingAllowedQty(material.materialId);
+    
+    let newQuantity = Math.max(0, value);
+    
+    // Check if quantity exceeds remaining allowed
+    if (newQuantity > remainingAllowed) {
+      toast({
+        title: "Quantity adjusted",
+        description: `Requested qty exceeds quotation limit.\nQuotation Qty: ${quotedQty}\nAlready ordered: ${orderedQty}\nRemaining allowed: ${remainingAllowed}\nWe adjusted your input to match the quotation limit.`,
+        variant: "destructive",
+      });
+      newQuantity = remainingAllowed;
+    }
+
+    // Ensure minimum of 1 if there's remaining allowed, otherwise 0
+    if (remainingAllowed > 0) {
+      newQuantity = Math.max(1, newQuantity);
+    }
+
     setMaterials(
       materials.map((m) =>
-        m.id === id ? { ...m, quantity: Math.max(1, value) } : m
+        m.id === id ? { ...m, quantity: newQuantity } : m
       )
     );
   };
 
-  // Get available materials (exclude already selected)
+  // Get available materials (exclude already selected AND materials with 0 remaining qty)
   const getAvailableMaterials = (currentRowId: string) => {
     const selectedIds = materials
       .filter(m => m.id !== currentRowId && m.materialId)
       .map(m => m.materialId);
-    return quotationMaterials.filter(qm => !selectedIds.includes(qm.id));
+    
+    return quotationMaterials.filter(qm => {
+      // Exclude already selected materials
+      if (selectedIds.includes(qm.id)) return false;
+      
+      // Check remaining quantity - only include if > 0 OR it's the current selection
+      const currentMaterial = materials.find(m => m.id === currentRowId);
+      if (currentMaterial?.materialId === qm.id) return true;
+      
+      const remaining = getRemainingAllowedQty(qm.id);
+      return remaining > 0;
+    });
   };
 
   const validateForm = (): boolean => {
@@ -171,6 +282,21 @@ export function CreateOrderModal({
     const hasInvalidMaterial = materials.some((m) => !m.materialId || m.quantity < 1);
     if (materials.length === 0 || hasInvalidMaterial) {
       newErrors.materials = 'Select at least one material with quantity of at least 1';
+    }
+
+    // Validate that no material exceeds remaining allowed
+    for (const material of materials) {
+      if (material.materialId) {
+        const remainingAllowed = getRemainingAllowedQty(material.materialId);
+        if (material.quantity > remainingAllowed) {
+          newErrors.materials = `Quantity for "${material.materialName}" exceeds remaining allowed (${remainingAllowed})`;
+          break;
+        }
+        if (remainingAllowed <= 0 && material.quantity > 0) {
+          newErrors.materials = `No remaining quantity available for "${material.materialName}"`;
+          break;
+        }
+      }
     }
 
     // Validate notes (required)
@@ -187,13 +313,37 @@ export function CreateOrderModal({
 
     if (!validateForm()) return;
 
-    await onSubmit({
-      materials: materials.map((m) => ({
+    // Final server-side style validation - clamp quantities if needed
+    const validatedMaterials = materials.map((m) => {
+      const remainingAllowed = getRemainingAllowedQty(m.materialId);
+      const clampedQty = Math.min(m.quantity, remainingAllowed);
+      
+      if (clampedQty !== m.quantity) {
+        toast({
+          title: "Quantity adjusted on submission",
+          description: `"${m.materialName}" quantity was adjusted from ${m.quantity} to ${clampedQty} to match quotation limit.`,
+        });
+      }
+      
+      return {
         materialId: m.materialId,
         name: m.materialName,
         unit: m.unit,
-        quantity: m.quantity,
-      })),
+        quantity: Math.max(0, clampedQty),
+      };
+    }).filter(m => m.quantity > 0);
+
+    if (validatedMaterials.length === 0) {
+      toast({
+        title: "Cannot create order",
+        description: "All materials have 0 remaining quantity available.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await onSubmit({
+      materials: validatedMaterials,
       expectedDeliveryDate: expectedDeliveryDate || null,
       notes: notes.trim(),
     });
@@ -218,7 +368,7 @@ export function CreateOrderModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Order for {projectName}</DialogTitle>
         </DialogHeader>
@@ -267,69 +417,100 @@ export function CreateOrderModal({
               <div className="space-y-3">
                 {materials.map((material) => {
                   const availableMaterials = getAvailableMaterials(material.id);
+                  const quotedQty = material.materialId ? getQuotedQty(material.materialId) : 0;
+                  const orderedQty = material.materialId ? getAlreadyOrderedQty(material.materialId) : 0;
+                  const remainingQty = material.materialId ? getRemainingAllowedQty(material.materialId) : 0;
+                  const hasExceeded = material.materialId && material.quantity > remainingQty;
+                  const noRemaining = material.materialId && remainingQty <= 0;
+
                   return (
-                    <div key={material.id} className="flex gap-2 items-start">
-                      {/* Material Dropdown */}
-                      <div className="flex-1">
-                        <Select
-                          value={material.materialId}
-                          onValueChange={(value) => selectMaterial(material.id, value)}
-                        >
-                          <SelectTrigger className={cn(
-                            errors.materials && !material.materialId && 'border-destructive'
-                          )}>
-                            <SelectValue placeholder="Select material" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-popover z-50">
-                            {availableMaterials.map((qm) => (
-                              <SelectItem key={qm.id} value={qm.id}>
-                                {qm.material_name}
-                              </SelectItem>
-                            ))}
-                            {material.materialId && !availableMaterials.find(m => m.id === material.materialId) && (
-                              <SelectItem value={material.materialId}>
-                                {material.materialName}
-                              </SelectItem>
+                    <div key={material.id} className="space-y-1">
+                      <div className="flex gap-2 items-start">
+                        {/* Material Dropdown */}
+                        <div className="flex-1">
+                          <Select
+                            value={material.materialId}
+                            onValueChange={(value) => selectMaterial(material.id, value)}
+                          >
+                            <SelectTrigger className={cn(
+                              errors.materials && !material.materialId && 'border-destructive'
+                            )}>
+                              <SelectValue placeholder="Select material" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-popover z-50">
+                              {availableMaterials.map((qm) => {
+                                const remaining = getRemainingAllowedQty(qm.id);
+                                return (
+                                  <SelectItem 
+                                    key={qm.id} 
+                                    value={qm.id}
+                                    disabled={remaining <= 0}
+                                  >
+                                    {qm.material_name} {remaining <= 0 && "(fully ordered)"}
+                                  </SelectItem>
+                                );
+                              })}
+                              {material.materialId && !availableMaterials.find(m => m.id === material.materialId) && (
+                                <SelectItem value={material.materialId}>
+                                  {material.materialName}
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {/* Unit (read-only) */}
+                        <div className="w-20">
+                          <Input
+                            value={material.unit || '-'}
+                            readOnly
+                            className="bg-muted text-muted-foreground"
+                            tabIndex={-1}
+                          />
+                        </div>
+
+                        {/* Quantity */}
+                        <div className="w-24">
+                          <Input
+                            type="number"
+                            min={0}
+                            max={remainingQty > 0 ? remainingQty : undefined}
+                            placeholder="Qty"
+                            value={material.quantity}
+                            onChange={(e) => updateQuantity(material.id, parseInt(e.target.value) || 0)}
+                            onBlur={(e) => updateQuantity(material.id, parseInt(e.target.value) || 0)}
+                            disabled={noRemaining}
+                            className={cn(
+                              (errors.materials && material.quantity < 1) || hasExceeded || noRemaining
+                                ? 'border-destructive'
+                                : ''
                             )}
-                          </SelectContent>
-                        </Select>
+                          />
+                        </div>
+
+                        {/* Remove Button */}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeMaterial(material.id)}
+                          disabled={materials.length === 1}
+                          className="shrink-0"
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
                       </div>
 
-                      {/* Unit (read-only) */}
-                      <div className="w-20">
-                        <Input
-                          value={material.unit || '-'}
-                          readOnly
-                          className="bg-muted text-muted-foreground"
-                          tabIndex={-1}
-                        />
-                      </div>
-
-                      {/* Quantity */}
-                      <div className="w-20">
-                        <Input
-                          type="number"
-                          min={1}
-                          placeholder="Qty"
-                          value={material.quantity}
-                          onChange={(e) => updateQuantity(material.id, parseInt(e.target.value) || 1)}
-                          className={cn(
-                            errors.materials && material.quantity < 1 && 'border-destructive'
-                          )}
-                        />
-                      </div>
-
-                      {/* Remove Button */}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeMaterial(material.id)}
-                        disabled={materials.length === 1}
-                        className="shrink-0"
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
-                      </Button>
+                      {/* Helper text showing quotation limits */}
+                      {material.materialId && (
+                        <div className={cn(
+                          "text-xs ml-1",
+                          noRemaining ? "text-destructive" : "text-muted-foreground"
+                        )}>
+                          Quoted: {quotedQty} | Already Ordered: {orderedQty} | Remaining: {remainingQty}
+                          {noRemaining && " — No remaining quantity available"}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -341,7 +522,8 @@ export function CreateOrderModal({
                 variant="outline"
                 size="sm"
                 onClick={addMaterial}
-                disabled={materials.length >= quotationMaterials.length}
+                disabled={materials.length >= quotationMaterials.length || 
+                  quotationMaterials.every(qm => getRemainingAllowedQty(qm.id) <= 0)}
                 className="w-full"
               >
                 <Plus className="h-4 w-4 mr-1" />
