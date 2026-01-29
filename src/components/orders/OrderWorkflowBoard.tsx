@@ -273,32 +273,58 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      // Log activity
-      await logActivity({
-        action: newStatus === 'approved' ? 'approve' : 'status_change',
-        tableName: 'orders',
-        recordId: order.id,
-        oldValues: { status: order.status },
-        newValues: { status: newStatus, order_number: order.order_number },
-        userId: user.id,
-      });
-
-      // Notify project members
-      const statusLabel = newStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-      await notifyProjectMembers({
-        projectId: project.id,
-        title: `Order ${statusLabel}`,
-        message: `Order ${order.order_number} has been moved to ${statusLabel}`,
-        type: 'order',
-        referenceType: 'order',
-        referenceId: order.id,
-        excludeUserId: user.id,
-      });
-
-      toast({ title: 'Success', description: `Order moved to ${statusLabel}` });
-      fetchOrders();
+      return;
     }
+
+    // When order is marked as "delivered", update order_items.quantity_received
+    if (newStatus === 'delivered') {
+      // Get all order items for this order
+      const { data: orderItems, error: itemsError } = await supabase
+        .from('order_items')
+        .select('id, quantity_ordered')
+        .eq('order_id', order.id);
+
+      if (itemsError) {
+        console.error('Error fetching order items:', itemsError);
+      } else if (orderItems && orderItems.length > 0) {
+        // Update each order item's quantity_received to match quantity_ordered
+        for (const item of orderItems) {
+          const { error: updateError } = await supabase
+            .from('order_items')
+            .update({ quantity_received: item.quantity_ordered })
+            .eq('id', item.id);
+
+          if (updateError) {
+            console.error('Error updating quantity_received:', updateError);
+          }
+        }
+      }
+    }
+
+    // Log activity
+    await logActivity({
+      action: newStatus === 'approved' ? 'approve' : 'status_change',
+      tableName: 'orders',
+      recordId: order.id,
+      oldValues: { status: order.status },
+      newValues: { status: newStatus, order_number: order.order_number },
+      userId: user.id,
+    });
+
+    // Notify project members
+    const statusLabel = newStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    await notifyProjectMembers({
+      projectId: project.id,
+      title: `Order ${statusLabel}`,
+      message: `Order ${order.order_number} has been moved to ${statusLabel}`,
+      type: 'order',
+      referenceType: 'order',
+      referenceId: order.id,
+      excludeUserId: user.id,
+    });
+
+    toast({ title: 'Success', description: `Order moved to ${statusLabel}` });
+    fetchOrders();
   };
 
   const handleReject = async (reason: string) => {
