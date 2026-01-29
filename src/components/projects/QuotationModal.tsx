@@ -7,9 +7,6 @@ import {
   Clock,
   Package,
   Pencil,
-  TruckIcon,
-  ChevronDown,
-  ChevronRight,
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
@@ -20,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -42,17 +38,6 @@ interface Quotation {
   created_at: string;
   updated_at: string;
   notes: string | null;
-}
-
-interface DeliveredOrderInfo {
-  id: string;
-  order_number: string;
-  delivered_at: string | null;
-  items: {
-    material_name: string;
-    unit: string;
-    quantity: number;
-  }[];
 }
 
 interface MaterialDeliveryProgress {
@@ -95,10 +80,8 @@ export function QuotationModal({
   const [isEditMode, setIsEditMode] = useState(false);
   const [creatorName, setCreatorName] = useState<string>("");
 
-  // Delivered materials tracking
+  // Delivery progress tracking (for progress bars only)
   const [materialProgress, setMaterialProgress] = useState<MaterialDeliveryProgress[]>([]);
-  const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrderInfo[]>([]);
-  const [isDeliveredOrdersOpen, setIsDeliveredOrdersOpen] = useState(false);
 
   const fetchQuotation = async () => {
     setLoading(true);
@@ -135,7 +118,6 @@ export function QuotationModal({
 
         if (itemsError) throw itemsError;
         setItems(itemsData || []);
-        console.log(itemsData);
         // Fetch delivered materials progress
         await fetchDeliveredMaterials(quotationData.id, itemsData || []);
       } else {
@@ -144,7 +126,6 @@ export function QuotationModal({
         setNotes("");
         setIsEditMode(true);
         setMaterialProgress([]);
-        setDeliveredOrders([]);
       }
     } catch (error: any) {
       toast({
@@ -182,11 +163,7 @@ export function QuotationModal({
           isFullyDelivered: false,
         }));
         setMaterialProgress(emptyProgress);
-        setDeliveredOrders([]);
         return;
-      } else {
-        console.log(orders);
-        console.log(deliveredOrders);
       }
 
       // Get order items with quotation_item_id reference and SKU info
@@ -229,22 +206,6 @@ export function QuotationModal({
         };
       });
       setMaterialProgress(progress);
-
-      // Build delivered orders info for expandable section
-      const ordersInfo: DeliveredOrderInfo[] = orders.map((order) => {
-        const orderItemsList = orderItems?.filter((item: any) => item.order_id === order.id) || [];
-        return {
-          id: order.id,
-          order_number: order.order_number,
-          delivered_at: order.updated_at,
-          items: orderItemsList.map((item: any) => ({
-            material_name: item.sku?.name || "Unknown Material",
-            unit: item.sku?.unit_of_measure || "pcs",
-            quantity: item.quantity_received ?? item.quantity_ordered ?? 0,
-          })),
-        };
-      });
-      setDeliveredOrders(ordersInfo.filter((o) => o.items.length > 0));
     } catch (error) {
       console.error("Error fetching delivered materials:", error);
     }
@@ -559,12 +520,12 @@ export function QuotationModal({
               )}
             </div>
 
-            {/* Delivered Materials Section (View Mode Only) */}
+            {/* Progress Tracking Section (View Mode Only) */}
             {isViewMode && materialProgress.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <TruckIcon className="h-4 w-4 text-primary" />
-                  <Label className="text-sm font-medium">Delivered Materials</Label>
+                  <Package className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-medium">Quotation Progress</Label>
                 </div>
 
                 <div className="border rounded-lg overflow-hidden">
@@ -574,7 +535,7 @@ export function QuotationModal({
                         <th className="text-left p-2 font-medium">Material</th>
                         <th className="text-center p-2 font-medium w-16">Unit</th>
                         <th className="text-center p-2 font-medium w-20">Quoted</th>
-                        <th className="text-center p-2 font-medium w-20">Delivered</th>
+                        <th className="text-center p-2 font-medium w-20">Received</th>
                         <th className="text-center p-2 font-medium w-20">Remaining</th>
                         <th className="text-center p-2 font-medium w-28">Progress</th>
                         <th className="text-center p-2 font-medium w-20">Status</th>
@@ -616,47 +577,6 @@ export function QuotationModal({
                     </tbody>
                   </table>
                 </div>
-
-                {/* View Delivered Orders Collapsible */}
-                {deliveredOrders.length > 0 && (
-                  <Collapsible open={isDeliveredOrdersOpen} onOpenChange={setIsDeliveredOrdersOpen}>
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" size="sm" className="w-full justify-between hover:bg-muted/50">
-                        <span className="flex items-center gap-2">
-                          <TruckIcon className="h-4 w-4" />
-                          View Delivered Orders ({deliveredOrders.length})
-                        </span>
-                        {isDeliveredOrdersOpen ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-2 pt-2">
-                      {deliveredOrders.map((order) => (
-                        <div key={order.id} className="border rounded-lg p-3 bg-muted/30">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-medium text-sm">{order.order_number}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {order.delivered_at ? formatManilaTime(new Date(order.delivered_at)) : "Unknown date"}
-                            </span>
-                          </div>
-                          <div className="space-y-1">
-                            {order.items.map((item, idx) => (
-                              <div key={idx} className="flex items-center justify-between text-xs">
-                                <span className="text-muted-foreground">{item.material_name}</span>
-                                <span className="font-medium">
-                                  {item.quantity} {item.unit}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
               </div>
             )}
 
