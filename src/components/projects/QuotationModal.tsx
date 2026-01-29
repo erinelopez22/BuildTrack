@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { Plus, Trash2, Loader2, Clock, Package, Pencil } from 'lucide-react';
+import { Plus, Trash2, Loader2, Clock, Package, Pencil, TruckIcon, ChevronDown, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,6 +12,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
@@ -33,6 +39,28 @@ interface Quotation {
   created_at: string;
   updated_at: string;
   notes: string | null;
+}
+
+interface DeliveredOrderInfo {
+  id: string;
+  order_number: string;
+  delivered_at: string | null;
+  items: {
+    material_name: string;
+    unit: string;
+    quantity: number;
+  }[];
+}
+
+interface MaterialDeliveryProgress {
+  quotationItemId: string;
+  materialName: string;
+  unit: string;
+  quotedQty: number;
+  deliveredQty: number;
+  remainingQty: number;
+  percentage: number;
+  isFullyDelivered: boolean;
 }
 
 interface QuotationModalProps {
@@ -61,9 +89,13 @@ export function QuotationModal({
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [items, setItems] = useState<QuotationItem[]>([]);
   const [notes, setNotes] = useState('');
-  const [receivedByMaterial, setReceivedByMaterial] = useState<Record<string, number>>({});
   const [isEditMode, setIsEditMode] = useState(false);
   const [creatorName, setCreatorName] = useState<string>('');
+  
+  // Delivered materials tracking
+  const [materialProgress, setMaterialProgress] = useState<MaterialDeliveryProgress[]>([]);
+  const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrderInfo[]>([]);
+  const [isDeliveredOrdersOpen, setIsDeliveredOrdersOpen] = useState(false);
 
   const fetchQuotation = async () => {
     setLoading(true);
@@ -101,13 +133,15 @@ export function QuotationModal({
         if (itemsError) throw itemsError;
         setItems(itemsData || []);
 
-        // Fetch received quantities from orders
-        await fetchReceivedQuantities();
+        // Fetch delivered materials progress
+        await fetchDeliveredMaterials(quotationData.id, itemsData || []);
       } else {
         setQuotation(null);
         setItems([{ id: crypto.randomUUID(), material_name: '', unit: 'pcs', quantity: 0 }]);
         setNotes('');
         setIsEditMode(true);
+        setMaterialProgress([]);
+        setDeliveredOrders([]);
       }
     } catch (error: any) {
       toast({
@@ -120,40 +154,92 @@ export function QuotationModal({
     }
   };
 
-  const fetchReceivedQuantities = async () => {
+  const fetchDeliveredMaterials = async (quotationId: string, quotationItems: QuotationItem[]) => {
     try {
-      // Get only DELIVERED orders for this project (strict: only 'delivered' status)
+      // Get only DELIVERED orders for this project
       const { data: orders, error: ordersError } = await supabase
         .from('orders')
-        .select('id')
+        .select('id, order_number, updated_at')
         .eq('project_id', projectId)
-        .eq('status', 'delivered');
+        .eq('status', 'delivered')
+        .order('updated_at', { ascending: false });
 
       if (ordersError) throw ordersError;
+
       if (!orders || orders.length === 0) {
-        setReceivedByMaterial({});
+        // No delivered orders - set empty progress
+        const emptyProgress = quotationItems.map(qItem => ({
+          quotationItemId: qItem.id,
+          materialName: qItem.material_name,
+          unit: qItem.unit,
+          quotedQty: qItem.quantity,
+          deliveredQty: 0,
+          remainingQty: qItem.quantity,
+          percentage: 0,
+          isFullyDelivered: false,
+        }));
+        setMaterialProgress(emptyProgress);
+        setDeliveredOrders([]);
         return;
       }
 
-      // Get order items with SKU names
+      // Get order items with quotation_item_id reference and SKU info
       const { data: orderItems, error: itemsError } = await supabase
         .from('order_items')
-        .select('quantity_received, sku:skus(name)')
+        .select('order_id, quotation_item_id, quantity_ordered, quantity_received, sku:skus(name, unit_of_measure)')
         .in('order_id', orders.map(o => o.id));
 
       if (itemsError) throw itemsError;
 
-      // Aggregate received quantities by material name
-      const received: Record<string, number> = {};
+      // Build delivered quantities map by quotation_item_id
+      const deliveredByQuotationItemId: Record<string, number> = {};
+      
       orderItems?.forEach((item: any) => {
-        const name = item.sku?.name?.toLowerCase() || '';
-        if (name) {
-          received[name] = (received[name] || 0) + (item.quantity_received || 0);
+        if (item.quotation_item_id) {
+          const qty = item.quantity_received ?? item.quantity_ordered ?? 0;
+          deliveredByQuotationItemId[item.quotation_item_id] = 
+            (deliveredByQuotationItemId[item.quotation_item_id] || 0) + qty;
         }
       });
-      setReceivedByMaterial(received);
+
+      // Calculate per-material progress using quotation_item_id
+      const progress: MaterialDeliveryProgress[] = quotationItems.map((qItem) => {
+        const deliveredQty = deliveredByQuotationItemId[qItem.id] || 0;
+        const remainingQty = Math.max(0, qItem.quantity - deliveredQty);
+        const percentage = qItem.quantity > 0 
+          ? Math.min(100, (deliveredQty / qItem.quantity) * 100) 
+          : 0;
+
+        return {
+          quotationItemId: qItem.id,
+          materialName: qItem.material_name,
+          unit: qItem.unit,
+          quotedQty: qItem.quantity,
+          deliveredQty: deliveredQty,
+          remainingQty: remainingQty,
+          percentage: Math.round(percentage * 10) / 10,
+          isFullyDelivered: percentage >= 100,
+        };
+      });
+      setMaterialProgress(progress);
+
+      // Build delivered orders info for expandable section
+      const ordersInfo: DeliveredOrderInfo[] = orders.map((order) => {
+        const orderItemsList = orderItems?.filter((item: any) => item.order_id === order.id) || [];
+        return {
+          id: order.id,
+          order_number: order.order_number,
+          delivered_at: order.updated_at,
+          items: orderItemsList.map((item: any) => ({
+            material_name: item.sku?.name || 'Unknown Material',
+            unit: item.sku?.unit_of_measure || 'pcs',
+            quantity: item.quantity_received ?? item.quantity_ordered ?? 0,
+          })),
+        };
+      });
+      setDeliveredOrders(ordersInfo.filter(o => o.items.length > 0));
     } catch (error) {
-      console.error('Error fetching received quantities:', error);
+      console.error('Error fetching delivered materials:', error);
     }
   };
 
@@ -354,29 +440,20 @@ export function QuotationModal({
     }
   };
 
-  const getItemProgress = (item: QuotationItem) => {
-    const materialKey = item.material_name.toLowerCase();
-    const received = receivedByMaterial[materialKey] || 0;
-    const cappedReceived = Math.min(received, item.quantity);
-    const percentage = item.quantity > 0 ? Math.min(100, (cappedReceived / item.quantity) * 100) : 0;
-    return { received, cappedReceived, percentage, remaining: Math.max(0, item.quantity - received) };
-  };
-
   const getTotalProgress = () => {
-    const totalQuoted = items.reduce((sum, item) => sum + item.quantity, 0);
-    const totalReceived = items.reduce((sum, item) => {
-      const materialKey = item.material_name.toLowerCase();
-      const received = receivedByMaterial[materialKey] || 0;
-      return sum + Math.min(received, item.quantity); // Cap at quoted quantity
+    const totalQuoted = materialProgress.reduce((sum, item) => sum + item.quotedQty, 0);
+    const totalDelivered = materialProgress.reduce((sum, item) => {
+      // Cap delivered at quoted amount for percentage calculation
+      return sum + Math.min(item.deliveredQty, item.quotedQty);
     }, 0);
-    return totalQuoted > 0 ? Math.min(100, (totalReceived / totalQuoted) * 100) : 0;
+    return totalQuoted > 0 ? Math.min(100, (totalDelivered / totalQuoted) * 100) : 0;
   };
 
   const isViewMode = !isEditMode && quotation !== null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
@@ -409,7 +486,7 @@ export function QuotationModal({
             )}
 
             {/* Overall Progress Summary */}
-            {isViewMode && items.length > 0 && items.some(i => i.material_name) && (
+            {isViewMode && materialProgress.length > 0 && (
               <div className="space-y-2 p-4 bg-primary/5 rounded-lg border">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Overall Project Progress</span>
@@ -417,16 +494,16 @@ export function QuotationModal({
                 </div>
                 <Progress value={getTotalProgress()} className="h-3" />
                 <p className="text-xs text-muted-foreground">
-                  Based on materials received vs. quoted quantities
+                  Based on materials delivered vs. quoted quantities
                 </p>
               </div>
             )}
 
-            {/* Materials List */}
+            {/* Initial Quotation List */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">
-                  Materials List {isEditMode && <span className="text-destructive">*</span>}
+                  Initial Quotation {isEditMode && <span className="text-destructive">*</span>}
                 </Label>
                 {isViewMode && canEdit && (
                   <Button type="button" variant="outline" size="sm" onClick={handleEnterEditMode}>
@@ -436,70 +513,49 @@ export function QuotationModal({
                 )}
               </div>
 
-              <div className="space-y-3">
-                {items.map((item, index) => {
-                  const progress = getItemProgress(item);
-                  return (
-                    <div key={item.id} className="space-y-2 p-3 border rounded-lg bg-card">
-                      <div className="flex gap-2 items-start">
-                        <div className="flex-1">
-                          <Input
-                            placeholder="Material name"
-                            value={item.material_name}
-                            onChange={(e) => updateItem(item.id, 'material_name', e.target.value)}
-                            disabled={!isEditMode}
-                          />
-                        </div>
-                        <div className="w-24">
-                          <Input
-                            placeholder="Unit"
-                            value={item.unit}
-                            onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
-                            disabled={!isEditMode}
-                          />
-                        </div>
-                        <div className="w-24">
-                          <Input
-                            type="number"
-                            min={1}
-                            placeholder="Qty"
-                            value={item.quantity || ''}
-                            onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
-                            disabled={!isEditMode}
-                          />
-                        </div>
-                        {isEditMode && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeItem(item.id)}
-                            disabled={items.length === 1}
-                            className="shrink-0"
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        )}
-                      </div>
-                      
-                      {/* Item Progress (only in view mode) */}
-                      {isViewMode && item.material_name && item.quantity > 0 && (
-                        <div className="space-y-1 pt-2 border-t">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">
-                              Received: {progress.received} / {item.quantity} {item.unit}
-                            </span>
-                            <span className="font-medium">{progress.percentage.toFixed(0)}%</span>
-                          </div>
-                          <Progress value={progress.percentage} className="h-2" />
-                          <p className="text-xs text-muted-foreground">
-                            Remaining: {progress.remaining} {item.unit}
-                          </p>
-                        </div>
-                      )}
+              <div className="space-y-2">
+                {items.map((item, index) => (
+                  <div key={item.id} className="flex gap-2 items-center p-2 border rounded-lg bg-card">
+                    <div className="flex-1">
+                      <Input
+                        placeholder="Material name"
+                        value={item.material_name}
+                        onChange={(e) => updateItem(item.id, 'material_name', e.target.value)}
+                        disabled={!isEditMode}
+                      />
                     </div>
-                  );
-                })}
+                    <div className="w-20">
+                      <Input
+                        placeholder="Unit"
+                        value={item.unit}
+                        onChange={(e) => updateItem(item.id, 'unit', e.target.value)}
+                        disabled={!isEditMode}
+                      />
+                    </div>
+                    <div className="w-24">
+                      <Input
+                        type="number"
+                        min={1}
+                        placeholder="Qty"
+                        value={item.quantity || ''}
+                        onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 0)}
+                        disabled={!isEditMode}
+                      />
+                    </div>
+                    {isEditMode && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeItem(item.id)}
+                        disabled={items.length === 1}
+                        className="shrink-0"
+                      >
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
               </div>
 
               {isEditMode && (
@@ -509,6 +565,107 @@ export function QuotationModal({
                 </Button>
               )}
             </div>
+
+            {/* Delivered Materials Section (View Mode Only) */}
+            {isViewMode && materialProgress.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <TruckIcon className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-medium">Delivered Materials</Label>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50">
+                      <tr>
+                        <th className="text-left p-2 font-medium">Material</th>
+                        <th className="text-center p-2 font-medium w-16">Unit</th>
+                        <th className="text-center p-2 font-medium w-20">Quoted</th>
+                        <th className="text-center p-2 font-medium w-20">Delivered</th>
+                        <th className="text-center p-2 font-medium w-20">Remaining</th>
+                        <th className="text-center p-2 font-medium w-28">Progress</th>
+                        <th className="text-center p-2 font-medium w-20">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {materialProgress.map((material) => (
+                        <tr key={material.quotationItemId} className="hover:bg-muted/30">
+                          <td className="p-2 font-medium">{material.materialName}</td>
+                          <td className="p-2 text-center text-muted-foreground">{material.unit}</td>
+                          <td className="p-2 text-center">{material.quotedQty}</td>
+                          <td className="p-2 text-center font-medium text-primary">{material.deliveredQty}</td>
+                          <td className="p-2 text-center text-muted-foreground">{material.remainingQty}</td>
+                          <td className="p-2">
+                            <div className="flex items-center gap-2">
+                              <Progress value={material.percentage} className="h-2 flex-1" />
+                              <span className="text-xs font-medium w-10 text-right">{material.percentage}%</span>
+                            </div>
+                          </td>
+                          <td className="p-2 text-center">
+                            {material.isFullyDelivered ? (
+                              <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-xs">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Complete
+                              </Badge>
+                            ) : material.deliveredQty > 0 ? (
+                              <Badge variant="secondary" className="text-xs">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                Partial
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-xs text-muted-foreground">
+                                Pending
+                              </Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* View Delivered Orders Collapsible */}
+                {deliveredOrders.length > 0 && (
+                  <Collapsible open={isDeliveredOrdersOpen} onOpenChange={setIsDeliveredOrdersOpen}>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm" className="w-full justify-between hover:bg-muted/50">
+                        <span className="flex items-center gap-2">
+                          <TruckIcon className="h-4 w-4" />
+                          View Delivered Orders ({deliveredOrders.length})
+                        </span>
+                        {isDeliveredOrdersOpen ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 pt-2">
+                      {deliveredOrders.map((order) => (
+                        <div key={order.id} className="border rounded-lg p-3 bg-muted/30">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-sm">{order.order_number}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {order.delivered_at 
+                                ? formatManilaTime(new Date(order.delivered_at))
+                                : 'Unknown date'}
+                            </span>
+                          </div>
+                          <div className="space-y-1">
+                            {order.items.map((item, idx) => (
+                              <div key={idx} className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">{item.material_name}</span>
+                                <span className="font-medium">{item.quantity} {item.unit}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+              </div>
+            )}
 
             {/* Notes */}
             <div className="space-y-2">
