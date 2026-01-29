@@ -1,16 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import {
-  Plus,
-  Trash2,
-  Loader2,
-  Clock,
-  Package,
-  Pencil,
-  CheckCircle2,
-  AlertCircle,
-  AlertTriangle,
-} from "lucide-react";
+import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -106,14 +96,9 @@ export function QuotationModal({
       }
 
       // Check global roles (admin, super_admin)
-      const { data: userRoles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id);
+      const { data: userRoles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
 
-      const hasAdminRole = userRoles?.some(
-        (r) => r.role === "admin" || r.role === "super_admin"
-      );
+      const hasAdminRole = userRoles?.some((r) => r.role === "admin" || r.role === "super_admin");
 
       if (hasAdminRole) {
         setCanDelete(true);
@@ -347,7 +332,7 @@ export function QuotationModal({
 
     // Validate each consolidated item
     const hasInvalidItem = consolidatedItems.some(
-      (item) => !item.material_name.trim() || item.quantity < 1 || !item.unit.trim()
+      (item) => !item.material_name.trim() || item.quantity < 1 || !item.unit.trim(),
     );
     if (hasInvalidItem) {
       toast({
@@ -509,20 +494,12 @@ export function QuotationModal({
     setDeleting(true);
     try {
       // Get user profile for activity log
-      const { data: userProfile } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .maybeSingle();
+      const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
 
       const userName = userProfile?.full_name || "User";
 
       // Get user role
-      const { data: userRole } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const { data: userRole } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
 
       const roleName = userRole?.role || "member";
 
@@ -538,10 +515,7 @@ export function QuotationModal({
       if (deleteItemsError) throw deleteItemsError;
 
       // Delete the quotation
-      const { error: deleteQuotationError } = await supabase
-        .from("project_quotations")
-        .delete()
-        .eq("id", quotationId);
+      const { error: deleteQuotationError } = await supabase.from("project_quotations").delete().eq("id", quotationId);
 
       if (deleteQuotationError) throw deleteQuotationError;
 
@@ -648,15 +622,21 @@ export function QuotationModal({
                     <div className="text-xs text-muted-foreground">Total Quoted</div>
                   </div>
                   <div>
-                    <div className="font-semibold text-primary">{materialProgress.reduce((sum, m) => sum + m.deliveredQty, 0)}</div>
+                    <div className="font-semibold text-primary">
+                      {materialProgress.reduce((sum, m) => sum + m.deliveredQty, 0)}
+                    </div>
                     <div className="text-xs text-muted-foreground">Total Received</div>
                   </div>
                   <div>
-                    <div className="font-semibold text-orange-600">{materialProgress.reduce((sum, m) => sum + m.remainingQty, 0)}</div>
+                    <div className="font-semibold text-orange-600">
+                      {materialProgress.reduce((sum, m) => sum + m.remainingQty, 0)}
+                    </div>
                     <div className="text-xs text-muted-foreground">Remaining</div>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">Based on quantity_received from Delivered + Closed orders</p>
+                <p className="text-xs text-muted-foreground">
+                  Based on quantity_received from Delivered + Closed orders
+                </p>
               </div>
             )}
 
@@ -667,18 +647,6 @@ export function QuotationModal({
                   Initial Quotation {isEditMode && <span className="text-destructive">*</span>}
                 </Label>
                 {isViewMode && canEdit && (
-                <div>
-                {isViewMode && quotation && canDelete && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="gap-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Delete Quotation
-                  </Button>
-                )}
-              </div>
                   <Button type="button" variant="outline" size="sm" onClick={handleEnterEditMode}>
                     <Pencil className="h-4 w-4 mr-1" />
                     Update Quotation
@@ -814,7 +782,14 @@ export function QuotationModal({
             {/* Actions */}
             <div className="flex justify-between items-center gap-2 pt-2">
               {/* Delete button - only visible in view mode for authorized users */}
-              
+              <div>
+                {isViewMode && quotation && canDelete && (
+                  <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} className="gap-2">
+                    <Trash2 className="h-4 w-4" />
+                    Delete Quotation
+                  </Button>
+                )}
+              </div>
 
               <div className="flex gap-2">
                 {isEditMode ? (
@@ -855,9 +830,7 @@ export function QuotationModal({
               Delete Quotation
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>
-                You are about to permanently delete the existing quotation for this project.
-              </p>
+              <p>You are about to permanently delete the existing quotation for this project.</p>
               <p className="font-medium text-destructive">
                 This action cannot be undone and will affect project progress tracking.
               </p>
