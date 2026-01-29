@@ -159,7 +159,7 @@ export function QuotationModal({
 
   const fetchDeliveredMaterials = async (quotationId: string, quotationItems: QuotationItem[]) => {
     try {
-      consoloe.log(quotation);
+      consoloe.log(orders);
       // Get only DELIVERED orders for this project
       const { data: orders, error: ordersError } = await supabase
         .from("orders")
