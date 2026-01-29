@@ -256,6 +256,7 @@ export type Database = {
           order_id: string
           quantity_ordered: number
           quantity_received: number | null
+          quotation_item_id: string | null
           sku_id: string
           unit_price: number | null
         }
@@ -266,6 +267,7 @@ export type Database = {
           order_id: string
           quantity_ordered: number
           quantity_received?: number | null
+          quotation_item_id?: string | null
           sku_id: string
           unit_price?: number | null
         }
@@ -276,6 +278,7 @@ export type Database = {
           order_id?: string
           quantity_ordered?: number
           quantity_received?: number | null
+          quotation_item_id?: string | null
           sku_id?: string
           unit_price?: number | null
         }
@@ -285,6 +288,13 @@ export type Database = {
             columns: ["order_id"]
             isOneToOne: false
             referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_items_quotation_item_id_fkey"
+            columns: ["quotation_item_id"]
+            isOneToOne: false
+            referencedRelation: "quotation_items"
             referencedColumns: ["id"]
           },
           {
