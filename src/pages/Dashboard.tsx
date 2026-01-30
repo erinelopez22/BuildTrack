@@ -62,7 +62,7 @@ export default function Dashboard() {
         .select("*, project:projects!inner(*)", { count: "exact", head: true })
         .in("status", ["for_approval", "approved", "submitted", "preparing", "in_transit", "on_hold"])
         .in("project.status", ["active"]);
-      console.log(ordersDatas);
+
       console.log(activeOrdersCount);
 
       // Fetch recent orders for the table and chart
