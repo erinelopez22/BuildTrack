@@ -26,7 +26,15 @@ type SortField = "created_at" | "expected_delivery_date" | "total_amount";
 type SortDirection = "asc" | "desc";
 
 // Active statuses for filtering - includes Delivered as per spec
-const ACTIVE_STATUSES: OrderStatus[] = ["for_approval", "approved", "submitted", "preparing", "in_transit", "delivered", "on_hold"];
+const ACTIVE_STATUSES: OrderStatus[] = [
+  "for_approval",
+  "approved",
+  "submitted",
+  "preparing",
+  "in_transit",
+  "delivered",
+  "on_hold",
+];
 
 export default function Orders() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -298,93 +306,7 @@ export default function Orders() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <PageHeader
-        title="Orders"
-        description="Manage purchase orders and track deliveries"
-        action={
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Order
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Purchase Order</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleCreateOrder} className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Project *</Label>
-                  <Select
-                    value={formData.project_id}
-                    onValueChange={(value) => setFormData({ ...formData, project_id: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Supplier Name</Label>
-                  <Input
-                    value={formData.supplier_name}
-                    onChange={(e) => setFormData({ ...formData, supplier_name: e.target.value })}
-                    placeholder="Acme Supplies Inc."
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Supplier Contact</Label>
-                  <Input
-                    value={formData.supplier_contact}
-                    onChange={(e) => setFormData({ ...formData, supplier_contact: e.target.value })}
-                    placeholder="Email or phone"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Expected Delivery Date</Label>
-                  <Input
-                    type="date"
-                    value={formData.expected_delivery_date}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        expected_delivery_date: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Notes</Label>
-                  <Textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">Create Order</Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        }
-      />
+      <PageHeader title="Orders" description="Manage purchase orders and track deliveries" />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1 max-w-sm">
