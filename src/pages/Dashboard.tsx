@@ -1,25 +1,20 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { PageHeader } from '@/components/common/PageHeader';
-import { StatCard } from '@/components/dashboard/StatCard';
-import { StatusBadge } from '@/components/common/StatusBadge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/contexts/AuthContext';
-import {
-  ClipboardList,
-  FolderKanban,
-  Package,
-  Users,
-} from 'lucide-react';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import type { Order } from '@/types/database';
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { PageHeader } from "@/components/common/PageHeader";
+import { StatCard } from "@/components/dashboard/StatCard";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/contexts/AuthContext";
+import { ClipboardList, FolderKanban, Package, Users } from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import type { Order } from "@/types/database";
 
 // Format currency in Philippine Peso
 const formatPHP = (amount: number | null | undefined) => {
-  if (amount == null) return '₱0.00';
-  return new Intl.NumberFormat('en-PH', {
-    style: 'currency',
-    currency: 'PHP',
+  if (amount == null) return "₱0.00";
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
@@ -50,27 +45,31 @@ export default function Dashboard() {
 
       // Fetch active projects count
       const { count: projectCount } = await supabase
-        .from('projects')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'active');
+        .from("projects")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "active");
 
       // Fetch SKUs count
       const { count: skuCount } = await supabase
-        .from('skus')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_active', true);
+        .from("skus")
+        .select("*", { count: "exact", head: true })
+        .eq("is_active", true);
 
       // Fetch active orders count (proper count query)
+
       const { count: activeOrdersCount } = await supabase
-        .from('orders')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['for_approval', 'approved', 'submitted', 'preparing', 'in_transit', 'on_hold']);
+        .from("orders")
+        .select("*, project:projects!inner(*)", { count: "exact", head: true })
+        .in("status", ["for_approval", "approved", "submitted", "preparing", "in_transit", "on_hold"])
+        .in("project.status", ["active"]);
+      console.log(ordersDatas);
+      console.log(activeOrdersCount);
 
       // Fetch recent orders for the table and chart
       const { data: ordersData } = await supabase
-        .from('orders')
-        .select('*, project:projects(name)')
-        .order('created_at', { ascending: false })
+        .from("orders")
+        .select("*, project:projects(name)")
+        .order("created_at", { ascending: false })
         .limit(10);
 
       // Count orders by status for the pie chart
@@ -83,9 +82,9 @@ export default function Dashboard() {
       let membersCount = 0;
       if (isAdmin()) {
         const { count } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_active', true);
+          .from("profiles")
+          .select("*", { count: "exact", head: true })
+          .eq("is_active", true);
         membersCount = count || 0;
       }
 
@@ -98,11 +97,11 @@ export default function Dashboard() {
 
       setRecentOrders((ordersData || []) as Order[]);
       setOrdersByStatus(
-        Object.entries(statusCounts).map(([status, value]) => ({ 
-          name: status.replace(/_/g, ' '), 
+        Object.entries(statusCounts).map(([status, value]) => ({
+          name: status.replace(/_/g, " "),
           value,
-          status // Keep original status for color mapping
-        }))
+          status, // Keep original status for color mapping
+        })),
       );
 
       setLoading(false);
@@ -114,30 +113,27 @@ export default function Dashboard() {
   // Status-based color mapping for the pie chart
   const getStatusColor = (status: string): string => {
     const colorMap: Record<string, string> = {
-      rejected: 'hsl(0, 72%, 51%)',           // Red
-      cancelled: 'hsl(0, 72%, 51%)',          // Red
-      for_approval: 'hsl(38, 92%, 50%)',      // Amber/Orange
-      approved: 'hsl(210, 90%, 50%)',         // Blue
-      submitted: 'hsl(210, 80%, 45%)',        // Blue (slightly darker)
-      preparing: 'hsl(220, 75%, 45%)',        // Blue (darker shade)
-      ordered: 'hsl(220, 65%, 40%)',          // Blue (darkest shade)
-      in_transit: 'hsl(45, 93%, 47%)',        // Yellow
-      on_hold: 'hsl(38, 80%, 50%)',           // Amber
-      delivered: 'hsl(142, 71%, 45%)',        // Green
-      fully_received: 'hsl(142, 71%, 45%)',   // Green
-      partially_received: 'hsl(38, 92%, 50%)',// Amber
-      closed: 'hsl(215, 16%, 47%)',           // Muted gray
-      draft: 'hsl(215, 16%, 60%)',            // Light gray
+      rejected: "hsl(0, 72%, 51%)", // Red
+      cancelled: "hsl(0, 72%, 51%)", // Red
+      for_approval: "hsl(38, 92%, 50%)", // Amber/Orange
+      approved: "hsl(210, 90%, 50%)", // Blue
+      submitted: "hsl(210, 80%, 45%)", // Blue (slightly darker)
+      preparing: "hsl(220, 75%, 45%)", // Blue (darker shade)
+      ordered: "hsl(220, 65%, 40%)", // Blue (darkest shade)
+      in_transit: "hsl(45, 93%, 47%)", // Yellow
+      on_hold: "hsl(38, 80%, 50%)", // Amber
+      delivered: "hsl(142, 71%, 45%)", // Green
+      fully_received: "hsl(142, 71%, 45%)", // Green
+      partially_received: "hsl(38, 92%, 50%)", // Amber
+      closed: "hsl(215, 16%, 47%)", // Muted gray
+      draft: "hsl(215, 16%, 60%)", // Light gray
     };
-    return colorMap[status] || 'hsl(270, 50%, 60%)'; // Fallback purple
+    return colorMap[status] || "hsl(270, 50%, 60%)"; // Fallback purple
   };
 
   return (
     <div className="animate-fade-in space-y-6">
-      <PageHeader
-        title="Dashboard"
-        description="Overview of your construction inventory and orders"
-      />
+      <PageHeader title="Dashboard" description="Overview of your construction inventory and orders" />
 
       {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -155,20 +151,9 @@ export default function Dashboard() {
           variant="default"
           href="/orders?status=active"
         />
-        <StatCard
-          title="Total SKUs"
-          value={loading ? '...' : stats.totalSkus}
-          icon={Package}
-          variant="default"
-        />
+        <StatCard title="Total SKUs" value={loading ? "..." : stats.totalSkus} icon={Package} variant="default" />
         {isAdmin() && (
-          <StatCard
-            title="Active Members"
-            value={stats.activeMembers}
-            icon={Users}
-            variant="default"
-            href="/members"
-          />
+          <StatCard title="Active Members" value={stats.activeMembers} icon={Users} variant="default" href="/members" />
         )}
       </div>
 
@@ -191,22 +176,23 @@ export default function Dashboard() {
                   label={({ name, value }) => `${name}: ${value}`}
                 >
                   {ordersByStatus.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={getStatusColor((entry as any).status || entry.name.replace(/ /g, '_'))} />
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={getStatusColor((entry as any).status || entry.name.replace(/ /g, "_"))}
+                    />
                   ))}
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '0.5rem',
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "0.5rem",
                   }}
                 />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex h-[280px] items-center justify-center text-muted-foreground">
-              No orders yet
-            </div>
+            <div className="flex h-[280px] items-center justify-center text-muted-foreground">No orders yet</div>
           )}
         </CardContent>
       </Card>
@@ -234,17 +220,13 @@ export default function Dashboard() {
                     <tr key={order.id} className="text-sm">
                       <td className="py-3 pr-4 font-medium">{order.order_number}</td>
                       <td className="py-3 pr-4 text-muted-foreground">
-                        {(order as Order & { project?: { name: string } }).project?.name || '-'}
+                        {(order as Order & { project?: { name: string } }).project?.name || "-"}
                       </td>
                       <td className="py-3 pr-4">
                         <StatusBadge status={order.status} />
                       </td>
-                      <td className="py-3 pr-4 text-muted-foreground">
-                        {order.supplier_name || '-'}
-                      </td>
-                      <td className="py-3 text-right">
-                        {order.total_amount ? formatPHP(order.total_amount) : '-'}
-                      </td>
+                      <td className="py-3 pr-4 text-muted-foreground">{order.supplier_name || "-"}</td>
+                      <td className="py-3 text-right">{order.total_amount ? formatPHP(order.total_amount) : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
