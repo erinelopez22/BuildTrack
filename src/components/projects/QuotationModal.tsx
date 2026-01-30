@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -18,6 +18,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -50,6 +56,15 @@ interface MaterialDeliveryProgress {
   remainingQty: number;
   percentage: number;
   isFullyDelivered: boolean;
+}
+
+// Tracks materials that are used in orders and their minimum allowed quantities
+interface MaterialOrderUsage {
+  quotationItemId: string;
+  orderedQty: number; // SUM from non-received/closed orders
+  receivedClosedQty: number; // SUM from received/closed orders
+  minimumAllowedQty: number; // orderedQty + receivedClosedQty
+  isUsedInOrders: boolean;
 }
 
 interface QuotationModalProps {
@@ -86,6 +101,9 @@ export function QuotationModal({
 
   // Delivery progress tracking (for progress bars only)
   const [materialProgress, setMaterialProgress] = useState<MaterialDeliveryProgress[]>();
+
+  // Track material usage in orders for validation
+  const [materialOrderUsage, setMaterialOrderUsage] = useState<Map<string, MaterialOrderUsage>>(new Map());
 
   // Check if user can delete quotation (Project Engineer, Admin, Super Admin)
   useEffect(() => {
@@ -156,14 +174,19 @@ export function QuotationModal({
 
         if (itemsError) throw itemsError;
         setItems(itemsData || []);
+
         // Fetch delivered materials progress
         await fetchDeliveredMaterials(quotationData.id, itemsData || []);
+        
+        // Fetch material order usage for validation
+        await fetchMaterialOrderUsage(itemsData || []);
       } else {
         setQuotation(null);
         setItems([{ id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
         setNotes("");
         setIsEditMode(true);
         setMaterialProgress([]);
+        setMaterialOrderUsage(new Map());
       }
     } catch (error: any) {
       toast({
@@ -173,6 +196,92 @@ export function QuotationModal({
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch material usage in orders for delete/qty validation
+  const fetchMaterialOrderUsage = async (quotationItems: QuotationItem[]) => {
+    try {
+      if (quotationItems.length === 0) {
+        setMaterialOrderUsage(new Map());
+        return;
+      }
+
+      // Get all orders for this project (exclude cancelled)
+      const { data: orders, error: ordersError } = await supabase
+        .from("orders")
+        .select("id, status")
+        .eq("project_id", projectId)
+        .not("status", "eq", "cancelled");
+
+      if (ordersError) throw ordersError;
+
+      if (!orders || orders.length === 0) {
+        // No orders - all materials can be deleted/modified freely
+        const emptyUsage = new Map<string, MaterialOrderUsage>();
+        quotationItems.forEach((qItem) => {
+          emptyUsage.set(qItem.id, {
+            quotationItemId: qItem.id,
+            orderedQty: 0,
+            receivedClosedQty: 0,
+            minimumAllowedQty: 0,
+            isUsedInOrders: false,
+          });
+        });
+        setMaterialOrderUsage(emptyUsage);
+        return;
+      }
+
+      // Separate orders by status category
+      const receivedClosedOrderIds = orders
+        .filter((o) => o.status === "delivered" || o.status === "closed")
+        .map((o) => o.id);
+      const activeOrderIds = orders
+        .filter((o) => o.status !== "delivered" && o.status !== "closed")
+        .map((o) => o.id);
+
+      // Get order items for all orders
+      const { data: orderItems, error: itemsError } = await supabase
+        .from("order_items")
+        .select("quotation_item_id, quantity_ordered, quantity_received, order_id")
+        .in("order_id", orders.map((o) => o.id));
+
+      if (itemsError) throw itemsError;
+
+      // Build usage map
+      const usageMap = new Map<string, MaterialOrderUsage>();
+      
+      quotationItems.forEach((qItem) => {
+        let orderedQty = 0;
+        let receivedClosedQty = 0;
+        let isUsedInOrders = false;
+
+        orderItems?.forEach((oi) => {
+          if (oi.quotation_item_id === qItem.id) {
+            isUsedInOrders = true;
+            
+            if (receivedClosedOrderIds.includes(oi.order_id)) {
+              // For received/closed orders, use quantity_received
+              receivedClosedQty += oi.quantity_received ?? 0;
+            } else if (activeOrderIds.includes(oi.order_id)) {
+              // For active orders (not received/closed), use quantity_ordered
+              orderedQty += oi.quantity_ordered ?? 0;
+            }
+          }
+        });
+
+        usageMap.set(qItem.id, {
+          quotationItemId: qItem.id,
+          orderedQty,
+          receivedClosedQty,
+          minimumAllowedQty: orderedQty + receivedClosedQty,
+          isUsedInOrders,
+        });
+      });
+
+      setMaterialOrderUsage(usageMap);
+    } catch (error) {
+      console.error("Error fetching material order usage:", error);
     }
   };
 
@@ -265,8 +374,29 @@ export function QuotationModal({
     setItems([...items, { id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
   };
 
+  // Check if a material can be deleted (not used in any order)
+  const canDeleteMaterial = (itemId: string): boolean => {
+    const usage = materialOrderUsage.get(itemId);
+    return !usage?.isUsedInOrders;
+  };
+
+  // Get the minimum allowed quantity for a material
+  const getMinimumAllowedQty = (itemId: string): number => {
+    const usage = materialOrderUsage.get(itemId);
+    return usage?.minimumAllowedQty || 0;
+  };
+
   const removeItem = (id: string) => {
     if (items.length > 1) {
+      // Check if material can be deleted
+      if (!canDeleteMaterial(id)) {
+        toast({
+          title: "Cannot delete",
+          description: "This material is already used in existing orders.",
+          variant: "destructive",
+        });
+        return;
+      }
       setItems(items.filter((item) => item.id !== id));
     }
   };
@@ -276,6 +406,21 @@ export function QuotationModal({
       // Auto-convert to uppercase while typing
       value = value.toUpperCase();
     }
+
+    // Handle quantity validation
+    if (field === "quantity" && typeof value === "number") {
+      const minAllowed = getMinimumAllowedQty(id);
+      if (value < minAllowed) {
+        const usage = materialOrderUsage.get(id);
+        toast({
+          title: "Quantity adjusted",
+          description: `Cannot set qty below already ordered/received amounts.\nOrdered: ${usage?.orderedQty || 0}\nReceived/Closed: ${usage?.receivedClosedQty || 0}\nMinimum allowed: ${minAllowed}`,
+          variant: "destructive",
+        });
+        value = minAllowed;
+      }
+    }
+
     setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
@@ -343,6 +488,20 @@ export function QuotationModal({
       return;
     }
 
+    // Validate minimum quantities for existing items
+    for (const item of consolidatedItems) {
+      const minAllowed = getMinimumAllowedQty(item.id);
+      if (item.quantity < minAllowed) {
+        const usage = materialOrderUsage.get(item.id);
+        toast({
+          title: "Quantity Error",
+          description: `${item.material_name}: Cannot set qty below ${minAllowed} (Ordered: ${usage?.orderedQty || 0}, Received: ${usage?.receivedClosedQty || 0})`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     // Update items state with consolidated version
     setItems(consolidatedItems);
 
@@ -367,19 +526,65 @@ export function QuotationModal({
 
         if (updateError) throw updateError;
 
-        // Delete existing items and insert new ones
-        await supabase.from("quotation_items").delete().eq("quotation_id", quotation.id);
+        // For update: we need to handle items carefully to preserve quotation_item_id references
+        // Get existing items to compare
+        const { data: existingItems } = await supabase
+          .from("quotation_items")
+          .select("id, material_name")
+          .eq("quotation_id", quotation.id);
 
-        const { error: itemsError } = await supabase.from("quotation_items").insert(
-          consolidatedItems.map((item) => ({
-            quotation_id: quotation.id,
-            material_name: normalizeMaterialName(item.material_name),
-            unit: item.unit.trim(),
-            quantity: item.quantity,
-          })),
-        );
+        const existingItemMap = new Map<string, string>();
+        existingItems?.forEach((ei) => {
+          existingItemMap.set(ei.material_name, ei.id);
+        });
 
-        if (itemsError) throw itemsError;
+        // Process consolidated items - update existing, insert new
+        for (const item of consolidatedItems) {
+          const normalizedName = normalizeMaterialName(item.material_name);
+          
+          // Check if this item exists (by ID or by normalized name)
+          const existingId = item.id && existingItems?.find((ei) => ei.id === item.id)
+            ? item.id
+            : existingItemMap.get(normalizedName);
+
+          if (existingId) {
+            // Update existing item
+            await supabase
+              .from("quotation_items")
+              .update({
+                material_name: normalizedName,
+                unit: item.unit.trim(),
+                quantity: item.quantity,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", existingId);
+          } else {
+            // Insert new item
+            await supabase.from("quotation_items").insert({
+              quotation_id: quotation.id,
+              material_name: normalizedName,
+              unit: item.unit.trim(),
+              quantity: item.quantity,
+            });
+          }
+        }
+
+        // Delete items that are no longer in the list (only if not used in orders)
+        const consolidatedIds = consolidatedItems.map((ci) => ci.id);
+        const consolidatedNames = consolidatedItems.map((ci) => normalizeMaterialName(ci.material_name));
+        
+        for (const existingItem of existingItems || []) {
+          const isInConsolidated = consolidatedIds.includes(existingItem.id) || 
+            consolidatedNames.includes(existingItem.material_name);
+          
+          if (!isInConsolidated) {
+            // Check if we can delete this item
+            const usage = materialOrderUsage.get(existingItem.id);
+            if (!usage?.isUsedInOrders) {
+              await supabase.from("quotation_items").delete().eq("id", existingItem.id);
+            }
+          }
+        }
 
         // Log activity
         await logActivity({
@@ -649,48 +854,79 @@ export function QuotationModal({
               </div>
 
               <div className="space-y-2">
-                {items.map((item, index) => (
-                  <div key={item.id} className="flex gap-2 items-center p-2 border rounded-lg bg-card">
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Material name"
-                        value={item.material_name}
-                        onChange={(e) => updateItem(item.id, "material_name", e.target.value)}
-                        disabled={!isEditMode}
-                      />
+                {items.map((item, index) => {
+                  const usage = materialOrderUsage.get(item.id);
+                  const isUsedInOrders = usage?.isUsedInOrders || false;
+                  const minAllowedQty = usage?.minimumAllowedQty || 0;
+
+                  return (
+                    <div key={item.id} className="space-y-1">
+                      <div className="flex gap-2 items-center p-2 border rounded-lg bg-card">
+                        <div className="flex-1">
+                          <Input
+                            placeholder="Material name"
+                            value={item.material_name}
+                            onChange={(e) => updateItem(item.id, "material_name", e.target.value)}
+                            disabled={!isEditMode}
+                          />
+                        </div>
+                        <div className="w-20">
+                          <Input
+                            placeholder="Unit"
+                            value={item.unit}
+                            onChange={(e) => updateItem(item.id, "unit", e.target.value)}
+                            disabled={!isEditMode}
+                          />
+                        </div>
+                        <div className="w-24">
+                          <Input
+                            type="number"
+                            min={minAllowedQty > 0 ? minAllowedQty : 1}
+                            placeholder="Qty"
+                            value={item.quantity || ""}
+                            onChange={(e) => updateItem(item.id, "quantity", parseInt(e.target.value) || 0)}
+                            disabled={!isEditMode}
+                          />
+                        </div>
+                        {isEditMode && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => removeItem(item.id)}
+                                    disabled={items.length === 1 || isUsedInOrders}
+                                    className="shrink-0"
+                                  >
+                                    {isUsedInOrders ? (
+                                      <Lock className="h-4 w-4 text-muted-foreground" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                    )}
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {isUsedInOrders && (
+                                <TooltipContent>
+                                  <p>Cannot delete — this material is already used in existing orders.</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                      {/* Show minimum quantity hint for materials used in orders */}
+                      {isEditMode && isUsedInOrders && minAllowedQty > 0 && (
+                        <p className="text-xs text-muted-foreground pl-2">
+                          Min qty: {minAllowedQty} (Ordered: {usage?.orderedQty || 0}, Received: {usage?.receivedClosedQty || 0})
+                        </p>
+                      )}
                     </div>
-                    <div className="w-20">
-                      <Input
-                        placeholder="Unit"
-                        value={item.unit}
-                        onChange={(e) => updateItem(item.id, "unit", e.target.value)}
-                        disabled={!isEditMode}
-                      />
-                    </div>
-                    <div className="w-24">
-                      <Input
-                        type="number"
-                        min={1}
-                        placeholder="Qty"
-                        value={item.quantity || ""}
-                        onChange={(e) => updateItem(item.id, "quantity", parseInt(e.target.value) || 0)}
-                        disabled={!isEditMode}
-                      />
-                    </div>
-                    {isEditMode && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeItem(item.id)}
-                        disabled={items.length === 1}
-                        className="shrink-0"
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {isEditMode && (
