@@ -60,7 +60,7 @@ export default function Dashboard() {
       const { count: activeOrdersCount } = await supabase
         .from("orders")
         .select("*, project:projects!inner(*)", { count: "exact", head: true })
-        .in("status", ["for_approval", "approved", "submitted", "preparing", "in_transit", "on_hold"])
+        .in("status", ["for_approval", "approved", "submitted", "delivered", "preparing", "in_transit", "on_hold"])
         .in("project.status", ["active"]);
 
       console.log(activeOrdersCount);
