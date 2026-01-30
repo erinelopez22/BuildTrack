@@ -25,8 +25,8 @@ interface OrderWithProject extends Order {
 type SortField = "created_at" | "expected_delivery_date" | "total_amount";
 type SortDirection = "asc" | "desc";
 
-// Active statuses for filtering
-const ACTIVE_STATUSES: OrderStatus[] = ["for_approval", "approved", "submitted", "preparing", "in_transit", "on_hold"];
+// Active statuses for filtering - includes Delivered as per spec
+const ACTIVE_STATUSES: OrderStatus[] = ["for_approval", "approved", "submitted", "preparing", "in_transit", "delivered", "on_hold"];
 
 export default function Orders() {
   const [searchParams, setSearchParams] = useSearchParams();
