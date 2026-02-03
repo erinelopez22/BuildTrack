@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { request } from '@/integrations/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { mapApiProfile, type ApiProfile } from '@/lib/apiMappers';
 import {
   Dialog,
   DialogContent,
@@ -37,48 +38,52 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   const fetchOrderDetails = async () => {
     if (!orderId) return;
     setLoading(true);
+    try {
+      const orderData = await request<{
+        id: string; projectId: string; orderNumber: string; orderType: string; status: string;
+        supplierName?: string | null; supplierContact?: string | null; expectedDeliveryDate?: string | null;
+        notes?: string | null; totalAmount?: number | null; createdAt: string; updatedAt: string;
+        createdBy: string; approvedBy?: string | null; approvedAt?: string | null; rejectedBy?: string | null; rejectedAt?: string | null; rejectionReason?: string | null;
+      }>(`/api/orders/${orderId}`);
+      const order: Order = {
+        id: orderData.id,
+        project_id: orderData.projectId,
+        order_number: orderData.orderNumber,
+        order_type: orderData.orderType,
+        status: orderData.status as Order['status'],
+        supplier_name: orderData.supplierName ?? null,
+        supplier_contact: orderData.supplierContact ?? null,
+        expected_delivery_date: orderData.expectedDeliveryDate ?? null,
+        notes: orderData.notes ?? null,
+        total_amount: orderData.totalAmount ?? null,
+        created_at: orderData.createdAt,
+        updated_at: orderData.updatedAt,
+        created_by: orderData.createdBy,
+        approved_by: orderData.approvedBy ?? null,
+        approved_at: orderData.approvedAt ?? null,
+        rejected_by: orderData.rejectedBy ?? null,
+        rejected_at: orderData.rejectedAt ?? null,
+        rejection_reason: orderData.rejectionReason ?? null,
+      };
+      setOrder(order);
 
-    const { data: orderData, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', orderId)
-      .maybeSingle();
-
-    if (orderData) {
-      setOrder(orderData as Order);
-
-      // Fetch creator profile
-      if (orderData.created_by) {
-        const { data: creatorData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', orderData.created_by)
-          .maybeSingle();
-        setCreator(creatorData as Profile);
+      if (orderData.createdBy) {
+        const creatorData = await request<ApiProfile>(`/api/profiles/${orderData.createdBy}`).catch(() => null);
+        setCreator(creatorData ? mapApiProfile(creatorData) : null);
       }
-
-      // Fetch approver profile if approved
-      if (orderData.approved_by) {
-        const { data: approverData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', orderData.approved_by)
-          .maybeSingle();
-        setApprover(approverData as Profile);
+      if (orderData.approvedBy) {
+        const approverData = await request<ApiProfile>(`/api/profiles/${orderData.approvedBy}`).catch(() => null);
+        setApprover(approverData ? mapApiProfile(approverData) : null);
       }
-
-      // Fetch rejector profile if rejected
-      if (orderData.rejected_by) {
-        const { data: rejectorData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', orderData.rejected_by)
-          .maybeSingle();
-        setRejector(rejectorData as Profile);
+      if (orderData.rejectedBy) {
+        const rejectorData = await request<ApiProfile>(`/api/profiles/${orderData.rejectedBy}`).catch(() => null);
+        setRejector(rejectorData ? mapApiProfile(rejectorData) : null);
       }
+    } catch {
+      setOrder(null);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   if (!open) return null;

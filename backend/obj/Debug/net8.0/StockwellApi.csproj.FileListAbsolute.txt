@@ -1,0 +1,9 @@
+C:\Users\elopez24\Documents\stockwell-build\backend\obj\Debug\net8.0\StockwellApi.csproj.AssemblyReference.cache
+C:\Users\elopez24\Documents\stockwell-build\backend\obj\Debug\net8.0\rpswa.dswa.cache.json
+C:\Users\elopez24\Documents\stockwell-build\backend\obj\Debug\net8.0\StockwellApi.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\elopez24\Documents\stockwell-build\backend\obj\Debug\net8.0\StockwellApi.AssemblyInfoInputs.cache
+C:\Users\elopez24\Documents\stockwell-build\backend\obj\Debug\net8.0\StockwellApi.AssemblyInfo.cs
+C:\Users\elopez24\Documents\stockwell-build\backend\obj\Debug\net8.0\StockwellApi.csproj.CoreCompileInputs.cache
+C:\Users\elopez24\Documents\stockwell-build\backend\obj\Debug\net8.0\StockwellApi.MvcApplicationPartsAssemblyInfo.cs
+C:\Users\elopez24\Documents\stockwell-build\backend\obj\Debug\net8.0\StockwellApi.MvcApplicationPartsAssemblyInfo.cache
+C:\Users\elopez24\Documents\stockwell-build\backend\obj\Debug\net8.0\StockwellApi.sourcelink.json

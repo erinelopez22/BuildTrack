@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { request } from '@/integrations/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { mapApiProfile, type ApiProfile } from '@/lib/apiMappers';
 import { PageHeader } from '@/components/common/PageHeader';
 import { EmptyState } from '@/components/common/EmptyState';
 import { DataTable, Column } from '@/components/common/DataTable';
@@ -28,63 +29,24 @@ export default function Members() {
         setLoading(false);
         return;
       }
-
       try {
-        // Fetch all active profiles
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('is_active', true)
-          .order('full_name', { ascending: true });
-
-        if (profilesError) throw profilesError;
-
-        // Fetch all user roles
-        const { data: userRoles, error: rolesError } = await supabase
-          .from('user_roles')
-          .select('user_id, role');
-
-        if (rolesError) throw rolesError;
-
-        // Fetch all project memberships with project names
-        const { data: projectMembers, error: membersError } = await supabase
-          .from('project_members')
-          .select('user_id, project_id, projects(id, name)');
-
-        if (membersError) throw membersError;
-
-        // Build member data with roles and projects
-        const membersWithDetails: MemberWithDetails[] = (profiles || []).map((profile) => {
-          const roles = (userRoles || [])
-            .filter((r) => r.user_id === profile.id)
-            .map((r) => r.role as AppRole);
-
-          const projects = (projectMembers || [])
-            .filter((pm) => pm.user_id === profile.id)
-            .map((pm) => ({
-              id: (pm.projects as any)?.id || pm.project_id,
-              name: (pm.projects as any)?.name || 'Unknown Project',
-            }));
-
-          return {
-            ...profile,
-            roles,
-            projects,
-          } as MemberWithDetails;
-        });
-
+        const profilesData = await request<ApiProfile[]>('/api/profiles?isActive=true');
+        const membersWithDetails: MemberWithDetails[] = (profilesData ?? []).map((p) => ({
+          ...mapApiProfile(p),
+          roles: (p.roles ?? []) as AppRole[],
+          projects: [], // Backend does not return project list per profile; can be extended later
+        }));
         setMembers(membersWithDetails);
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast({
           title: 'Error',
-          description: error.message,
+          description: error instanceof Error ? error.message : 'Failed to load members',
           variant: 'destructive',
         });
       } finally {
         setLoading(false);
       }
     }
-
     fetchMembers();
   }, [isAdmin, toast]);
 

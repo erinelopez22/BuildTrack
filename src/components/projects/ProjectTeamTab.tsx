@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { request } from '@/integrations/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { mapApiProfile, type ApiProfile } from '@/lib/apiMappers';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -28,8 +29,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2, UserPlus } from 'lucide-react';
-import { logActivity } from '@/lib/activityLogger';
-import { notifyProjectMembers } from '@/lib/notificationService';
 import type { ProjectMember, Profile, AppRole } from '@/types/database';
 
 interface ProjectTeamTabProps {
@@ -71,42 +70,37 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
   const [isAdding, setIsAdding] = useState(false);
 
   const fetchMembers = async () => {
-    const { data: membersData } = await supabase
-      .from('project_members')
-      .select('*')
-      .eq('project_id', projectId);
-
-    if (membersData && membersData.length > 0) {
-      const userIds = membersData.map(m => m.user_id);
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', userIds);
-
-      const membersWithProfiles = membersData.map(member => ({
-        ...member,
-        profile: (profilesData || []).find(p => p.id === member.user_id) || {} as Profile,
+    setLoading(true);
+    try {
+      const membersData = await request<Array<{ id: string; projectId: string; userId: string; role: string; createdAt: string; user?: { id: string; email: string; fullName?: string | null } | null }>>(`/api/projects/${projectId}/members`);
+      const membersWithProfiles: (ProjectMember & { profile: Profile })[] = membersData.map((m) => ({
+        id: m.id,
+        created_by: m.userId ?? null,
+        project_id: m.projectId,
+        user_id: m.userId,
+        role: m.role as AppRole,
+        created_at: m.createdAt,
+        profile: m.user
+          ? mapApiProfile({ id: m.user.id, email: m.user.email, fullName: m.user.fullName ?? null, phone: null, avatarUrl: null, isActive: true, roles: [], createdAt: m.createdAt, updatedAt: m.createdAt })
+          : ({} as Profile),
       }));
-      setMembers(membersWithProfiles as (ProjectMember & { profile: Profile })[]);
-    } else {
+      setMembers(membersWithProfiles);
+    } catch {
       setMembers([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchAvailableUsers = async () => {
-    // Get all active profiles
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('is_active', true);
-
-    // Get current member IDs
-    const memberIds = members.map(m => m.user_id);
-    
-    // Filter out users already in the project
-    const available = (profiles || []).filter(p => !memberIds.includes(p.id));
-    setAvailableUsers(available as Profile[]);
+    try {
+      const profiles = await request<ApiProfile[]>('/api/profiles?isActive=true');
+      const memberIds = members.map((m) => m.user_id);
+      const available = profiles.filter((p) => !memberIds.includes(p.id)).map(mapApiProfile);
+      setAvailableUsers(available);
+    } catch {
+      setAvailableUsers([]);
+    }
   };
 
   useEffect(() => {
@@ -122,88 +116,36 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
   const handleAddMember = async () => {
     if (!selectedUserId || !user) return;
     setIsAdding(true);
-
-    const { error } = await supabase.from('project_members').insert({
-      project_id: projectId,
-      user_id: selectedUserId,
-      role: selectedRole,
-      created_by: user.id,
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      // Log activity
-      await logActivity({
-        action: 'add',
-        tableName: 'project_members',
-        recordId: projectId,
-        newValues: { user_id: selectedUserId, role: selectedRole },
-        userId: user.id,
+    try {
+      await request(`/api/projects/${projectId}/members`, {
+        method: 'POST',
+        body: { userId: selectedUserId, role: selectedRole },
       });
-
-      // Get the added user's name
-      const addedUser = availableUsers.find(u => u.id === selectedUserId);
-      
-      // Notify project members
-      await notifyProjectMembers({
-        projectId,
-        title: 'New Team Member',
-        message: `${addedUser?.full_name || 'A new member'} has been added to ${projectName}`,
-        type: 'team',
-        referenceType: 'project',
-        referenceId: projectId,
-        excludeUserId: user.id,
-      });
-
       toast({ title: 'Success', description: 'Team member added' });
       setIsAddDialogOpen(false);
       setSelectedUserId('');
       setSelectedRole('viewer');
       fetchMembers();
+    } catch (err: unknown) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to add member', variant: 'destructive' });
+    } finally {
+      setIsAdding(false);
     }
-
-    setIsAdding(false);
   };
 
   const handleRemoveMember = async () => {
     if (!memberToRemove || !user) return;
     setIsRemoving(true);
-
-    const { error } = await supabase
-      .from('project_members')
-      .delete()
-      .eq('id', memberToRemove.id);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      // Log activity
-      await logActivity({
-        action: 'remove',
-        tableName: 'project_members',
-        recordId: projectId,
-        oldValues: { user_id: memberToRemove.user_id, role: memberToRemove.role },
-        userId: user.id,
-      });
-
-      // Notify project members
-      await notifyProjectMembers({
-        projectId,
-        title: 'Team Member Removed',
-        message: `${memberToRemove.profile?.full_name || 'A team member'} has been removed from ${projectName}`,
-        type: 'team',
-        referenceType: 'project',
-        referenceId: projectId,
-        excludeUserId: user.id,
-      });
-
+    try {
+      await request(`/api/projects/${projectId}/members/${memberToRemove.id}`, { method: 'DELETE' });
       toast({ title: 'Success', description: 'Team member removed' });
       setMemberToRemove(null);
       fetchMembers();
+    } catch (err: unknown) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to remove member', variant: 'destructive' });
+    } finally {
+      setIsRemoving(false);
     }
-
-    setIsRemoving(false);
   };
 
   const canManageTeam = isAdmin();

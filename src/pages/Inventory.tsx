@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { request } from "@/integrations/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Package, Search } from "lucide-react";
 import type { Project } from "@/types/database";
+import { mapApiProject, type ApiProject } from "@/lib/apiMappers";
 
 export default function Inventory() {
-  const { isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,20 +19,14 @@ export default function Inventory() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
   const fetchProjects = async () => {
-    // Fetch all non-deleted projects (deleted projects hidden unless Super Admin)
-    let query = supabase.from("projects").select("*").order("name", { ascending: true });
-
-    // Never show deleted projects in inventory view
-    query = query.neq("status", "deleted");
-
-    const { data, error } = await query;
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      setProjects(data as Project[]);
+    try {
+      const data = await request<ApiProject[]>("/api/projects");
+      setProjects((data ?? []).map(mapApiProject));
+    } catch (e) {
+      toast({ title: "Error", description: e instanceof Error ? e.message : "Failed to load projects", variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {

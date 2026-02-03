@@ -9,7 +9,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { supabase } from '@/integrations/supabase/client';
+import { request } from '@/integrations/api';
+import { mapApiOrderWithProject, type ApiOrderWithProject } from '@/lib/apiMappers';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import type { Order, OrderStatus } from '@/types/database';
@@ -47,19 +48,12 @@ export function ActiveOrdersModal({
   const fetchActiveOrders = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('project_id', projectId)
-        .in('status', ACTIVE_STATUSES)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setOrders((data || []) as Order[]);
-    } catch (error: any) {
+      const data = await request<ApiOrderWithProject[]>(`/api/orders?projectId=${projectId}&status=active&limit=100`);
+      setOrders(data.map(mapApiOrderWithProject));
+    } catch (err: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to load orders',
+        description: err instanceof Error ? err.message : 'Failed to load orders',
         variant: 'destructive',
       });
     } finally {

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { request } from '@/integrations/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { mapApiProject, type ApiProject } from '@/lib/apiMappers';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
 import { ProjectTeamTab } from '@/components/projects/ProjectTeamTab';
@@ -60,55 +61,54 @@ export default function ProjectDetail() {
   const progress = useProjectProgress(id || '', progressKey);
 
   const fetchAllProjects = async () => {
-    const { data } = await supabase
-      .from('projects')
-      .select('id, name, status')
-      .order('name', { ascending: true });
-    setAllProjects((data || []) as Project[]);
+    try {
+      const data = await request<ApiProject[]>('/api/projects');
+      setAllProjects(data.map(mapApiProject));
+    } catch {
+      setAllProjects([]);
+    }
   };
 
   const fetchProjectData = async () => {
     if (!id) return;
 
-    // Fetch project
-    const { data: projectData, error: projectError } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
+    try {
+      const projectData = await request<{
+        id: string; name: string; code?: string | null; location?: string | null; description?: string | null;
+        status: string; startDate?: string | null; endDate?: string | null; projectManagerId?: string | null;
+        estimatedCost?: number | null; createdAt: string; updatedAt: string; createdBy?: string | null;
+      }>(`/api/projects/${id}`);
+      setProject(mapApiProject(projectData));
 
-    if (projectError || !projectData) {
+      try {
+       
+      const res=  await request<any>(`/api/projects/${id}/quotation`);
+      console.log(res);
+       if(res.id=="00000000-0000-0000-0000-000000000000")
+       {
+        setHasQuotation(false);
+       }
+       else
+       {
+        setHasQuotation(true);
+       }
+       
+      } catch {
+        console.log("HAS NOOOO  QQQQQQQQQ");
+        setHasQuotation(false);
+      }
+
+      if (user) {
+        const members = await request<Array<{ userId: string; role: string }>>(`/api/projects/${id}/members`);
+        const member = members.find((m: { userId: string }) => m.userId === user.id);
+        if (member) setUserProjectRole(member.role as AppRole);
+      }
+    } catch {
       toast({ title: 'Error', description: 'Project not found', variant: 'destructive' });
       navigate('/projects');
-      return;
+    } finally {
+      setLoading(false);
     }
-
-    setProject(projectData as Project);
-
-    // Check if quotation exists
-    const { data: quotationData } = await supabase
-      .from('project_quotations')
-      .select('id')
-      .eq('project_id', id)
-      .maybeSingle();
-    
-    setHasQuotation(!!quotationData);
-
-    // Fetch user's role in this project
-    if (user) {
-      const { data: memberData } = await supabase
-        .from('project_members')
-        .select('role')
-        .eq('project_id', id)
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (memberData) {
-        setUserProjectRole(memberData.role as AppRole);
-      }
-    }
-
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -137,19 +137,17 @@ export default function ProjectDetail() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({
+      await request(`/api/projects/${project.id}`, {
+        method: 'PUT',
+        body: {
           name: data.name,
           description: data.description || null,
           location: data.location,
-          start_date: data.start_date,
-          end_date: data.end_date,
+          startDate: data.start_date,
+          endDate: data.end_date,
           status: data.status,
-        })
-        .eq('id', project.id);
-
-      if (error) throw error;
+        },
+      });
       toast({ title: 'Success', description: 'Project updated successfully' });
       setIsEditDialogOpen(false);
       fetchProjectData();

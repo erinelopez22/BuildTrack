@@ -36,7 +36,7 @@ export default function Login() {
     setIsSubmitting(true);
     
     const { error } = await signIn(email, password);
-    
+    console.log('error', error);
     if (error) {
       toast({
         title: 'Sign in failed',
@@ -65,8 +65,9 @@ export default function Login() {
     } else {
       toast({
         title: 'Account created',
-        description: 'Please check your email to verify your account.',
+        description: 'You are signed in.',
       });
+      navigate('/dashboard');
     }
     
     setIsSubmitting(false);

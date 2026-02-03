@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Calendar, MapPin, MoreVertical, Pencil, Trash2, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
 import type { Project } from '@/types/database';
 
 interface ProjectCardProps {
@@ -49,82 +48,8 @@ export function ProjectCard({
   canRestore 
 }: ProjectCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  // Progress could be loaded from API later; for now show 0% when using .NET backend
   const [progress, setProgress] = useState<ProjectProgress>({ percentage: 0, hasQuotation: false });
-
-  useEffect(() => {
-    const fetchProgress = async () => {
-      try {
-        // Check if project has a quotation
-        const { data: quotation } = await supabase
-          .from('project_quotations')
-          .select('id')
-          .eq('project_id', project.id)
-          .maybeSingle();
-
-        if (!quotation) {
-          setProgress({ percentage: 0, hasQuotation: false });
-          return;
-        }
-
-        // Fetch quotation items with IDs for accurate matching
-        const { data: quotationItems } = await supabase
-          .from('quotation_items')
-          .select('id, material_name, quantity')
-          .eq('quotation_id', quotation.id);
-
-        if (!quotationItems || quotationItems.length === 0) {
-          setProgress({ percentage: 0, hasQuotation: true });
-          return;
-        }
-
-        const totalQuoted = quotationItems.reduce((sum, item) => sum + item.quantity, 0);
-
-        // Get DELIVERED and CLOSED orders for this project (Received + Completed)
-        const { data: orders } = await supabase
-          .from('orders')
-          .select('id')
-          .eq('project_id', project.id)
-          .in('status', ['delivered', 'closed']);
-
-        if (!orders || orders.length === 0) {
-          setProgress({ percentage: 0, hasQuotation: true });
-          return;
-        }
-
-        // Get order items with quotation_item_id reference - use ONLY quantity_received
-        const { data: orderItems } = await supabase
-          .from('order_items')
-          .select('quotation_item_id, quantity_received')
-          .in('order_id', orders.map(o => o.id))
-          .not('quotation_item_id', 'is', null);
-
-        // Build received quantities map by quotation_item_id
-        const receivedByQuotationItemId: Record<string, number> = {};
-        orderItems?.forEach((item: any) => {
-          if (item.quotation_item_id) {
-            // Use ONLY quantity_received (not quantity_ordered)
-            const qty = item.quantity_received ?? 0;
-            receivedByQuotationItemId[item.quotation_item_id] = 
-              (receivedByQuotationItemId[item.quotation_item_id] || 0) + qty;
-          }
-        });
-
-        // Calculate total received, capped at quoted amounts
-        let totalReceived = 0;
-        quotationItems.forEach((qItem) => {
-          const received = receivedByQuotationItemId[qItem.id] || 0;
-          totalReceived += Math.min(received, qItem.quantity);
-        });
-
-        const percentage = totalQuoted > 0 ? Math.min(100, (totalReceived / totalQuoted) * 100) : 0;
-        setProgress({ percentage, hasQuotation: true });
-      } catch (error) {
-        console.error('Error fetching project progress:', error);
-      }
-    };
-
-    fetchProgress();
-  }, [project.id]);
 
   const getDateRangeDisplay = () => {
     if (project.start_date && project.end_date) {

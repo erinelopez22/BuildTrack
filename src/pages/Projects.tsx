@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { request } from '@/integrations/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { mapApiProject, type ApiProject } from '@/lib/apiMappers';
 import { PageHeader } from '@/components/common/PageHeader';
 import { EmptyState } from '@/components/common/EmptyState';
 import { ProjectCard } from '@/components/projects/ProjectCard';
@@ -53,29 +54,20 @@ export default function Projects() {
   }, [statusFilter, searchParams, setSearchParams]);
 
   const fetchProjects = async () => {
-    let query = supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    // Non-super-admins should never see deleted projects
-    if (!isSuperAdmin()) {
-      query = query.neq('status', 'deleted');
+    try {
+      const statusParam = statusFilter !== 'all' ? `?status=${encodeURIComponent(statusFilter)}` : '';
+      const data = await request<ApiProject[]>(`/api/projects${statusParam}`);
+      setProjects((data ?? []).map(mapApiProject));
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to load projects', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-
-    const { data, error } = await query;
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      setProjects(data as Project[]);
-    }
-    setLoading(false);
   };
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [statusFilter]);
 
   const handleSubmit = async (data: {
     name: string;
@@ -89,44 +81,40 @@ export default function Projects() {
 
     try {
       if (editingProject) {
-        // Update existing project
-        const { error } = await supabase
-          .from('projects')
-          .update({
+        await request(`/api/projects/${editingProject.id}`, {
+          method: 'PUT',
+          body: {
             name: data.name,
             description: data.description || null,
             location: data.location,
-            start_date: data.start_date,
-            end_date: data.end_date,
+            startDate: data.start_date,
+            endDate: data.end_date,
             status: data.status,
-          })
-          .eq('id', editingProject.id);
-
-        if (error) throw error;
+          },
+        });
         toast({ title: 'Success', description: 'Project updated successfully' });
       } else {
-        // Create new project
-        const { error } = await supabase.from('projects').insert({
-          name: data.name,
-          description: data.description || null,
-          location: data.location,
-          start_date: data.start_date,
-          end_date: data.end_date,
-          status: data.status,
-          created_by: user?.id,
+        await request('/api/projects', {
+          method: 'POST',
+          body: {
+            name: data.name,
+            description: data.description || null,
+            location: data.location,
+            startDate: data.start_date,
+            endDate: data.end_date,
+            status: data.status,
+          },
         });
-
-        if (error) throw error;
         toast({ title: 'Success', description: 'Project created successfully' });
       }
 
       setIsDialogOpen(false);
       setEditingProject(null);
       fetchProjects();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Something went wrong',
+        description: error instanceof Error ? error.message : 'Something went wrong',
         variant: 'destructive',
       });
     } finally {
@@ -139,41 +127,35 @@ export default function Projects() {
     setIsDialogOpen(true);
   };
 
-  // Soft delete: set status to 'deleted' instead of removing
   const handleDeleteProject = async (project: Project) => {
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({ status: 'deleted' as ProjectStatus })
-        .eq('id', project.id);
-
-      if (error) throw error;
+      await request(`/api/projects/${project.id}`, {
+        method: 'PUT',
+        body: { status: 'deleted', name: project.name, description: project.description ?? null, location: project.location ?? '', startDate: project.start_date ?? undefined, endDate: project.end_date ?? undefined },
+      });
       toast({ title: 'Success', description: 'Project moved to deleted' });
       fetchProjects();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to delete project',
+        description: error instanceof Error ? error.message : 'Failed to delete project',
         variant: 'destructive',
       });
     }
   };
 
-  // Restore a deleted project (Super Admin only)
   const handleRestoreProject = async (project: Project) => {
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({ status: 'active' as ProjectStatus })
-        .eq('id', project.id);
-
-      if (error) throw error;
+      await request(`/api/projects/${project.id}`, {
+        method: 'PUT',
+        body: { status: 'active', name: project.name, description: project.description ?? null, location: project.location ?? '', startDate: project.start_date ?? undefined, endDate: project.end_date ?? undefined },
+      });
       toast({ title: 'Success', description: 'Project restored successfully' });
       fetchProjects();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to restore project',
+        description: error instanceof Error ? error.message : 'Failed to restore project',
         variant: 'destructive',
       });
     }

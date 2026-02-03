@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { request } from '@/integrations/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { mapApiSku, type ApiSku } from '@/lib/apiMappers';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, Column } from '@/components/common/DataTable';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -37,17 +38,14 @@ export default function SKUs() {
   });
 
   const fetchSKUs = async () => {
-    const { data, error } = await supabase
-      .from('skus')
-      .select('*')
-      .order('name', { ascending: true });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      setSKUs(data as SKU[]);
+    try {
+      const data = await request<ApiSku[]>('/api/skus');
+      setSKUs((data ?? []).map(mapApiSku));
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to load SKUs', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -56,20 +54,19 @@ export default function SKUs() {
 
   const handleCreateSKU = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const { error } = await supabase.from('skus').insert({
-      sku_code: formData.sku_code || null, // Will be auto-generated if empty
-      name: formData.name,
-      description: formData.description || null,
-      category: formData.category || null,
-      unit_of_measure: formData.unit_of_measure,
-      brand: formData.brand || null,
-      default_min_threshold: formData.default_min_threshold,
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
+    try {
+      await request('/api/skus', {
+        method: 'POST',
+        body: {
+          skuCode: formData.sku_code || undefined,
+          name: formData.name,
+          description: formData.description || null,
+          category: formData.category || null,
+          unitOfMeasure: formData.unit_of_measure,
+          brand: formData.brand || null,
+          defaultMinThreshold: formData.default_min_threshold,
+        },
+      });
       toast({ title: 'Success', description: 'SKU created successfully' });
       setIsDialogOpen(false);
       setFormData({
@@ -82,6 +79,8 @@ export default function SKUs() {
         default_min_threshold: 10,
       });
       fetchSKUs();
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to create SKU', variant: 'destructive' });
     }
   };
 

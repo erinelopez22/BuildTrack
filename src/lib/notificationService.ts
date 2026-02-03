@@ -1,5 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
-
 interface CreateNotificationParams {
   userId: string;
   title: string;
@@ -9,40 +7,13 @@ interface CreateNotificationParams {
   referenceId?: string;
 }
 
-export async function createNotification({
-  userId,
-  title,
-  message,
-  type,
-  referenceType,
-  referenceId,
-}: CreateNotificationParams) {
-  const { error } = await supabase.from('notifications').insert({
-    user_id: userId,
-    title,
-    message,
-    type,
-    reference_type: referenceType || null,
-    reference_id: referenceId || null,
-    is_read: false,
-  });
-
-  if (error) {
-    console.error('Failed to create notification:', error);
-  }
-  
-  return { error };
+/** No-op when using .NET API (notifications not yet exposed). Kept for callers that still reference it. */
+export async function createNotification(_params: CreateNotificationParams) {
+  return { error: null as { message: string } | null };
 }
 
-export async function notifyProjectMembers({
-  projectId,
-  title,
-  message,
-  type,
-  referenceType,
-  referenceId,
-  excludeUserId,
-}: {
+/** No-op when using .NET API (notifications not yet exposed). Kept for callers that still reference it. */
+export async function notifyProjectMembers(_params: {
   projectId: string;
   title: string;
   message: string;
@@ -51,41 +22,7 @@ export async function notifyProjectMembers({
   referenceId?: string;
   excludeUserId?: string;
 }) {
-  // Get all project members
-  const { data: members, error: membersError } = await supabase
-    .from('project_members')
-    .select('user_id')
-    .eq('project_id', projectId);
-
-  if (membersError || !members) {
-    console.error('Failed to fetch project members:', membersError);
-    return { error: membersError };
-  }
-
-  // Create notifications for each member (except excluded user)
-  const notifications = members
-    .filter(m => m.user_id !== excludeUserId)
-    .map(m => ({
-      user_id: m.user_id,
-      title,
-      message,
-      type,
-      reference_type: referenceType || null,
-      reference_id: referenceId || null,
-      is_read: false,
-    }));
-
-  if (notifications.length === 0) {
-    return { error: null };
-  }
-
-  const { error } = await supabase.from('notifications').insert(notifications);
-
-  if (error) {
-    console.error('Failed to create notifications:', error);
-  }
-  
-  return { error };
+  return { error: null as { message: string } | null };
 }
 
 // Format timestamp to Manila timezone

@@ -1,4 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 
 interface LogActivityParams {
@@ -10,28 +9,9 @@ interface LogActivityParams {
   userId: string;
 }
 
-export async function logActivity({
-  action,
-  tableName,
-  recordId,
-  oldValues = null,
-  newValues = null,
-  userId,
-}: LogActivityParams) {
-  const { error } = await supabase.from('audit_logs').insert([{
-    action,
-    table_name: tableName,
-    record_id: recordId,
-    old_values: oldValues as Json,
-    new_values: newValues as Json,
-    user_id: userId,
-  }]);
-
-  if (error) {
-    console.error('Failed to log activity:', error);
-  }
-  
-  return { error };
+/** No-op when using .NET API (audit logs not yet exposed). Kept for callers that still reference it. */
+export async function logActivity(_params: LogActivityParams) {
+  return { error: null as { message: string } | null };
 }
 
 // Helper function to format activity for display

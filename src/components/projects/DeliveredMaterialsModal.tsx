@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { OrderDetailModal } from "@/components/orders/OrderDetailModal";
-import { supabase } from "@/integrations/supabase/client";
+import { request } from "@/integrations/api";
 import { useToast } from "@/hooks/use-toast";
 
 interface DeliveredMaterial {
@@ -74,145 +74,78 @@ export function DeliveredMaterialsModal({
   const [isOrdersExpanded, setIsOrdersExpanded] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
+  type OrderWithItems = {
+    id: string;
+    orderNumber: string;
+    status: string;
+    updatedAt: string;
+    notes?: string | null;
+    items?: Array<{ id: string; orderId: string; quantityOrdered: number; quantityReceived: number; sku?: { name: string; unitOfMeasure: string } | null }>;
+  };
+
   const processOrdersData = (
-    orders: any[],
-    orderItems: any[]
+    orders: OrderWithItems[]
   ): { materials: DeliveredMaterial[]; ordersInfo: DeliveredOrder[] } => {
-    // Build materials summary
     const materialsMap: Record<string, DeliveredMaterial> = {};
-
-    orderItems?.forEach((item: any) => {
-      const materialName = item.sku?.name || "Unknown Material";
-      const unit = item.sku?.unit_of_measure || "pcs";
-      const qty = item.quantity_received ?? item.quantity_ordered ?? 0;
-      const order = orders.find((o) => o.id === item.order_id);
-      const deliveredAt = order?.updated_at || null;
-
-      if (!materialsMap[materialName]) {
-        materialsMap[materialName] = {
-          materialName,
-          unit,
-          deliveredQty: 0,
-          lastDeliveredAt: deliveredAt,
-        };
-      }
-
-      materialsMap[materialName].deliveredQty += qty;
-
-      // Update last delivered date if more recent
-      if (
-        deliveredAt &&
-        (!materialsMap[materialName].lastDeliveredAt ||
-          new Date(deliveredAt) > new Date(materialsMap[materialName].lastDeliveredAt!))
-      ) {
-        materialsMap[materialName].lastDeliveredAt = deliveredAt;
-      }
-    });
-
-    const materials = Object.values(materialsMap).sort((a, b) =>
-      a.materialName.localeCompare(b.materialName)
-    );
-
-    // Build orders list
     const ordersInfo: DeliveredOrder[] = orders.map((order) => {
-      const orderItemsList = orderItems?.filter((item: any) => item.order_id === order.id) || [];
+      const orderItemsList = order.items ?? [];
+      const items = orderItemsList.map((item) => {
+        const materialName = item.sku?.name || "Unknown Material";
+        const unit = item.sku?.unitOfMeasure || "pcs";
+        const qty = item.quantityReceived ?? item.quantityOrdered ?? 0;
+        if (!materialsMap[materialName]) {
+          materialsMap[materialName] = { materialName, unit, deliveredQty: 0, lastDeliveredAt: order.updatedAt };
+        }
+        materialsMap[materialName].deliveredQty += qty;
+        if (order.updatedAt && (!materialsMap[materialName].lastDeliveredAt || new Date(order.updatedAt) > new Date(materialsMap[materialName].lastDeliveredAt!))) {
+          materialsMap[materialName].lastDeliveredAt = order.updatedAt;
+        }
+        return { material_name: materialName, unit, quantity: qty };
+      });
       return {
         id: order.id,
-        order_number: order.order_number,
+        order_number: order.orderNumber,
         status: order.status,
-        delivered_at: order.updated_at,
-        notes: order.notes,
-        items: orderItemsList.map((item: any) => ({
-          material_name: item.sku?.name || "Unknown Material",
-          unit: item.sku?.unit_of_measure || "pcs",
-          quantity: item.quantity_received ?? item.quantity_ordered ?? 0,
-        })),
+        delivered_at: order.updatedAt,
+        notes: order.notes ?? null,
+        items,
       };
     });
-
+    const materials = Object.values(materialsMap).sort((a, b) => a.materialName.localeCompare(b.materialName));
     return { materials, ordersInfo: ordersInfo.filter((o) => o.items.length > 0) };
   };
 
   const fetchDeliveredData = async () => {
     setLoading(true);
     try {
-      // Get delivered orders (status = 'delivered')
-      const { data: deliveredOrdersData, error: deliveredError } = await supabase
-        .from("orders")
-        .select("id, order_number, status, updated_at, notes")
-        .eq("project_id", projectId)
-        .eq("status", "delivered")
-        .order("updated_at", { ascending: false });
+      const [deliveredList, completedList] = await Promise.all([
+        request<OrderWithItems[]>(`/api/orders?projectId=${projectId}&status=delivered&limit=100`),
+        request<OrderWithItems[]>(`/api/orders?projectId=${projectId}&status=closed&limit=100`),
+      ]);
 
-      if (deliveredError) throw deliveredError;
+      const deliveredWithItems: OrderWithItems[] = await Promise.all(
+        deliveredList.map(async (o) => {
+          const full = await request<OrderWithItems>(`/api/orders/${o.id}?includeItems=true`);
+          return full;
+        })
+      );
+      const completedWithItems: OrderWithItems[] = await Promise.all(
+        completedList.map(async (o) => {
+          const full = await request<OrderWithItems>(`/api/orders/${o.id}?includeItems=true`);
+          return full;
+        })
+      );
 
-      // Get completed/hidden orders (status = 'closed')
-      const { data: completedOrdersData, error: completedError } = await supabase
-        .from("orders")
-        .select("id, order_number, status, updated_at, notes")
-        .eq("project_id", projectId)
-        .eq("status", "closed")
-        .order("updated_at", { ascending: false });
-
-      if (completedError) throw completedError;
-
-      const allOrderIds = [
-        ...(deliveredOrdersData || []).map((o) => o.id),
-        ...(completedOrdersData || []).map((o) => o.id),
-      ];
-
-      if (allOrderIds.length === 0) {
-        setDeliveredMaterials([]);
-        setDeliveredOrders([]);
-        setCompletedMaterials([]);
-        setCompletedOrders([]);
-        setLoading(false);
-        return;
-      }
-
-      // Get order items with SKU info for all orders
-      const { data: orderItems, error: itemsError } = await supabase
-        .from("order_items")
-        .select("order_id, quantity_received, quantity_ordered, sku:skus(name, unit_of_measure)")
-        .in("order_id", allOrderIds);
-
-      if (itemsError) throw itemsError;
-
-      // Process delivered orders
-      if (deliveredOrdersData && deliveredOrdersData.length > 0) {
-        const deliveredItems = orderItems?.filter((item: any) =>
-          deliveredOrdersData.some((o) => o.id === item.order_id)
-        );
-        const { materials, ordersInfo } = processOrdersData(
-          deliveredOrdersData,
-          deliveredItems || []
-        );
-        setDeliveredMaterials(materials);
-        setDeliveredOrders(ordersInfo);
-      } else {
-        setDeliveredMaterials([]);
-        setDeliveredOrders([]);
-      }
-
-      // Process completed orders
-      if (completedOrdersData && completedOrdersData.length > 0) {
-        const completedItems = orderItems?.filter((item: any) =>
-          completedOrdersData.some((o) => o.id === item.order_id)
-        );
-        const { materials, ordersInfo } = processOrdersData(
-          completedOrdersData,
-          completedItems || []
-        );
-        setCompletedMaterials(materials);
-        setCompletedOrders(ordersInfo);
-      } else {
-        setCompletedMaterials([]);
-        setCompletedOrders([]);
-      }
-    } catch (error: any) {
+      const { materials: delMats, ordersInfo: delOrders } = processOrdersData(deliveredWithItems);
+      const { materials: compMats, ordersInfo: compOrders } = processOrdersData(completedWithItems);
+      setDeliveredMaterials(delMats);
+      setDeliveredOrders(delOrders);
+      setCompletedMaterials(compMats);
+      setCompletedOrders(compOrders);
+    } catch (err: unknown) {
       toast({
         title: "Error",
-        description: error.message || "Failed to load delivered materials",
+        description: err instanceof Error ? err.message : "Failed to load delivered materials",
         variant: "destructive",
       });
     } finally {

@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { request } from "@/integrations/api";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import type { OrderStatus } from "@/types/database";
 import { ClipboardList, FolderKanban, Package, Users } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
-import type { Order } from "@/types/database";
 
-// Format currency in Philippine Peso
 const formatPHP = (amount: number | null | undefined) => {
   if (amount == null) return "₱0.00";
   return new Intl.NumberFormat("en-PH", {
@@ -27,6 +26,17 @@ interface DashboardStats {
   activeMembers: number;
 }
 
+/** API response (camelCase). */
+interface RecentOrderRow {
+  id: string;
+  orderNumber: string;
+  projectName?: string | null;
+  status: string;
+  supplierName?: string | null;
+  totalAmount?: number | null;
+  createdAt: string;
+}
+
 export default function Dashboard() {
   const { user, isAdmin } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
@@ -35,107 +45,74 @@ export default function Dashboard() {
     activeOrders: 0,
     activeMembers: 0,
   });
-  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
-  const [ordersByStatus, setOrdersByStatus] = useState<{ name: string; value: number }[]>([]);
+  const [recentOrders, setRecentOrders] = useState<RecentOrderRow[]>([]);
+  const [ordersByStatus, setOrdersByStatus] = useState<{ name: string; value: number; status?: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchDashboardData() {
       if (!user) return;
 
-      // Fetch active projects count
-      const { count: projectCount } = await supabase
-        .from("projects")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "active");
+      try {
+        const [statsRes, ordersRes] = await Promise.all([
+          request<{ activeProjects: number; totalSkus: number; activeOrders: number; activeMembers: number }>("/api/dashboard/stats"),
+          request<RecentOrderRow[]>("/api/dashboard/recent-orders?limit=10"),
+        ]);
 
-      // Fetch SKUs count
-      const { count: skuCount } = await supabase
-        .from("skus")
-        .select("*", { count: "exact", head: true })
-        .eq("is_active", true);
+        setStats({
+          activeProjects: statsRes.activeProjects ?? 0,
+          totalSkus: statsRes.totalSkus ?? 0,
+          activeOrders: statsRes.activeOrders ?? 0,
+          activeMembers: statsRes.activeMembers ?? 0,
+        });
 
-      // Fetch active orders count (proper count query)
+        setRecentOrders(ordersRes ?? []);
 
-      const { count: activeOrdersCount } = await supabase
-        .from("orders")
-        .select("*, project:projects!inner(*)", { count: "exact", head: true })
-        .in("status", ["for_approval", "approved", "submitted", "delivered", "preparing", "in_transit", "on_hold"])
-        .in("project.status", ["active"]);
-
-      console.log(activeOrdersCount);
-
-      // Fetch recent orders for the table and chart
-      const { data: ordersData } = await supabase
-        .from("orders")
-        .select("*, project:projects(name)")
-        .order("created_at", { ascending: false })
-        .limit(10);
-
-      // Count orders by status for the pie chart
-      const statusCounts: Record<string, number> = {};
-      (ordersData || []).forEach((order) => {
-        statusCounts[order.status] = (statusCounts[order.status] || 0) + 1;
-      });
-
-      // Fetch active members count (only if admin)
-      let membersCount = 0;
-      if (isAdmin()) {
-        const { count } = await supabase
-          .from("profiles")
-          .select("*", { count: "exact", head: true })
-          .eq("is_active", true);
-        membersCount = count || 0;
+        const statusCounts: Record<string, number> = {};
+        (ordersRes || []).forEach((order) => {
+          statusCounts[order.status] = (statusCounts[order.status] || 0) + 1;
+        });
+        setOrdersByStatus(
+          Object.entries(statusCounts).map(([status, value]) => ({
+            name: status.replace(/_/g, " "),
+            value,
+            status,
+          }))
+        );
+      } catch (e) {
+        console.error("Dashboard fetch failed", e);
+      } finally {
+        setLoading(false);
       }
-
-      setStats({
-        activeProjects: projectCount || 0,
-        totalSkus: skuCount || 0,
-        activeOrders: activeOrdersCount || 0,
-        activeMembers: membersCount,
-      });
-
-      setRecentOrders((ordersData || []) as Order[]);
-      setOrdersByStatus(
-        Object.entries(statusCounts).map(([status, value]) => ({
-          name: status.replace(/_/g, " "),
-          value,
-          status, // Keep original status for color mapping
-        })),
-      );
-
-      setLoading(false);
     }
 
     fetchDashboardData();
-  }, [user, isAdmin]);
+  }, [user]);
 
-  // Status-based color mapping for the pie chart
   const getStatusColor = (status: string): string => {
     const colorMap: Record<string, string> = {
-      rejected: "hsl(0, 72%, 51%)", // Red
-      cancelled: "hsl(0, 72%, 51%)", // Red
-      for_approval: "hsl(38, 92%, 50%)", // Amber/Orange
-      approved: "hsl(210, 90%, 50%)", // Blue
-      submitted: "hsl(210, 80%, 45%)", // Blue (slightly darker)
-      preparing: "hsl(220, 75%, 45%)", // Blue (darker shade)
-      ordered: "hsl(220, 65%, 40%)", // Blue (darkest shade)
-      in_transit: "hsl(45, 93%, 47%)", // Yellow
-      on_hold: "hsl(38, 80%, 50%)", // Amber
-      delivered: "hsl(142, 71%, 45%)", // Green
-      fully_received: "hsl(142, 71%, 45%)", // Green
-      partially_received: "hsl(38, 92%, 50%)", // Amber
-      closed: "hsl(215, 16%, 47%)", // Muted gray
-      draft: "hsl(215, 16%, 60%)", // Light gray
+      rejected: "hsl(0, 72%, 51%)",
+      cancelled: "hsl(0, 72%, 51%)",
+      for_approval: "hsl(38, 92%, 50%)",
+      approved: "hsl(210, 90%, 50%)",
+      submitted: "hsl(210, 80%, 45%)",
+      preparing: "hsl(220, 75%, 45%)",
+      ordered: "hsl(220, 65%, 40%)",
+      in_transit: "hsl(45, 93%, 47%)",
+      on_hold: "hsl(38, 80%, 50%)",
+      delivered: "hsl(142, 71%, 45%)",
+      fully_received: "hsl(142, 71%, 45%)",
+      partially_received: "hsl(38, 92%, 50%)",
+      closed: "hsl(215, 16%, 47%)",
+      draft: "hsl(215, 16%, 60%)",
     };
-    return colorMap[status] || "hsl(270, 50%, 60%)"; // Fallback purple
+    return colorMap[status] || "hsl(270, 50%, 60%)";
   };
 
   return (
     <div className="animate-fade-in space-y-6">
       <PageHeader title="Dashboard" description="Overview of your construction inventory and orders" />
 
-      {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Active Projects"
@@ -157,7 +134,6 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Orders by Status Chart */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg font-medium">Orders by Status</CardTitle>
@@ -178,7 +154,7 @@ export default function Dashboard() {
                   {ordersByStatus.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={getStatusColor((entry as any).status || entry.name.replace(/ /g, "_"))}
+                      fill={getStatusColor(entry.status ?? entry.name.replace(/ /g, "_"))}
                     />
                   ))}
                 </Pie>
@@ -197,7 +173,6 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Recent Orders Table */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg font-medium">Recent Orders</CardTitle>
@@ -218,15 +193,13 @@ export default function Dashboard() {
                 <tbody className="divide-y">
                   {recentOrders.slice(0, 5).map((order) => (
                     <tr key={order.id} className="text-sm">
-                      <td className="py-3 pr-4 font-medium">{order.order_number}</td>
-                      <td className="py-3 pr-4 text-muted-foreground">
-                        {(order as Order & { project?: { name: string } }).project?.name || "-"}
-                      </td>
+                      <td className="py-3 pr-4 font-medium">{order.orderNumber}</td>
+                      <td className="py-3 pr-4 text-muted-foreground">{order.projectName ?? "-"}</td>
                       <td className="py-3 pr-4">
-                        <StatusBadge status={order.status} />
+                        <StatusBadge status={order.status as OrderStatus} />
                       </td>
-                      <td className="py-3 pr-4 text-muted-foreground">{order.supplier_name || "-"}</td>
-                      <td className="py-3 text-right">{order.total_amount ? formatPHP(order.total_amount) : "-"}</td>
+                      <td className="py-3 pr-4 text-muted-foreground">{order.supplierName ?? "-"}</td>
+                      <td className="py-3 text-right">{order.totalAmount != null ? formatPHP(order.totalAmount) : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
