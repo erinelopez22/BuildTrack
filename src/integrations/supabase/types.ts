@@ -775,6 +775,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_approve_orders: { Args: { _user_id: string }; Returns: boolean }
+      can_create_orders: { Args: { _user_id: string }; Returns: boolean }
+      can_manage_roles: { Args: { _user_id: string }; Returns: boolean }
+      can_process_logistics: { Args: { _user_id: string }; Returns: boolean }
+      can_receive_orders: { Args: { _user_id: string }; Returns: boolean }
+      can_submit_orders: { Args: { _user_id: string }; Returns: boolean }
+      can_transition_order_status: {
+        Args: {
+          _from_status: Database["public"]["Enums"]["order_status"]
+          _to_status: Database["public"]["Enums"]["order_status"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       get_project_role: {
         Args: { _project_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
