@@ -804,6 +804,11 @@ export type Database = {
         | "site_lead"
         | "viewer"
         | "approver"
+        | "approval_admin"
+        | "logistics_admin"
+        | "project_engineer"
+        | "receiver"
+        | "tracking_driver"
       order_status:
         | "draft"
         | "for_approval"
@@ -968,6 +973,11 @@ export const Constants = {
         "site_lead",
         "viewer",
         "approver",
+        "approval_admin",
+        "logistics_admin",
+        "project_engineer",
+        "receiver",
+        "tracking_driver",
       ],
       order_status: [
         "draft",
