@@ -823,6 +823,8 @@ export type Database = {
         | "project_engineer"
         | "receiver"
         | "tracking_driver"
+        | "office_admin"
+        | "warehouse_admin"
       order_status:
         | "draft"
         | "for_approval"
@@ -992,6 +994,8 @@ export const Constants = {
         "project_engineer",
         "receiver",
         "tracking_driver",
+        "office_admin",
+        "warehouse_admin",
       ],
       order_status: [
         "draft",
