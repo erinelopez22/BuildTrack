@@ -16,6 +16,14 @@ interface AuthContextType {
   isAdmin: () => boolean;
   isSuperAdmin: () => boolean;
   isApprover: () => boolean;
+  isOfficeAdmin: () => boolean;
+  isWarehouseAdmin: () => boolean;
+  isProjectEngineer: () => boolean;
+  isReceiver: () => boolean;
+  canCreateOrders: () => boolean;
+  canApproveOrders: () => boolean;
+  canProcessLogistics: () => boolean;
+  canReceiveOrders: () => boolean;
   refreshProfile: () => Promise<void>;
 }
 
@@ -124,6 +132,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
   const isApprover = () => hasRole('approver') || hasRole('admin') || hasRole('super_admin');
 
+  const isOfficeAdmin = () => hasRole('office_admin') || hasRole('approval_admin') || hasRole('admin') || hasRole('super_admin');
+  
+  const isWarehouseAdmin = () => hasRole('warehouse_admin') || hasRole('logistics_admin') || hasRole('admin') || hasRole('super_admin');
+  
+  const isProjectEngineer = () => hasRole('project_engineer') || hasRole('project_manager') || hasRole('site_lead');
+  
+  const isReceiver = () => hasRole('receiver') || hasRole('storekeeper');
+
+  // Permission checks based on role definitions
+  const canCreateOrders = () => 
+    hasRole('super_admin') || hasRole('admin') || 
+    hasRole('project_engineer') || hasRole('project_manager') || hasRole('site_lead');
+
+  const canApproveOrders = () => 
+    hasRole('super_admin') || hasRole('admin') || 
+    hasRole('office_admin') || hasRole('approval_admin') || hasRole('approver');
+
+  const canProcessLogistics = () => 
+    hasRole('super_admin') || hasRole('admin') || 
+    hasRole('warehouse_admin') || hasRole('logistics_admin');
+
+  const canReceiveOrders = () => 
+    hasRole('super_admin') || hasRole('admin') || 
+    hasRole('project_engineer') || hasRole('project_manager') || 
+    hasRole('site_lead') || hasRole('receiver') || hasRole('storekeeper');
+
   return (
     <AuthContext.Provider
       value={{
@@ -139,6 +173,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAdmin,
         isSuperAdmin,
         isApprover,
+        isOfficeAdmin,
+        isWarehouseAdmin,
+        isProjectEngineer,
+        isReceiver,
+        canCreateOrders,
+        canApproveOrders,
+        canProcessLogistics,
+        canReceiveOrders,
         refreshProfile,
       }}
     >

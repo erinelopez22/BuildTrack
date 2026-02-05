@@ -1,12 +1,19 @@
 export type AppRole = 
   | 'super_admin' 
   | 'admin' 
+  | 'office_admin'
+  | 'warehouse_admin'
   | 'project_manager' 
   | 'procurement' 
   | 'storekeeper' 
   | 'site_lead' 
   | 'viewer'
-  | 'approver';
+  | 'approver'
+  | 'approval_admin'
+  | 'logistics_admin'
+  | 'project_engineer'
+  | 'receiver'
+  | 'tracking_driver';
 
 export type OrderStatus = 
   | 'draft'

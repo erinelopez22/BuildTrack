@@ -17,12 +17,19 @@ import type { SMSSettings, AppRole } from '@/types/database';
 const roleLabels: Record<AppRole, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',
+  office_admin: 'Office Admin',
+  warehouse_admin: 'Warehouse Admin',
   project_manager: 'Project Manager',
   procurement: 'Procurement',
   storekeeper: 'Storekeeper',
   site_lead: 'Site Lead',
   viewer: 'Viewer',
   approver: 'Approver',
+  approval_admin: 'Approval Admin',
+  logistics_admin: 'Logistics Admin',
+  project_engineer: 'Project/Site Engineer',
+  receiver: 'Receiver',
+  tracking_driver: 'Tracking Driver',
 };
 
 const eventLabels: Record<string, string> = {
