@@ -33,27 +33,37 @@ interface UserWithRoles extends Profile {
 const roleLabels: Record<AppRole, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',
+  office_admin: 'Office Admin',
+  warehouse_admin: 'Warehouse Admin',
+  project_engineer: 'Project/Site Engineer',
+  receiver: 'Receiver',
+  tracking_driver: 'Tracking Driver',
   project_manager: 'Project Manager',
   procurement: 'Procurement',
   storekeeper: 'Storekeeper',
   site_lead: 'Site Lead',
   viewer: 'Viewer',
   approver: 'Approver',
+  approval_admin: 'Approval Admin (Legacy)',
+  logistics_admin: 'Logistics Admin (Legacy)',
 };
 
 const roleOptions: AppRole[] = [
   'super_admin',
   'admin',
-  'approver',
+  'office_admin',
+  'warehouse_admin',
+  'project_engineer',
+  'receiver',
+  'tracking_driver',
   'project_manager',
-  'procurement',
   'storekeeper',
   'site_lead',
   'viewer',
 ];
 
 export default function UsersPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isSuperAdmin, user: authUser } = useAuth();
   const { toast } = useToast();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +113,16 @@ export default function UsersPage() {
 
     if (!selectedUser) return;
 
+    // Only Super Admin can assign super_admin role
+    if (selectedRole === 'super_admin' && !isSuperAdmin()) {
+      toast({
+        title: 'Permission Denied',
+        description: 'Only Super Admin can assign Super Admin role',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const { error } = await supabase.from('user_roles').insert({
       user_id: selectedUser.id,
       role: selectedRole,
@@ -127,6 +147,30 @@ export default function UsersPage() {
   };
 
   const handleRemoveRole = async (userId: string, roleId: string) => {
+    // Find the role being removed
+    const userToModify = users.find(u => u.id === userId);
+    const roleToRemove = userToModify?.roles.find(r => r.id === roleId);
+    
+    // Only Super Admin can remove super_admin role
+    if (roleToRemove?.role === 'super_admin' && !isSuperAdmin()) {
+      toast({
+        title: 'Permission Denied',
+        description: 'Only Super Admin can remove Super Admin role',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Prevent removing your own super_admin role
+    if (roleToRemove?.role === 'super_admin' && userId === authUser?.id) {
+      toast({
+        title: 'Cannot Remove',
+        description: 'You cannot remove your own Super Admin role',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const { error } = await supabase
       .from('user_roles')
       .delete()
@@ -186,20 +230,26 @@ export default function UsersPage() {
       render: (user) => (
         <div className="flex flex-wrap gap-1">
           {user.roles.length > 0 ? (
-            user.roles.map((role) => (
-              <Badge
-                key={role.id}
-                variant="secondary"
-                className="cursor-pointer hover:bg-destructive/20"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRemoveRole(user.id, role.id);
-                }}
-              >
-                {roleLabels[role.role]}
-                <span className="ml-1 text-muted-foreground">×</span>
-              </Badge>
-            ))
+            user.roles.map((role) => {
+              // Only super_admin can remove super_admin roles, and users can't remove their own super_admin
+              const canRemove = role.role !== 'super_admin' || (isSuperAdmin() && user.id !== authUser?.id);
+              return (
+                <Badge
+                  key={role.id}
+                  variant="secondary"
+                  className={canRemove ? 'cursor-pointer hover:bg-destructive/20' : 'cursor-not-allowed'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (canRemove) {
+                      handleRemoveRole(user.id, role.id);
+                    }
+                  }}
+                >
+                  {roleLabels[role.role]}
+                  {canRemove && <span className="ml-1 text-muted-foreground">×</span>}
+                </Badge>
+              );
+            })
           ) : (
             <span className="text-muted-foreground">No roles</span>
           )}
@@ -297,7 +347,9 @@ export default function UsersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {roleOptions.map((role) => (
+                  {roleOptions
+                    .filter((role) => isSuperAdmin() || role !== 'super_admin')
+                    .map((role) => (
                     <SelectItem key={role} value={role}>
                       {roleLabels[role]}
                     </SelectItem>

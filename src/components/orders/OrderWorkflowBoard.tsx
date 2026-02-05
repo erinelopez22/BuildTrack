@@ -35,7 +35,7 @@ const SPECIAL_STATUS_LANES: { key: OrderStatus; label: string; color: string; ic
 ];
 
 export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps) {
-  const { user, isApprover, isSuperAdmin, isAdmin } = useAuth();
+  const { user, isSuperAdmin, isAdmin, canCreateOrders, canApproveOrders, canProcessLogistics, canReceiveOrders } = useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -218,15 +218,28 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   const handleStatusChange = async (order: Order, newStatus: OrderStatus) => {
     if (!user) return;
 
-    // Check permissions
-    const canTransition = isSuperAdmin() || isApprover();
-    if (!canTransition) {
-      toast({ 
-        title: 'Permission Denied', 
-        description: 'Only Approvers, Admins, and Super Admins can change order status', 
-        variant: 'destructive' 
-      });
-      return;
+    // Check permissions based on role and transition
+    let hasPermission = false;
+    
+    if (isSuperAdmin() || isAdmin()) {
+      hasPermission = true;
+    } else if (order.status === 'for_approval' && (newStatus === 'approved' || newStatus === 'rejected')) {
+      hasPermission = canApproveOrders();
+    } else if (order.status === 'approved' && (newStatus === 'submitted' || newStatus === 'ordered')) {
+      hasPermission = canApproveOrders();
+    } else if ((order.status === 'submitted' || order.status === 'ordered' || order.status === 'approved') && newStatus === 'preparing') {
+      hasPermission = canProcessLogistics();
+    } else if (order.status === 'preparing' && newStatus === 'in_transit') {
+      hasPermission = canProcessLogistics();
+    } else if (order.status === 'in_transit' && newStatus === 'delivered') {
+      hasPermission = canReceiveOrders();
+    } else if (order.status === 'delivered' && newStatus === 'closed') {
+      hasPermission = isAdmin() || isSuperAdmin();
+    }
+    
+    if (!hasPermission) {
+      toast({ title: 'Permission Denied', description: 'You do not have permission to perform this action', variant: 'destructive' });
+      return; 
     }
 
     // Validate transition rules (non-Super Admin)
@@ -392,8 +405,12 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     return null;
   };
 
-  const canMoveOrder = isApprover() || isSuperAdmin();
-  const canRejectOrder = isApprover() || isAdmin() || isSuperAdmin();
+  // Permission checks for UI visibility
+  const canMoveApproval = canApproveOrders();
+  const canMoveLogistics = canProcessLogistics();
+  const canMoveDelivery = canReceiveOrders();
+  const canRejectOrder = canApproveOrders();
+  const showCreateButton = canCreateOrders();
 
   if (loading) {
     return (
@@ -458,10 +475,12 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
             <Archive className="mr-2 h-4 w-4" />
             Completed
           </Button>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Order
-          </Button>
+          {showCreateButton && (
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Order
+            </Button>
+          )}
         </div>
       </div>
 
@@ -498,7 +517,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                         {/* Action buttons - show on hover if user has permissions */}
                         {order.status === 'for_approval' && (
                           <div className="absolute -bottom-2 left-0 right-0 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                            {canMoveOrder && (
+                            {canMoveApproval && (
                               <Button
                                 size="sm"
                                 variant="secondary"
@@ -529,7 +548,14 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                           </div>
                         )}
                         {/* Move button for statuses that can progress */}
-                        {!['for_approval', 'rejected', 'delivered', 'on_hold'].includes(order.status) && canMoveOrder && getNextStatus(order.status) && (
+                        {!['for_approval', 'rejected', 'delivered', 'on_hold'].includes(order.status) && getNextStatus(order.status) && (
+                          // Show move button based on status-specific permissions
+                          (order.status === 'approved' && canMoveApproval) ||
+                          (order.status === 'submitted' && canMoveLogistics) ||
+                          (order.status === 'preparing' && canMoveLogistics) ||
+                          (order.status === 'in_transit' && canMoveDelivery) ||
+                          isSuperAdmin() || isAdmin()
+                        ) && (
                           <Button
                             size="sm"
                             variant="secondary"
@@ -544,7 +570,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                           </Button>
                         )}
                         {/* Hide button for delivered orders */}
-                        {order.status === 'delivered' && canMoveOrder && (
+                        {order.status === 'delivered' && (isSuperAdmin() || isAdmin()) && (
                           <Button
                             size="sm"
                             variant="secondary"
