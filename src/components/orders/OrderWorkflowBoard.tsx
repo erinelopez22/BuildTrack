@@ -101,7 +101,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     setIsCreating(true);
 
     // Format materials as notes content (including the materials list in the notes)
-    const materialsDescription = data.materials.map((m) => `• ${m.name} (${m.unit}) - Qty: ${m.quantity}`).join("\n");
+    const materialsDescription = ""; //data.materials.map((m) => `• ${m.name} (${m.unit}) - Qty: ${m.quantity}`).join("\n");
 
     const fullNotes = `\n${data.notes}`;
 
