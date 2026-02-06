@@ -103,8 +103,8 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     // Format materials as notes content (including the materials list in the notes)
     const materialsDescription = data.materials.map((m) => `• ${m.name} (${m.unit}) - Qty: ${m.quantity}`).join("\n");
 
-    //const fullNotes = `Materials:\n${materialsDescription}\n\n${data.notes}`;
-    const fullNotes = `${data.notes}`;
+    const fullNotes = `\n${data.notes}`;
+
     const { data: orderData, error } = await supabase
       .from("orders")
       .insert({
