@@ -1,18 +1,18 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { OrderCard } from './OrderCard';
-import { OrderDetailModal } from './OrderDetailModal';
-import { RejectOrderDialog } from './RejectOrderDialog';
-import { CreateOrderModal } from './CreateOrderModal';
-import { CompletedOrdersModal } from './CompletedOrdersModal';
-import { OnHoldReasonDialog } from './OnHoldReasonDialog';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { Plus, ArrowLeft, Loader2, XCircle, Archive, Truck } from 'lucide-react';
-import { logActivity } from '@/lib/activityLogger';
-import { notifyProjectMembers, formatManilaTime } from '@/lib/notificationService';
-import type { Order, Project, OrderStatus } from '@/types/database';
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { OrderCard } from "./OrderCard";
+import { OrderDetailModal } from "./OrderDetailModal";
+import { RejectOrderDialog } from "./RejectOrderDialog";
+import { CreateOrderModal } from "./CreateOrderModal";
+import { CompletedOrdersModal } from "./CompletedOrdersModal";
+import { OnHoldReasonDialog } from "./OnHoldReasonDialog";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { Plus, ArrowLeft, Loader2, XCircle, Archive, Truck } from "lucide-react";
+import { logActivity } from "@/lib/activityLogger";
+import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
+import type { Order, Project, OrderStatus } from "@/types/database";
 
 interface OrderWorkflowBoardProps {
   project: Project;
@@ -21,22 +21,23 @@ interface OrderWorkflowBoardProps {
 
 // Main workflow lanes (active orders flow)
 const MAIN_WORKFLOW_LANES: { key: OrderStatus; label: string; color: string }[] = [
-  { key: 'for_approval', label: 'Order Requested', color: 'bg-warning/10 border-warning/30' },
-  { key: 'approved', label: 'Order Approved', color: 'bg-[hsl(210,90%,50%)]/10 border-[hsl(210,90%,50%)]/30' },
-  { key: 'submitted', label: 'Order Submitted', color: 'bg-[hsl(210,90%,50%)]/15 border-[hsl(210,80%,45%)]/30' },
-  { key: 'preparing', label: 'Preparing for Tracking', color: 'bg-[hsl(220,75%,45%)]/10 border-[hsl(220,75%,45%)]/30' },
-  { key: 'in_transit', label: 'On Transit', color: 'bg-amber-400/10 border-amber-400/30' },
-  { key: 'delivered', label: 'Delivered', color: 'bg-success/10 border-success/30' },
+  { key: "for_approval", label: "Order Requested", color: "bg-warning/10 border-warning/30" },
+  { key: "approved", label: "Order Approved", color: "bg-[hsl(210,90%,50%)]/10 border-[hsl(210,90%,50%)]/30" },
+  { key: "submitted", label: "Order Submitted", color: "bg-[hsl(210,90%,50%)]/15 border-[hsl(210,80%,45%)]/30" },
+  { key: "preparing", label: "Preparing for Tracking", color: "bg-[hsl(220,75%,45%)]/10 border-[hsl(220,75%,45%)]/30" },
+  { key: "in_transit", label: "On Transit", color: "bg-amber-400/10 border-amber-400/30" },
+  { key: "delivered", label: "Delivered", color: "bg-success/10 border-success/30" },
 ];
 
 // Separated lanes for held/rejected orders
-const SPECIAL_STATUS_LANES: { key: OrderStatus; label: string; color: string; icon: 'hold' | 'reject' }[] = [
-  { key: 'on_hold', label: 'On-Hold', color: 'bg-amber-500/10 border-amber-500/30', icon: 'hold' },
-  { key: 'rejected', label: 'Rejected', color: 'bg-destructive/10 border-destructive/30', icon: 'reject' },
+const SPECIAL_STATUS_LANES: { key: OrderStatus; label: string; color: string; icon: "hold" | "reject" }[] = [
+  { key: "on_hold", label: "On-Hold", color: "bg-amber-500/10 border-amber-500/30", icon: "hold" },
+  { key: "rejected", label: "Rejected", color: "bg-destructive/10 border-destructive/30", icon: "reject" },
 ];
 
 export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps) {
-  const { user, isSuperAdmin, isAdmin, canCreateOrders, canApproveOrders, canProcessLogistics, canReceiveOrders } = useAuth();
+  const { user, isSuperAdmin, isAdmin, canCreateOrders, canApproveOrders, canProcessLogistics, canReceiveOrders } =
+    useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,14 +52,14 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
   const fetchOrders = async () => {
     const { data, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('project_id', project.id)
-      .neq('status', 'closed') // Exclude completed/hidden orders from workflow view
-      .order('created_at', { ascending: false });
+      .from("orders")
+      .select("*")
+      .eq("project_id", project.id)
+      .neq("status", "closed") // Exclude completed/hidden orders from workflow view
+      .order("created_at", { ascending: false });
 
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       setOrders(data as Order[]);
     }
@@ -70,18 +71,18 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
     // Set up realtime subscription
     const channel = supabase
-      .channel('orders-changes')
+      .channel("orders-changes")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'orders',
+          event: "*",
+          schema: "public",
+          table: "orders",
           filter: `project_id=eq.${project.id}`,
         },
         () => {
           fetchOrders();
-        }
+        },
       )
       .subscribe();
 
@@ -100,61 +101,59 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     setIsCreating(true);
 
     // Format materials as notes content (including the materials list in the notes)
-    const materialsDescription = data.materials
-      .map((m) => `• ${m.name} (${m.unit}) - Qty: ${m.quantity}`)
-      .join('\n');
-    
-    const fullNotes = `Materials:\n${materialsDescription}\n\n${data.notes}`;
+    const materialsDescription = data.materials.map((m) => `• ${m.name} (${m.unit}) - Qty: ${m.quantity}`).join("\n");
 
-    const { data: orderData, error } = await supabase.from('orders').insert({
-      project_id: project.id,
-      expected_delivery_date: data.expectedDeliveryDate?.toISOString().split('T')[0] || null,
-      notes: fullNotes,
-      created_by: user.id,
-      order_number: '', // Auto-generated by trigger
-      status: 'for_approval' as OrderStatus,
-    }).select().single();
+    //const fullNotes = `Materials:\n${materialsDescription}\n\n${data.notes}`;
+    const fullNotes = `${data.notes}`;
+    const { data: orderData, error } = await supabase
+      .from("orders")
+      .insert({
+        project_id: project.id,
+        expected_delivery_date: data.expectedDeliveryDate?.toISOString().split("T")[0] || null,
+        notes: fullNotes,
+        created_by: user.id,
+        order_number: "", // Auto-generated by trigger
+        status: "for_approval" as OrderStatus,
+      })
+      .select()
+      .single();
 
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       setIsCreating(false);
       return;
     }
-    
+
     if (orderData) {
       // Insert order items with quotation_item_id reference
       const orderItems = [];
-      
+
       for (const material of data.materials) {
         let skuId: string | null = null;
-        
-        const { data: existingSku } = await supabase
-          .from('skus')
-          .select('id')
-          .eq('name', material.name)
-          .maybeSingle();
-        
+
+        const { data: existingSku } = await supabase.from("skus").select("id").eq("name", material.name).maybeSingle();
+
         if (existingSku) {
           skuId = existingSku.id;
         } else {
           const { data: newSku, error: skuError } = await supabase
-            .from('skus')
+            .from("skus")
             .insert({
               name: material.name,
-              sku_code: '',
+              sku_code: "",
               unit_of_measure: material.unit,
               created_by: user.id,
             })
-            .select('id')
+            .select("id")
             .single();
-          
+
           if (skuError) {
-            console.error('Error creating SKU:', skuError);
+            console.error("Error creating SKU:", skuError);
             continue;
           }
           skuId = newSku.id;
         }
-        
+
         if (skuId) {
           orderItems.push({
             order_id: orderData.id,
@@ -165,45 +164,43 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
           });
         }
       }
-      
+
       if (orderItems.length > 0) {
-        const { error: itemsError } = await supabase
-          .from('order_items')
-          .insert(orderItems);
-        
+        const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
+
         if (itemsError) {
-          console.error('Error creating order items:', itemsError);
-          toast({ 
-            title: 'Warning', 
-            description: 'Order created but some items could not be linked', 
-            variant: 'destructive' 
+          console.error("Error creating order items:", itemsError);
+          toast({
+            title: "Warning",
+            description: "Order created but some items could not be linked",
+            variant: "destructive",
           });
         }
       }
 
       await logActivity({
-        action: 'create',
-        tableName: 'orders',
+        action: "create",
+        tableName: "orders",
         recordId: orderData.id,
-        newValues: { 
-          order_number: orderData.order_number, 
-          status: 'for_approval',
-          materials_count: data.materials.length 
+        newValues: {
+          order_number: orderData.order_number,
+          status: "for_approval",
+          materials_count: data.materials.length,
         },
         userId: user.id,
       });
 
       await notifyProjectMembers({
         projectId: project.id,
-        title: 'New Order Created',
+        title: "New Order Created",
         message: `Order ${orderData.order_number} has been created for ${project.name} with ${data.materials.length} material(s)`,
-        type: 'order',
-        referenceType: 'order',
+        type: "order",
+        referenceType: "order",
         referenceId: orderData.id,
         excludeUserId: user.id,
       });
 
-      toast({ title: 'Success', description: 'Order created successfully' });
+      toast({ title: "Success", description: "Order created successfully" });
       setIsCreateDialogOpen(false);
       fetchOrders();
     }
@@ -216,84 +213,86 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
     // Check permissions based on role and transition
     let hasPermission = false;
-    
+
     if (isSuperAdmin() || isAdmin()) {
       hasPermission = true;
-    } else if (order.status === 'for_approval' && (newStatus === 'approved' || newStatus === 'rejected')) {
+    } else if (order.status === "for_approval" && (newStatus === "approved" || newStatus === "rejected")) {
       hasPermission = canApproveOrders();
-    } else if (order.status === 'approved' && (newStatus === 'submitted' || newStatus === 'ordered')) {
+    } else if (order.status === "approved" && (newStatus === "submitted" || newStatus === "ordered")) {
       hasPermission = canApproveOrders();
-    } else if ((order.status === 'submitted' || order.status === 'ordered' || order.status === 'approved') && newStatus === 'preparing') {
+    } else if (
+      (order.status === "submitted" || order.status === "ordered" || order.status === "approved") &&
+      newStatus === "preparing"
+    ) {
       hasPermission = canProcessLogistics();
-    } else if (order.status === 'preparing' && newStatus === 'in_transit') {
+    } else if (order.status === "preparing" && newStatus === "in_transit") {
       hasPermission = canProcessLogistics();
-    } else if (order.status === 'in_transit' && (newStatus === 'delivered' || newStatus === 'on_hold')) {
+    } else if (order.status === "in_transit" && (newStatus === "delivered" || newStatus === "on_hold")) {
       hasPermission = canReceiveOrders();
-    } else if (order.status === 'delivered' && newStatus === 'closed') {
+    } else if (order.status === "delivered" && newStatus === "closed") {
       hasPermission = canApproveOrders() || isAdmin() || isSuperAdmin();
-    } else if (order.status === 'on_hold' && newStatus === 'in_transit') {
+    } else if (order.status === "on_hold" && newStatus === "in_transit") {
       hasPermission = isSuperAdmin() || isAdmin();
     }
-    
+
     if (!hasPermission) {
-      toast({ title: 'Permission Denied', description: 'You do not have permission to perform this action', variant: 'destructive' });
-      return; 
+      toast({
+        title: "Permission Denied",
+        description: "You do not have permission to perform this action",
+        variant: "destructive",
+      });
+      return;
     }
 
     const updateData: Record<string, unknown> = { status: newStatus };
-    
-    if (newStatus === 'approved' && order.status === 'for_approval') {
+
+    if (newStatus === "approved" && order.status === "for_approval") {
       updateData.approved_by = user.id;
       updateData.approved_at = new Date().toISOString();
     }
 
-    const { error } = await supabase
-      .from('orders')
-      .update(updateData)
-      .eq('id', order.id);
+    const { error } = await supabase.from("orders").update(updateData).eq("id", order.id);
 
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
 
-    if (newStatus === 'delivered') {
+    if (newStatus === "delivered") {
       const { data: orderItems } = await supabase
-        .from('order_items')
-        .select('id, quantity_ordered')
-        .eq('order_id', order.id);
+        .from("order_items")
+        .select("id, quantity_ordered")
+        .eq("order_id", order.id);
 
       if (orderItems) {
         for (const item of orderItems) {
-          await supabase
-            .from('order_items')
-            .update({ quantity_received: item.quantity_ordered })
-            .eq('id', item.id);
+          await supabase.from("order_items").update({ quantity_received: item.quantity_ordered }).eq("id", item.id);
         }
       }
     }
 
     await logActivity({
-      action: newStatus === 'approved' ? 'approve' : 'status_change',
-      tableName: 'orders',
+      action: newStatus === "approved" ? "approve" : "status_change",
+      tableName: "orders",
       recordId: order.id,
       oldValues: { status: order.status },
       newValues: { status: newStatus, order_number: order.order_number },
       userId: user.id,
     });
 
-    const statusLabel = newStatus === 'closed' ? 'Completed' : newStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const statusLabel =
+      newStatus === "closed" ? "Completed" : newStatus.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
     await notifyProjectMembers({
       projectId: project.id,
       title: `Order ${statusLabel}`,
       message: `Order ${order.order_number} has been moved to ${statusLabel}`,
-      type: 'order',
-      referenceType: 'order',
+      type: "order",
+      referenceType: "order",
       referenceId: order.id,
       excludeUserId: user.id,
     });
 
-    toast({ title: 'Success', description: `Order moved to ${statusLabel}` });
+    toast({ title: "Success", description: `Order moved to ${statusLabel}` });
     fetchOrders();
   };
 
@@ -302,42 +301,42 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     setIsRejecting(true);
 
     const { error } = await supabase
-      .from('orders')
+      .from("orders")
       .update({
-        status: 'rejected' as OrderStatus,
+        status: "rejected" as OrderStatus,
         rejected_by: user.id,
         rejected_at: new Date().toISOString(),
         rejection_reason: reason || null,
       })
-      .eq('id', orderToReject.id);
+      .eq("id", orderToReject.id);
 
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       await logActivity({
-        action: 'reject',
-        tableName: 'orders',
+        action: "reject",
+        tableName: "orders",
         recordId: orderToReject.id,
         oldValues: { status: orderToReject.status },
-        newValues: { 
-          status: 'rejected', 
+        newValues: {
+          status: "rejected",
           order_number: orderToReject.order_number,
-          rejection_reason: reason || null 
+          rejection_reason: reason || null,
         },
         userId: user.id,
       });
 
       await notifyProjectMembers({
         projectId: project.id,
-        title: 'Order Rejected',
-        message: `Order ${orderToReject.order_number} has been rejected${reason ? `: ${reason}` : ''}`,
-        type: 'order',
-        referenceType: 'order',
+        title: "Order Rejected",
+        message: `Order ${orderToReject.order_number} has been rejected${reason ? `: ${reason}` : ""}`,
+        type: "order",
+        referenceType: "order",
         referenceId: orderToReject.id,
         excludeUserId: user.id,
       });
 
-      toast({ title: 'Order Rejected', description: `Order ${orderToReject.order_number} has been rejected` });
+      toast({ title: "Order Rejected", description: `Order ${orderToReject.order_number} has been rejected` });
       setOrderToReject(null);
       fetchOrders();
     }
@@ -354,40 +353,40 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       : `[ON-HOLD ${formatManilaTime(new Date())}]: ${reason}`;
 
     const { error } = await supabase
-      .from('orders')
+      .from("orders")
       .update({
-        status: 'on_hold' as OrderStatus,
+        status: "on_hold" as OrderStatus,
         notes: updatedNotes,
       })
-      .eq('id', orderToHold.id);
+      .eq("id", orderToHold.id);
 
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
       await logActivity({
-        action: 'on_hold',
-        tableName: 'orders',
+        action: "on_hold",
+        tableName: "orders",
         recordId: orderToHold.id,
         oldValues: { status: orderToHold.status },
-        newValues: { 
-          status: 'on_hold', 
+        newValues: {
+          status: "on_hold",
           order_number: orderToHold.order_number,
-          on_hold_reason: reason 
+          on_hold_reason: reason,
         },
         userId: user.id,
       });
 
       await notifyProjectMembers({
         projectId: project.id,
-        title: 'Order On-Hold',
+        title: "Order On-Hold",
         message: `Order ${orderToHold.order_number} has been placed on hold: ${reason}`,
-        type: 'order',
-        referenceType: 'order',
+        type: "order",
+        referenceType: "order",
         referenceId: orderToHold.id,
         excludeUserId: user.id,
       });
 
-      toast({ title: 'Order On-Hold', description: `Order ${orderToHold.order_number} has been placed on hold` });
+      toast({ title: "Order On-Hold", description: `Order ${orderToHold.order_number} has been placed on hold` });
       setOrderToHold(null);
       fetchOrders();
     }
@@ -395,10 +394,10 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     setIsHolding(false);
   };
 
-  const handleQuickAction = (order: Order, action: OrderStatus | 'reject' | 'on_hold') => {
-    if (action === 'reject') {
+  const handleQuickAction = (order: Order, action: OrderStatus | "reject" | "on_hold") => {
+    if (action === "reject") {
       setOrderToReject(order);
-    } else if (action === 'on_hold') {
+    } else if (action === "on_hold") {
       setOrderToHold(order);
     } else {
       handleStatusChange(order, action);
@@ -406,7 +405,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   };
 
   const getOrdersForLane = (status: OrderStatus) => {
-    return orders.filter(o => o.status === status);
+    return orders.filter((o) => o.status === status);
   };
 
   const showCreateButton = canCreateOrders();
@@ -453,10 +452,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
           {MAIN_WORKFLOW_LANES.map((lane) => {
             const laneOrders = getOrdersForLane(lane.key);
             return (
-              <div
-                key={lane.key}
-                className={`rounded-xl border-2 ${lane.color} p-3 min-h-[200px] flex flex-col`}
-              >
+              <div key={lane.key} className={`rounded-xl border-2 ${lane.color} p-3 min-h-[200px] flex flex-col`}>
                 <div className="flex items-center justify-between mb-3 flex-shrink-0">
                   <h3 className="font-semibold text-foreground text-xs sm:text-sm truncate">{lane.label}</h3>
                   <span className="text-xs text-muted-foreground bg-background/80 px-2 py-0.5 rounded-full flex-shrink-0 ml-1">
@@ -466,9 +462,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
                 <div className="space-y-4 flex-1 overflow-y-auto">
                   {laneOrders.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-6">
-                      No orders
-                    </p>
+                    <p className="text-xs text-muted-foreground text-center py-6">No orders</p>
                   ) : (
                     laneOrders.map((order) => (
                       <OrderCard
@@ -492,13 +486,10 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         {SPECIAL_STATUS_LANES.map((lane) => {
           const laneOrders = getOrdersForLane(lane.key);
           return (
-            <div
-              key={lane.key}
-              className={`rounded-xl border-2 ${lane.color} p-4`}
-            >
+            <div key={lane.key} className={`rounded-xl border-2 ${lane.color} p-4`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  {lane.icon === 'hold' ? (
+                  {lane.icon === "hold" ? (
                     <div className="p-1.5 rounded-lg bg-amber-500/20">
                       <Loader2 className="h-4 w-4 text-amber-600" />
                     </div>
@@ -510,14 +501,12 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                   <h3 className="font-semibold text-foreground">{lane.label}</h3>
                 </div>
                 <span className="text-sm text-muted-foreground bg-background/80 px-2.5 py-1 rounded-full">
-                  {laneOrders.length} {laneOrders.length === 1 ? 'order' : 'orders'}
+                  {laneOrders.length} {laneOrders.length === 1 ? "order" : "orders"}
                 </span>
               </div>
 
               {laneOrders.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No {lane.label.toLowerCase()} orders
-                </p>
+                <p className="text-sm text-muted-foreground text-center py-8">No {lane.label.toLowerCase()} orders</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {laneOrders.map((order) => (
@@ -526,7 +515,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                       order={order}
                       onClick={() => setSelectedOrderId(order.id)}
                       onQuickAction={(action) => handleQuickAction(order, action)}
-                      showHoverActions={lane.key === 'on_hold'} // Only show for on_hold, not rejected
+                      showHoverActions={lane.key === "on_hold"} // Only show for on_hold, not rejected
                     />
                   ))}
                 </div>
@@ -558,7 +547,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       <RejectOrderDialog
         open={!!orderToReject}
         onOpenChange={(open) => !open && setOrderToReject(null)}
-        orderNumber={orderToReject?.order_number || ''}
+        orderNumber={orderToReject?.order_number || ""}
         onConfirm={handleReject}
         isSubmitting={isRejecting}
       />
@@ -567,7 +556,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       <OnHoldReasonDialog
         open={!!orderToHold}
         onOpenChange={(open) => !open && setOrderToHold(null)}
-        orderNumber={orderToHold?.order_number || ''}
+        orderNumber={orderToHold?.order_number || ""}
         onConfirm={handleOnHold}
         isSubmitting={isHolding}
       />

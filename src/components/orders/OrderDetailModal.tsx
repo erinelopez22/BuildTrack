@@ -440,7 +440,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <ListOrdered className="h-4 w-4 text-muted-foreground" />
-                    Materials ooo ({orderItems.length})
+                    Materials ({orderItems.length})
                   </div>
                   {orderItems.length > 0 ? (
                     <div className="rounded-lg border bg-muted/30 divide-y">
