@@ -271,27 +271,27 @@ export function CompletedOrdersModal({
                     key={order.id}
                     className="group transition-all duration-200 hover:shadow-md hover:border-primary/30 bg-card"
                   >
-                    <CardContent className="p-4">
-                      <div className="space-y-2">
+                    <CardContent className="p-3">
+                      <div className="space-y-1.5">
                         <div className="flex items-start justify-between gap-2">
                           <span
-                            className="font-mono text-sm font-semibold text-foreground cursor-pointer hover:text-primary"
+                            className="font-mono text-sm font-bold text-foreground cursor-pointer hover:text-primary"
                             onClick={() => setSelectedOrderId(order.id)}
                           >
                             {order.order_number}
                           </span>
                           <div className="flex items-center gap-2">
-                            <StatusBadge status={order.status} className="text-xs" />
+                            <StatusBadge status={order.status} className="text-[10px] px-1.5 py-0.5" />
                             {canDelete && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                                     onClick={(e) => e.stopPropagation()}
                                   >
-                                    <MoreVertical className="h-4 w-4" />
+                                    <MoreVertical className="h-3 w-3" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
@@ -311,28 +311,21 @@ export function CompletedOrdersModal({
                           </div>
                         </div>
 
+                        <p
+                          className="text-xs text-muted-foreground cursor-pointer"
+                          onClick={() => setSelectedOrderId(order.id)}
+                        >
+                          {order.created_at ? formatManilaTime(order.created_at) : 'No date'}
+                        </p>
+
                         {order.supplier_name && (
                           <p
-                            className="text-sm text-muted-foreground truncate cursor-pointer"
+                            className="text-xs text-muted-foreground truncate cursor-pointer"
                             onClick={() => setSelectedOrderId(order.id)}
                           >
                             {order.supplier_name}
                           </p>
                         )}
-
-                        <div
-                          className="flex items-center justify-between text-xs text-muted-foreground cursor-pointer"
-                          onClick={() => setSelectedOrderId(order.id)}
-                        >
-                          <span>
-                            {order.expected_delivery_date
-                              ? format(new Date(order.expected_delivery_date), 'MMM d, yyyy')
-                              : 'No delivery date'}
-                          </span>
-                          <span className="font-medium text-foreground">
-                            {formatPHP(order.total_amount)}
-                          </span>
-                        </div>
                       </div>
                     </CardContent>
                   </Card>
