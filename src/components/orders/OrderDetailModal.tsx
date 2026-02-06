@@ -1,22 +1,16 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { logActivity } from '@/lib/activityLogger';
-import { notifyProjectMembers, formatManilaTime } from '@/lib/notificationService';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { StatusBadge } from '@/components/common/StatusBadge';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { logActivity } from "@/lib/activityLogger";
+import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,7 +20,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+} from "@/components/ui/alert-dialog";
 import {
   Loader2,
   Calendar,
@@ -43,8 +37,8 @@ import {
   PauseCircle,
   FileText,
   ListOrdered,
-} from 'lucide-react';
-import type { Order, Profile, OrderStatus } from '@/types/database';
+} from "lucide-react";
+import type { Order, Profile, OrderStatus } from "@/types/database";
 
 interface OrderItem {
   id: string;
@@ -79,7 +73,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   // Dialogs for actions requiring reason
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showOnHoldDialog, setShowOnHoldDialog] = useState(false);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
 
   useEffect(() => {
     if (orderId && open) {
@@ -92,19 +86,16 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     setLoading(true);
 
     // Fetch order
-    const { data: orderData, error } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('id', orderId)
-      .maybeSingle();
+    const { data: orderData, error } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
 
     if (orderData) {
       setOrder(orderData as Order);
 
       // Fetch order items with SKU info
       const { data: items } = await supabase
-        .from('order_items')
-        .select(`
+        .from("order_items")
+        .select(
+          `
           id,
           sku_id,
           quantity_ordered,
@@ -114,26 +105,29 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             name,
             unit_of_measure
           )
-        `)
-        .eq('order_id', orderId);
+        `,
+        )
+        .eq("order_id", orderId);
 
       if (items) {
-        setOrderItems(items.map(item => ({
-          ...item,
-          sku: item.skus as unknown as { name: string; unit_of_measure: string } | undefined
-        })));
+        setOrderItems(
+          items.map((item) => ({
+            ...item,
+            sku: item.skus as unknown as { name: string; unit_of_measure: string } | undefined,
+          })),
+        );
       }
 
       // Fetch profiles in parallel
       const [creatorRes, approverRes, rejectorRes] = await Promise.all([
         orderData.created_by
-          ? supabase.from('profiles').select('*').eq('id', orderData.created_by).maybeSingle()
+          ? supabase.from("profiles").select("*").eq("id", orderData.created_by).maybeSingle()
           : Promise.resolve({ data: null }),
         orderData.approved_by
-          ? supabase.from('profiles').select('*').eq('id', orderData.approved_by).maybeSingle()
+          ? supabase.from("profiles").select("*").eq("id", orderData.approved_by).maybeSingle()
           : Promise.resolve({ data: null }),
         orderData.rejected_by
-          ? supabase.from('profiles').select('*').eq('id', orderData.rejected_by).maybeSingle()
+          ? supabase.from("profiles").select("*").eq("id", orderData.rejected_by).maybeSingle()
           : Promise.resolve({ data: null }),
       ]);
 
@@ -155,43 +149,37 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     };
 
     // Set approval info if approving
-    if (newStatus === 'approved' && order.status === 'for_approval') {
+    if (newStatus === "approved" && order.status === "for_approval") {
       updateData.approved_by = user.id;
       updateData.approved_at = new Date().toISOString();
     }
 
-    const { error } = await supabase
-      .from('orders')
-      .update(updateData)
-      .eq('id', order.id);
+    const { error } = await supabase.from("orders").update(updateData).eq("id", order.id);
 
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       setActionLoading(false);
       return;
     }
 
     // When order is marked as "delivered", update order_items.quantity_received
-    if (newStatus === 'delivered') {
+    if (newStatus === "delivered") {
       const { data: items } = await supabase
-        .from('order_items')
-        .select('id, quantity_ordered')
-        .eq('order_id', order.id);
+        .from("order_items")
+        .select("id, quantity_ordered")
+        .eq("order_id", order.id);
 
       if (items) {
         for (const item of items) {
-          await supabase
-            .from('order_items')
-            .update({ quantity_received: item.quantity_ordered })
-            .eq('id', item.id);
+          await supabase.from("order_items").update({ quantity_received: item.quantity_ordered }).eq("id", item.id);
         }
       }
     }
 
     // Log activity
     await logActivity({
-      action: newStatus === 'approved' ? 'approve' : newStatus === 'rejected' ? 'reject' : 'status_change',
-      tableName: 'orders',
+      action: newStatus === "approved" ? "approve" : newStatus === "rejected" ? "reject" : "status_change",
+      tableName: "orders",
       recordId: order.id,
       oldValues: { status: order.status },
       newValues: { status: newStatus, order_number: order.order_number, ...additionalData },
@@ -199,18 +187,19 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     });
 
     // Notify project members
-    const statusLabel = newStatus === 'closed' ? 'Completed' : newStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    const statusLabel =
+      newStatus === "closed" ? "Completed" : newStatus.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
     await notifyProjectMembers({
       projectId: order.project_id,
       title: `Order ${statusLabel}`,
       message: `Order ${order.order_number} has been moved to ${statusLabel}`,
-      type: 'order',
-      referenceType: 'order',
+      type: "order",
+      referenceType: "order",
       referenceId: order.id,
       excludeUserId: user.id,
     });
 
-    toast({ title: 'Success', description: `Order moved to ${statusLabel}` });
+    toast({ title: "Success", description: `Order moved to ${statusLabel}` });
     setActionLoading(false);
     onStatusChange?.();
     onOpenChange(false);
@@ -218,23 +207,23 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
   const handleReject = async () => {
     if (!reason.trim()) {
-      toast({ title: 'Error', description: 'Rejection reason is required', variant: 'destructive' });
+      toast({ title: "Error", description: "Rejection reason is required", variant: "destructive" });
       return;
     }
 
-    await handleStatusChange('rejected', {
+    await handleStatusChange("rejected", {
       rejected_by: user?.id,
       rejected_at: new Date().toISOString(),
       rejection_reason: reason.trim(),
     });
 
     setShowRejectDialog(false);
-    setReason('');
+    setReason("");
   };
 
   const handleOnHold = async () => {
     if (!reason.trim()) {
-      toast({ title: 'Error', description: 'On-hold reason is required', variant: 'destructive' });
+      toast({ title: "Error", description: "On-hold reason is required", variant: "destructive" });
       return;
     }
 
@@ -243,59 +232,109 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       ? `${order.notes}\n\n[ON-HOLD ${formatManilaTime(new Date())}]: ${reason.trim()}`
       : `[ON-HOLD ${formatManilaTime(new Date())}]: ${reason.trim()}`;
 
-    await handleStatusChange('on_hold', { notes: updatedNotes });
+    await handleStatusChange("on_hold", { notes: updatedNotes });
 
     setShowOnHoldDialog(false);
-    setReason('');
+    setReason("");
   };
 
   // Determine available actions based on status and permissions
   const getAvailableActions = () => {
     if (!order) return [];
 
-    const actions: { label: string; action: () => void; icon: React.ReactNode; variant: 'default' | 'destructive' | 'outline' | 'secondary' }[] = [];
+    const actions: {
+      label: string;
+      action: () => void;
+      icon: React.ReactNode;
+      variant: "default" | "destructive" | "outline" | "secondary";
+    }[] = [];
     const hasFullAccess = isSuperAdmin() || isAdmin();
 
     switch (order.status) {
-      case 'for_approval':
+      case "for_approval":
         if (hasFullAccess || canApproveOrders()) {
           actions.push(
-            { label: 'Approve', action: () => handleStatusChange('approved'), icon: <Check className="h-4 w-4 mr-2" />, variant: 'default' },
-            { label: 'Reject', action: () => setShowRejectDialog(true), icon: <XCircle className="h-4 w-4 mr-2" />, variant: 'destructive' }
+            {
+              label: "Approve",
+              action: () => handleStatusChange("approved"),
+              icon: <Check className="h-4 w-4 mr-2" />,
+              variant: "default",
+            },
+            {
+              label: "Reject",
+              action: () => setShowRejectDialog(true),
+              icon: <XCircle className="h-4 w-4 mr-2" />,
+              variant: "destructive",
+            },
           );
         }
         break;
-      case 'approved':
+      case "approved":
         if (hasFullAccess || canApproveOrders()) {
-          actions.push({ label: 'Submit Order', action: () => handleStatusChange('submitted'), icon: <ArrowRight className="h-4 w-4 mr-2" />, variant: 'default' });
+          actions.push({
+            label: "Submit Order",
+            action: () => handleStatusChange("submitted"),
+            icon: <ArrowRight className="h-4 w-4 mr-2" />,
+            variant: "default",
+          });
         }
         break;
-      case 'submitted':
+      case "submitted":
         if (hasFullAccess || canProcessLogistics()) {
-          actions.push({ label: 'Prepare for Tracking', action: () => handleStatusChange('preparing'), icon: <Package className="h-4 w-4 mr-2" />, variant: 'default' });
+          actions.push({
+            label: "Prepare for Tracking",
+            action: () => handleStatusChange("preparing"),
+            icon: <Package className="h-4 w-4 mr-2" />,
+            variant: "default",
+          });
         }
         break;
-      case 'preparing':
+      case "preparing":
         if (hasFullAccess || canProcessLogistics()) {
-          actions.push({ label: 'On Transit', action: () => handleStatusChange('in_transit'), icon: <Truck className="h-4 w-4 mr-2" />, variant: 'default' });
+          actions.push({
+            label: "On Transit",
+            action: () => handleStatusChange("in_transit"),
+            icon: <Truck className="h-4 w-4 mr-2" />,
+            variant: "default",
+          });
         }
         break;
-      case 'in_transit':
+      case "in_transit":
         if (hasFullAccess || canReceiveOrders()) {
           actions.push(
-            { label: 'Delivered', action: () => handleStatusChange('delivered'), icon: <CheckCircle2 className="h-4 w-4 mr-2" />, variant: 'default' },
-            { label: 'On-Hold', action: () => setShowOnHoldDialog(true), icon: <PauseCircle className="h-4 w-4 mr-2" />, variant: 'outline' }
+            {
+              label: "Delivered",
+              action: () => handleStatusChange("delivered"),
+              icon: <CheckCircle2 className="h-4 w-4 mr-2" />,
+              variant: "default",
+            },
+            {
+              label: "On-Hold",
+              action: () => setShowOnHoldDialog(true),
+              icon: <PauseCircle className="h-4 w-4 mr-2" />,
+              variant: "outline",
+            },
           );
         }
         break;
-      case 'delivered':
+      case "delivered":
         if (hasFullAccess || canApproveOrders()) {
-          actions.push({ label: 'Complete Order', action: () => handleStatusChange('closed'), icon: <CheckCircle2 className="h-4 w-4 mr-2" />, variant: 'default' });
+          actions.push({
+            label: "Complete Order",
+            action: () => handleStatusChange("closed"),
+            icon: <CheckCircle2 className="h-4 w-4 mr-2" />,
+            variant: "default",
+          });
         }
         break;
-      case 'on_hold':
+      case "on_hold":
         if (hasFullAccess) {
-          actions.push({ label: 'Resume Transit', action: () => handleStatusChange('in_transit'), icon: <Truck className="h-4 w-4 mr-2" />, variant: 'default' });
+          actions.push({
+            label: "Resume Transit",
+            action: () => handleStatusChange("in_transit"),
+            icon: <Truck className="h-4 w-4 mr-2" />,
+            variant: "default",
+          });
         }
         break;
       default:
@@ -315,7 +354,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
         <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3">
-              <span className="font-mono">{order?.order_number || 'Loading...'}</span>
+              <span className="font-mono">{order?.order_number || "Loading..."}</span>
               {order && <StatusBadge status={order.status} />}
             </DialogTitle>
           </DialogHeader>
@@ -328,7 +367,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             <ScrollArea className="flex-1 -mx-6 px-6">
               <div className="space-y-4 pb-4">
                 {/* Rejected Alert */}
-                {order.status === 'rejected' && (
+                {order.status === "rejected" && (
                   <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 space-y-2">
                     <div className="flex items-center gap-2 text-destructive font-medium">
                       <XCircle className="h-5 w-5" />
@@ -341,8 +380,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                     )}
                     {rejector && order.rejected_at && (
                       <p className="text-xs text-muted-foreground pl-7">
-                        Rejected by {rejector.full_name || rejector.email} on{' '}
-                        {formatManilaTime(order.rejected_at)}
+                        Rejected by {rejector.full_name || rejector.email} on {formatManilaTime(order.rejected_at)}
                       </p>
                     )}
                   </div>
@@ -354,7 +392,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                     <Building2 className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Supplier</p>
-                      <p className="font-medium">{order.supplier_name || 'Not specified'}</p>
+                      <p className="font-medium">{order.supplier_name || "Not specified"}</p>
                       {order.supplier_contact && (
                         <p className="text-sm text-muted-foreground">{order.supplier_contact}</p>
                       )}
@@ -365,9 +403,9 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                     <User className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                     <div>
                       <p className="text-sm text-muted-foreground">Created By</p>
-                      <p className="font-medium">{creator?.full_name || creator?.email || 'Unknown'}</p>
+                      <p className="font-medium">{creator?.full_name || creator?.email || "Unknown"}</p>
                       <p className="text-xs text-muted-foreground">
-                        {order.created_at ? formatManilaTime(order.created_at) : 'No date'}
+                        {order.created_at ? formatManilaTime(order.created_at) : "No date"}
                       </p>
                     </div>
                   </div>
@@ -378,21 +416,19 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                       <p className="text-sm text-muted-foreground">Expected Delivery</p>
                       <p className="font-medium">
                         {order.expected_delivery_date
-                          ? formatManilaTime(order.expected_delivery_date).split(' –')[0]
-                          : 'Not set'}
+                          ? formatManilaTime(order.expected_delivery_date).split(" –")[0]
+                          : "Not set"}
                       </p>
                     </div>
                   </div>
 
-                  {order.status !== 'for_approval' && order.status !== 'rejected' && approver && order.approved_at && (
+                  {order.status !== "for_approval" && order.status !== "rejected" && approver && order.approved_at && (
                     <div className="flex items-start gap-3">
                       <Clock className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
                       <div>
                         <p className="text-sm text-muted-foreground">Approved By</p>
                         <p className="font-medium">{approver.full_name || approver.email}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatManilaTime(order.approved_at)}
-                        </p>
+                        <p className="text-xs text-muted-foreground">{formatManilaTime(order.approved_at)}</p>
                       </div>
                     </div>
                   )}
@@ -404,15 +440,15 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <ListOrdered className="h-4 w-4 text-muted-foreground" />
-                    Materials ({orderItems.length})
+                    Materials ooo ({orderItems.length})
                   </div>
                   {orderItems.length > 0 ? (
                     <div className="rounded-lg border bg-muted/30 divide-y">
                       {orderItems.map((item) => (
                         <div key={item.id} className="px-3 py-2 flex justify-between items-center">
-                          <span className="text-sm">{item.sku?.name || 'Unknown Material'}</span>
+                          <span className="text-sm">{item.sku?.name || "Unknown Material"}</span>
                           <span className="text-sm text-muted-foreground">
-                            {item.quantity_ordered} {item.sku?.unit_of_measure || 'pcs'}
+                            {item.quantity_ordered} {item.sku?.unit_of_measure || "pcs"}
                           </span>
                         </div>
                       ))}
@@ -431,9 +467,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                         <FileText className="h-4 w-4 text-muted-foreground" />
                         Notes
                       </div>
-                      <p className="text-sm whitespace-pre-wrap bg-muted/30 rounded-lg p-3">
-                        {order.notes}
-                      </p>
+                      <p className="text-sm whitespace-pre-wrap bg-muted/30 rounded-lg p-3">{order.notes}</p>
                     </div>
                   </>
                 )}
@@ -445,14 +479,14 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Total Amount</span>
                       <span className="text-lg font-semibold">
-                        ₱{order.total_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        ₱{order.total_amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
                       </span>
                     </div>
                   </>
                 )}
 
                 {/* Read-only notice for rejected orders */}
-                {order.status === 'rejected' && (
+                {order.status === "rejected" && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
                     <AlertTriangle className="h-4 w-4" />
                     This order is read-only. Only Super Admin can modify rejected orders.
@@ -475,11 +509,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                   disabled={actionLoading}
                   className="flex-1 sm:flex-none"
                 >
-                  {actionLoading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    action.icon
-                  )}
+                  {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : action.icon}
                   {action.label}
                 </Button>
               ))}
@@ -512,7 +542,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setReason('')}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setReason("")}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleReject}
               disabled={!reason.trim() || actionLoading}
@@ -549,7 +579,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setReason('')}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setReason("")}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleOnHold}
               disabled={!reason.trim() || actionLoading}
