@@ -108,7 +108,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
         `,
         )
         .eq("order_id", orderId);
-
+console.log(order);
       if (items) {
         setOrderItems(
           items.map((item) => ({

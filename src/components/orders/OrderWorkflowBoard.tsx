@@ -104,7 +104,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     const materialsDescription = ""; //data.materials.map((m) => `• ${m.name} (${m.unit}) - Qty: ${m.quantity}`).join("\n");
 
     const fullNotes = `\n${data.notes}`;
-
+console.log(fullNotes);
     const { data: orderData, error } = await supabase
       .from("orders")
       .insert({
@@ -123,7 +123,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       setIsCreating(false);
       return;
     }
-
+      console.log(orderData);
     if (orderData) {
       // Insert order items with quotation_item_id reference
       const orderItems = [];
