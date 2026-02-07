@@ -39,6 +39,8 @@ import {
   ListOrdered,
 } from "lucide-react";
 import type { Order, Profile, OrderStatus } from "@/types/database";
+import { TrackingAssignmentSection } from "./TrackingAssignmentSection";
+import { EvidenceLightbox, useLightbox } from "./EvidenceLightbox";
 
 interface OrderItem {
   id: string;
@@ -74,6 +76,13 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showOnHoldDialog, setShowOnHoldDialog] = useState(false);
   const [reason, setReason] = useState("");
+
+  // Tracking validation state
+  const [trackingValid, setTrackingValid] = useState(false);
+  const [hasTrackingAssignments, setHasTrackingAssignments] = useState(false);
+
+  // Lightbox state
+  const lightbox = useLightbox();
 
   useEffect(() => {
     if (orderId && open) {
@@ -247,6 +256,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       action: () => void;
       icon: React.ReactNode;
       variant: "default" | "destructive" | "outline" | "secondary";
+      disabled?: boolean;
     }[] = [];
     const hasFullAccess = isSuperAdmin() || isAdmin();
 
@@ -296,6 +306,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             action: () => handleStatusChange("in_transit"),
             icon: <Truck className="h-4 w-4 mr-2" />,
             variant: "default",
+            disabled: !trackingValid, // Require tracking assignments before transit
           });
         }
         break;
@@ -485,6 +496,26 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                   </>
                 )}
 
+                {/* Tracking Assignment Section - Show for preparing and in_transit statuses */}
+                {(order.status === "preparing" || order.status === "in_transit") && (
+                  <>
+                    <Separator />
+                    <TrackingAssignmentSection
+                      orderId={order.id}
+                      projectId={order.project_id}
+                      status={order.status}
+                      onValidationChange={setTrackingValid}
+                      onAssignmentsLoaded={setHasTrackingAssignments}
+                      readOnly={order.status === "in_transit"}
+                    />
+                    {order.status === "preparing" && !trackingValid && (
+                      <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
+                        Assign at least one driver with a plate number before moving to transit.
+                      </p>
+                    )}
+                  </>
+                )}
+
                 {/* Read-only notice for rejected orders */}
                 {order.status === "rejected" && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
@@ -506,7 +537,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                   key={index}
                   variant={action.variant}
                   onClick={action.action}
-                  disabled={actionLoading}
+                  disabled={actionLoading || action.disabled}
                   className="flex-1 sm:flex-none"
                 >
                   {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : action.icon}
@@ -591,6 +622,14 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Evidence Lightbox */}
+      <EvidenceLightbox
+        images={lightbox.images}
+        startIndex={lightbox.startIndex}
+        open={lightbox.open}
+        onOpenChange={lightbox.setOpen}
+      />
     </>
   );
 }

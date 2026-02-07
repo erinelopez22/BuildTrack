@@ -306,6 +306,76 @@ export type Database = {
           },
         ]
       }
+      order_tracking_assignments: {
+        Row: {
+          created_at: string
+          created_by: string
+          driver_user_id: string
+          id: string
+          order_id: string
+          plate_number: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          driver_user_id: string
+          id?: string
+          order_id: string
+          plate_number: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          driver_user_id?: string
+          id?: string
+          order_id?: string
+          plate_number?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_tracking_assignments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      order_tracking_evidence: {
+        Row: {
+          file_name: string
+          file_url: string
+          id: string
+          order_tracking_assignment_id: string
+          uploaded_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          file_name: string
+          file_url: string
+          id?: string
+          order_tracking_assignment_id: string
+          uploaded_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          file_name?: string
+          file_url?: string
+          id?: string
+          order_tracking_assignment_id?: string
+          uploaded_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_tracking_evidence_order_tracking_assignment_id_fkey"
+            columns: ["order_tracking_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "order_tracking_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       orders: {
         Row: {
           approved_at: string | null
