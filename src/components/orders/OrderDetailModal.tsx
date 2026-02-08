@@ -12,6 +12,12 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -37,6 +43,8 @@ import {
   PauseCircle,
   FileText,
   ListOrdered,
+  ClipboardList,
+  History,
 } from "lucide-react";
 import type { Order, Profile, OrderStatus } from "@/types/database";
 import { TrackingAssignmentSection } from "./TrackingAssignmentSection";
@@ -84,9 +92,14 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   // Lightbox state
   const lightbox = useLightbox();
 
+  // Accordion state - summary expanded by default
+  const [expandedSections, setExpandedSections] = useState<string[]>(["summary"]);
+
   useEffect(() => {
     if (orderId && open) {
       fetchOrderDetails();
+      // Reset expanded sections when opening a new order
+      setExpandedSections(["summary"]);
     }
   }, [orderId, open]);
 
@@ -357,27 +370,32 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
   const availableActions = getAvailableActions();
 
+  // Check if tracking section should be shown
+  const showTrackingSection = order && (order.status === "preparing" || order.status === "in_transit");
+
   if (!open) return null;
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-3">
-              <span className="font-mono">{order?.order_number || "Loading..."}</span>
+        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] md:max-h-[85vh] flex flex-col p-0 gap-0">
+          {/* Sticky Header */}
+          <DialogHeader className="flex-shrink-0 px-4 sm:px-6 py-4 border-b bg-background sticky top-0 z-10">
+            <DialogTitle className="flex items-center gap-3 flex-wrap">
+              <span className="font-mono text-lg">{order?.order_number || "Loading..."}</span>
               {order && <StatusBadge status={order.status} />}
             </DialogTitle>
           </DialogHeader>
 
+          {/* Scrollable Content */}
           {loading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-8 flex-1">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : order ? (
-            <ScrollArea className="flex-1 -mx-6 px-6">
-              <div className="space-y-4 pb-4">
-                {/* Rejected Alert */}
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="px-4 sm:px-6 py-4 space-y-4">
+                {/* Rejected Alert - Always visible at top */}
                 {order.status === "rejected" && (
                   <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 space-y-2">
                     <div className="flex items-center gap-2 text-destructive font-medium">
@@ -397,148 +415,187 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                   </div>
                 )}
 
-                {/* Order Info */}
-                <div className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <Building2 className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Supplier</p>
-                      <p className="font-medium">{order.supplier_name || "Not specified"}</p>
-                      {order.supplier_contact && (
-                        <p className="text-sm text-muted-foreground">{order.supplier_contact}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <User className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Created By</p>
-                      <p className="font-medium">{creator?.full_name || creator?.email || "Unknown"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {order.created_at ? formatManilaTime(order.created_at) : "No date"}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3">
-                    <Calendar className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Expected Delivery</p>
-                      <p className="font-medium">
-                        {order.expected_delivery_date
-                          ? formatManilaTime(order.expected_delivery_date).split(" –")[0]
-                          : "Not set"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {order.status !== "for_approval" && order.status !== "rejected" && approver && order.approved_at && (
-                    <div className="flex items-start gap-3">
-                      <Clock className="h-5 w-5 text-success mt-0.5 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm text-muted-foreground">Approved By</p>
-                        <p className="font-medium">{approver.full_name || approver.email}</p>
-                        <p className="text-xs text-muted-foreground">{formatManilaTime(order.approved_at)}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                {/* Materials List */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <ListOrdered className="h-4 w-4 text-muted-foreground" />
-                    Materials ({orderItems.length})
-                  </div>
-                  {orderItems.length > 0 ? (
-                    <div className="rounded-lg border bg-muted/30 divide-y">
-                      {orderItems.map((item) => (
-                        <div key={item.id} className="px-3 py-2 flex justify-between items-center">
-                          <span className="text-sm">{item.sku?.name || "Unknown Material"}</span>
-                          <span className="text-sm text-muted-foreground">
-                            {item.quantity_ordered} {item.sku?.unit_of_measure || "pcs"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">No materials listed</p>
-                  )}
-                </div>
-
-                {/* Notes */}
-                {order.notes && (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
+                {/* Accordion Sections */}
+                <Accordion
+                  type="multiple"
+                  value={expandedSections}
+                  onValueChange={setExpandedSections}
+                  className="w-full space-y-2"
+                >
+                  {/* Order Summary Section - Default Expanded */}
+                  <AccordionItem value="summary" className="border rounded-lg px-4">
+                    <AccordionTrigger className="hover:no-underline py-3">
                       <div className="flex items-center gap-2 text-sm font-medium">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        Notes
+                        <ClipboardList className="h-4 w-4 text-muted-foreground" />
+                        Order Summary
                       </div>
-                      <p className="text-sm whitespace-pre-wrap bg-muted/30 rounded-lg p-3">{order.notes}</p>
-                    </div>
-                  </>
-                )}
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-3 pb-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="flex items-start gap-3">
+                            <Building2 className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm text-muted-foreground">Supplier</p>
+                              <p className="font-medium truncate">{order.supplier_name || "Not specified"}</p>
+                              {order.supplier_contact && (
+                                <p className="text-sm text-muted-foreground truncate">{order.supplier_contact}</p>
+                              )}
+                            </div>
+                          </div>
 
-                {/* Total Amount */}
-                {order.total_amount && (
-                  <>
-                    <Separator />
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Total Amount</span>
-                      <span className="text-lg font-semibold">
-                        ₱{order.total_amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                  </>
-                )}
+                          <div className="flex items-start gap-3">
+                            <User className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm text-muted-foreground">Created By</p>
+                              <p className="font-medium truncate">{creator?.full_name || creator?.email || "Unknown"}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {order.created_at ? formatManilaTime(order.created_at) : "No date"}
+                              </p>
+                            </div>
+                          </div>
 
-                {/* Tracking Assignment Section - Show for preparing and in_transit statuses */}
-                {(order.status === "preparing" || order.status === "in_transit") && (
-                  <>
-                    <Separator />
-                    <TrackingAssignmentSection
-                      orderId={order.id}
-                      projectId={order.project_id}
-                      status={order.status}
-                      onValidationChange={setTrackingValid}
-                      onAssignmentsLoaded={setHasTrackingAssignments}
-                      readOnly={order.status === "in_transit"}
-                    />
-                    {order.status === "preparing" && !trackingValid && (
-                      <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded">
-                        Assign at least one driver with a plate number before moving to transit.
-                      </p>
-                    )}
-                  </>
-                )}
+                          <div className="flex items-start gap-3">
+                            <Calendar className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm text-muted-foreground">Expected Delivery</p>
+                              <p className="font-medium">
+                                {order.expected_delivery_date
+                                  ? formatManilaTime(order.expected_delivery_date).split(" –")[0]
+                                  : "Not set"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {order.status !== "for_approval" && order.status !== "rejected" && approver && order.approved_at && (
+                            <div className="flex items-start gap-3">
+                              <Clock className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-sm text-muted-foreground">Approved By</p>
+                                <p className="font-medium truncate">{approver.full_name || approver.email}</p>
+                                <p className="text-xs text-muted-foreground">{formatManilaTime(order.approved_at)}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Total Amount */}
+                        {order.total_amount && (
+                          <div className="flex justify-between items-center pt-2 border-t">
+                            <span className="text-muted-foreground">Total Amount</span>
+                            <span className="text-lg font-semibold">
+                              ₱{order.total_amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* Materials Section */}
+                  <AccordionItem value="materials" className="border rounded-lg px-4">
+                    <AccordionTrigger className="hover:no-underline py-3">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <ListOrdered className="h-4 w-4 text-muted-foreground" />
+                        Materials ({orderItems.length})
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="pb-3">
+                        {orderItems.length > 0 ? (
+                          <div className="rounded-lg border bg-muted/30 divide-y">
+                            {orderItems.map((item) => (
+                              <div key={item.id} className="px-3 py-2 flex justify-between items-center gap-2">
+                                <span className="text-sm truncate">{item.sku?.name || "Unknown Material"}</span>
+                                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                                  {item.quantity_ordered} {item.sku?.unit_of_measure || "pcs"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">No materials listed</p>
+                        )}
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {/* Notes Section */}
+                  {order.notes && (
+                    <AccordionItem value="notes" className="border rounded-lg px-4">
+                      <AccordionTrigger className="hover:no-underline py-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          Notes
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="pb-3">
+                          <p className="text-sm whitespace-pre-wrap bg-muted/30 rounded-lg p-3">{order.notes}</p>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+
+                  {/* Driver & Tracking Section */}
+                  {showTrackingSection && (
+                    <AccordionItem value="tracking" className="border rounded-lg px-4">
+                      <AccordionTrigger className="hover:no-underline py-3">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <Truck className="h-4 w-4 text-muted-foreground" />
+                          Driver & Tracking
+                          {order.status === "preparing" && !trackingValid && (
+                            <span className="text-xs text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded ml-2">
+                              Required
+                            </span>
+                          )}
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="pb-3">
+                          <TrackingAssignmentSection
+                            orderId={order.id}
+                            projectId={order.project_id}
+                            status={order.status}
+                            onValidationChange={setTrackingValid}
+                            onAssignmentsLoaded={setHasTrackingAssignments}
+                            readOnly={order.status === "in_transit"}
+                          />
+                          {order.status === "preparing" && !trackingValid && (
+                            <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded mt-3">
+                              Assign at least one driver with a plate number before moving to transit.
+                            </p>
+                          )}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+                </Accordion>
 
                 {/* Read-only notice for rejected orders */}
                 {order.status === "rejected" && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
-                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                     This order is read-only. Only Super Admin can modify rejected orders.
                   </div>
                 )}
               </div>
             </ScrollArea>
           ) : (
-            <p className="text-center py-8 text-muted-foreground">Order not found</p>
+            <p className="text-center py-8 text-muted-foreground flex-1 flex items-center justify-center">Order not found</p>
           )}
 
-          {/* Action Buttons */}
+          {/* Sticky Footer with Actions */}
           {availableActions.length > 0 && (
-            <DialogFooter className="flex-shrink-0 gap-2 sm:gap-2">
+            <DialogFooter className="flex-shrink-0 px-4 sm:px-6 py-4 border-t bg-background gap-2 flex-wrap sticky bottom-0">
               {availableActions.map((action, index) => (
                 <Button
                   key={index}
                   variant={action.variant}
                   onClick={action.action}
                   disabled={actionLoading || action.disabled}
-                  className="flex-1 sm:flex-none"
+                  className="flex-1 sm:flex-none min-w-[120px]"
+                  size="default"
                 >
                   {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : action.icon}
                   {action.label}
@@ -551,7 +608,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
       {/* Reject Reason Dialog */}
       <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
               <XCircle className="h-5 w-5" />
@@ -588,7 +645,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
       {/* On-Hold Reason Dialog */}
       <AlertDialog open={showOnHoldDialog} onOpenChange={setShowOnHoldDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
               <PauseCircle className="h-5 w-5" />
