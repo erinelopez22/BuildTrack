@@ -6,9 +6,16 @@ import { logActivity } from "@/lib/activityLogger";
 import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Command,
   CommandEmpty,
@@ -27,10 +34,13 @@ import {
   UserPlus,
   X,
   Upload,
-  Image as ImageIcon,
   Truck,
   Check,
   ChevronsUpDown,
+  Pencil,
+  Trash2,
+  Plus,
+  Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -46,8 +56,14 @@ interface DriverAssignment {
   driver_user_id: string;
   driver: Driver;
   plate_number: string;
+  tracking_reference: string;
+  notes: string;
   evidence: EvidenceFile[];
+  created_by?: string;
+  created_at?: string;
+  creator?: Driver;
   isNew?: boolean;
+  isEditing?: boolean;
 }
 
 interface EvidenceFile {
@@ -56,6 +72,8 @@ interface EvidenceFile {
   file_name: string;
   file?: File;
   isUploading?: boolean;
+  uploaded_by?: string;
+  uploaded_at?: string;
 }
 
 interface TrackingAssignmentSectionProps {
@@ -82,6 +100,7 @@ export function TrackingAssignmentSection({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [driverSearchOpen, setDriverSearchOpen] = useState(false);
+  const [selectedDriverForAdd, setSelectedDriverForAdd] = useState<Driver | null>(null);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   const canEdit = !readOnly && (isSuperAdmin() || isAdmin() || canProcessLogistics());
@@ -124,18 +143,22 @@ export function TrackingAssignmentSection({
     const { data: existingAssignments } = await supabase
       .from("order_tracking_assignments")
       .select("*")
-      .eq("order_id", orderId);
+      .eq("order_id", orderId)
+      .order("created_at", { ascending: true });
 
     if (existingAssignments && existingAssignments.length > 0) {
       // Fetch driver profiles for assignments
       const driverIds = existingAssignments.map((a) => a.driver_user_id);
-      const { data: assignedDriverProfiles } = await supabase
+      const creatorIds = existingAssignments.map((a) => a.created_by).filter(Boolean);
+      const allProfileIds = [...new Set([...driverIds, ...creatorIds])];
+      
+      const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, email, phone")
-        .in("id", driverIds);
+        .in("id", allProfileIds);
 
-      const driverMap = new Map(
-        (assignedDriverProfiles || []).map((d) => [d.id, d])
+      const profileMap = new Map(
+        (profiles || []).map((d) => [d.id, d])
       );
 
       // Fetch evidence for all assignments
@@ -152,6 +175,8 @@ export function TrackingAssignmentSection({
           id: e.id,
           file_url: e.file_url,
           file_name: e.file_name,
+          uploaded_by: e.uploaded_by,
+          uploaded_at: e.uploaded_at,
         });
         evidenceMap.set(e.order_tracking_assignment_id, list);
       });
@@ -159,14 +184,19 @@ export function TrackingAssignmentSection({
       const loadedAssignments: DriverAssignment[] = existingAssignments.map((a) => ({
         id: a.id,
         driver_user_id: a.driver_user_id,
-        driver: driverMap.get(a.driver_user_id) || {
+        driver: profileMap.get(a.driver_user_id) || {
           id: a.driver_user_id,
           full_name: null,
           email: "Unknown",
           phone: null,
         },
         plate_number: a.plate_number,
+        tracking_reference: "",
+        notes: "",
         evidence: evidenceMap.get(a.id) || [],
+        created_by: a.created_by,
+        created_at: a.created_at,
+        creator: a.created_by ? profileMap.get(a.created_by) : undefined,
       }));
 
       setAssignments(loadedAssignments);
@@ -195,21 +225,68 @@ export function TrackingAssignmentSection({
         driver_user_id: driver.id,
         driver,
         plate_number: "",
+        tracking_reference: "",
+        notes: "",
         evidence: [],
         isNew: true,
+        isEditing: true,
       },
     ]);
     setDriverSearchOpen(false);
+    setSelectedDriverForAdd(null);
   };
 
-  const handleRemoveDriver = (driverUserId: string) => {
+  const handleRemoveDriver = async (driverUserId: string) => {
+    const assignment = assignments.find((a) => a.driver_user_id === driverUserId);
+    
+    // If it's a saved assignment, delete from database
+    if (assignment?.id && !assignment.isNew) {
+      const { error } = await supabase
+        .from("order_tracking_assignments")
+        .delete()
+        .eq("id", assignment.id);
+      
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to remove driver assignment",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Log activity
+      await logActivity({
+        action: "tracking_removed",
+        tableName: "orders",
+        recordId: orderId,
+        oldValues: {
+          driver_name: assignment.driver.full_name || assignment.driver.email,
+          plate_number: assignment.plate_number,
+        },
+        newValues: null,
+        userId: user?.id,
+      });
+
+      // Notify project members
+      await notifyProjectMembers({
+        projectId,
+        title: "Driver Assignment Removed",
+        message: `Driver ${assignment.driver.full_name || assignment.driver.email} was removed from tracking`,
+        type: "order",
+        referenceType: "order",
+        referenceId: orderId,
+        excludeUserId: user?.id,
+      });
+    }
+
     setAssignments((prev) => prev.filter((a) => a.driver_user_id !== driverUserId));
   };
 
-  const handlePlateChange = (driverUserId: string, plateNumber: string) => {
+  const handleFieldChange = (driverUserId: string, field: keyof DriverAssignment, value: string) => {
     setAssignments((prev) =>
       prev.map((a) =>
-        a.driver_user_id === driverUserId ? { ...a, plate_number: plateNumber } : a
+        a.driver_user_id === driverUserId ? { ...a, [field]: value } : a
       )
     );
   };
@@ -329,7 +406,7 @@ export function TrackingAssignmentSection({
 
         // Log activity
         await logActivity({
-          action: "tracking_assigned",
+          action: assignment.isNew ? "tracking_assigned" : "tracking_updated",
           tableName: "orders",
           recordId: orderId,
           oldValues: null,
@@ -382,199 +459,363 @@ export function TrackingAssignmentSection({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        <Truck className="h-4 w-4 text-muted-foreground" />
-        {isPreparing ? "Tracking Assignment" : "Tracking Details"}
-      </div>
-
-      {/* Driver Selection (only in preparing status) */}
+      {/* Add Driver Button */}
       {isPreparing && canEdit && (
-        <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="w-full justify-between">
-              <span className="flex items-center gap-2">
-                <UserPlus className="h-4 w-4" />
+        <div className="flex justify-end">
+          <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Plus className="h-4 w-4" />
                 Add Driver
-              </span>
-              <ChevronsUpDown className="h-4 w-4 opacity-50" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[300px] p-0" align="start">
-            <Command>
-              <CommandInput placeholder="Search drivers..." />
-              <CommandList>
-                <CommandEmpty>No drivers found.</CommandEmpty>
-                <CommandGroup>
-                  {availableDrivers.map((driver) => (
-                    <CommandItem
-                      key={driver.id}
-                      value={driver.full_name || driver.email}
-                      onSelect={() => handleAddDriver(driver)}
-                    >
-                      <div className="flex flex-col">
-                        <span>{driver.full_name || "No Name"}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {driver.email}
-                          {driver.phone && ` • ${driver.phone}`}
-                        </span>
-                      </div>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[300px] p-0" align="end">
+              <Command>
+                <CommandInput placeholder="Search drivers..." />
+                <CommandList>
+                  <CommandEmpty>No drivers found.</CommandEmpty>
+                  <CommandGroup>
+                    {availableDrivers.map((driver) => (
+                      <CommandItem
+                        key={driver.id}
+                        value={driver.full_name || driver.email}
+                        onSelect={() => handleAddDriver(driver)}
+                      >
+                        <div className="flex flex-col">
+                          <span>{driver.full_name || "No Name"}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {driver.email}
+                            {driver.phone && ` • ${driver.phone}`}
+                          </span>
+                        </div>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
       )}
 
       {/* No drivers message */}
       {assignments.length === 0 && (
-        <p className="text-sm text-muted-foreground italic text-center py-4">
-          No drivers assigned yet.
-        </p>
+        <div className="text-center py-6 border border-dashed rounded-lg">
+          <Truck className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+          <p className="text-sm text-muted-foreground">No drivers assigned yet.</p>
+          {isPreparing && canEdit && (
+            <p className="text-xs text-muted-foreground mt-1">Click "Add Driver" to assign tracking drivers.</p>
+          )}
+        </div>
       )}
 
-      {/* Driver Cards */}
-      <div className="space-y-3">
-        {assignments.map((assignment) => (
-          <div
-            key={assignment.driver_user_id}
-            className="rounded-lg border bg-muted/30 p-4 space-y-3"
-          >
-            {/* Driver Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Truck className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm">
-                    {assignment.driver.full_name || "No Name"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {assignment.driver.email}
-                  </p>
-                </div>
-              </div>
-              {isPreparing && canEdit && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                  onClick={() => handleRemoveDriver(assignment.driver_user_id)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-
-            {/* Plate Number */}
-            <div className="space-y-1">
-              <Label className="text-xs">Plate Number</Label>
-              {isPreparing && canEdit ? (
-                <Input
-                  placeholder="Enter plate number"
-                  value={assignment.plate_number}
-                  onChange={(e) =>
-                    handlePlateChange(assignment.driver_user_id, e.target.value)
-                  }
-                  className="h-9"
-                />
-              ) : (
-                <p className="text-sm font-medium">
-                  {assignment.plate_number || "Not set"}
-                </p>
-              )}
-            </div>
-
-            {/* Evidence */}
-            <div className="space-y-2">
-              <Label className="text-xs">Evidence Photos</Label>
-              
-              {/* Upload button (only in preparing) */}
-              {isPreparing && canEdit && (
-                <>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    ref={(el) => {
-                      fileInputRefs.current[assignment.driver_user_id] = el;
-                    }}
-                    onChange={(e) =>
-                      handleFileSelect(assignment.driver_user_id, e.target.files)
-                    }
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() =>
-                      fileInputRefs.current[assignment.driver_user_id]?.click()
-                    }
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Photos
-                  </Button>
-                </>
-              )}
-
-              {/* Evidence Thumbnails */}
-              {assignment.evidence.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {assignment.evidence.map((evidence, index) => (
-                    <div
-                      key={index}
-                      className="relative group"
-                    >
-                      <img
-                        src={evidence.file_url}
-                        alt={evidence.file_name}
-                        className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => {
-                          // Will trigger lightbox - handled by parent component
-                          const event = new CustomEvent("open-lightbox", {
-                            detail: {
-                              images: assignment.evidence.map((e) => ({
-                                url: e.file_url,
-                                name: e.file_name,
-                              })),
-                              startIndex: index,
-                            },
-                          });
-                          window.dispatchEvent(event);
-                        }}
-                      />
-                      {evidence.isUploading && (
-                        <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin text-white" />
+      {/* Driver Table - Desktop */}
+      {assignments.length > 0 && (
+        <>
+          {/* Desktop Table View */}
+          <div className="hidden md:block border rounded-lg overflow-hidden">
+            <ScrollArea className="w-full">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="min-w-[150px]">Driver</TableHead>
+                    <TableHead className="min-w-[120px]">Plate Number</TableHead>
+                    <TableHead className="min-w-[100px]">Evidence</TableHead>
+                    <TableHead className="min-w-[120px]">Added By</TableHead>
+                    <TableHead className="min-w-[150px]">Date/Time Added</TableHead>
+                    {isPreparing && canEdit && (
+                      <TableHead className="w-[80px] text-right">Actions</TableHead>
+                    )}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {assignments.map((assignment) => (
+                    <TableRow key={assignment.driver_user_id}>
+                      {/* Driver Column */}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Truck className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">
+                              {assignment.driver.full_name || "No Name"}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {assignment.driver.email}
+                            </p>
+                          </div>
                         </div>
-                      )}
+                      </TableCell>
+
+                      {/* Plate Number Column */}
+                      <TableCell>
+                        {isPreparing && canEdit ? (
+                          <Input
+                            placeholder="Enter plate #"
+                            value={assignment.plate_number}
+                            onChange={(e) =>
+                              handleFieldChange(assignment.driver_user_id, "plate_number", e.target.value)
+                            }
+                            className="h-8 text-sm"
+                          />
+                        ) : (
+                          <span className="font-mono text-sm">
+                            {assignment.plate_number || "—"}
+                          </span>
+                        )}
+                      </TableCell>
+
+                      {/* Evidence Column */}
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {assignment.evidence.length > 0 ? (
+                            <div className="flex -space-x-2">
+                              {assignment.evidence.slice(0, 3).map((evidence, index) => (
+                                <img
+                                  key={index}
+                                  src={evidence.file_url}
+                                  alt={evidence.file_name}
+                                  className="h-8 w-8 rounded border-2 border-background object-cover cursor-pointer hover:z-10 hover:scale-110 transition-transform"
+                                  onClick={() => {
+                                    const event = new CustomEvent("open-lightbox", {
+                                      detail: {
+                                        images: assignment.evidence.map((e) => ({
+                                          url: e.file_url,
+                                          name: e.file_name,
+                                        })),
+                                        startIndex: index,
+                                      },
+                                    });
+                                    window.dispatchEvent(event);
+                                  }}
+                                />
+                              ))}
+                              {assignment.evidence.length > 3 && (
+                                <div className="h-8 w-8 rounded border-2 border-background bg-muted flex items-center justify-center text-xs font-medium">
+                                  +{assignment.evidence.length - 3}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">None</span>
+                          )}
+                          
+                          {isPreparing && canEdit && (
+                            <>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                ref={(el) => {
+                                  fileInputRefs.current[assignment.driver_user_id] = el;
+                                }}
+                                onChange={(e) =>
+                                  handleFileSelect(assignment.driver_user_id, e.target.files)
+                                }
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() =>
+                                  fileInputRefs.current[assignment.driver_user_id]?.click()
+                                }
+                              >
+                                <Upload className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+
+                      {/* Added By Column */}
+                      <TableCell>
+                        <span className="text-sm truncate">
+                          {assignment.creator?.full_name || assignment.creator?.email || "—"}
+                        </span>
+                      </TableCell>
+
+                      {/* Date/Time Column */}
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {assignment.created_at ? formatManilaTime(assignment.created_at) : "—"}
+                        </span>
+                      </TableCell>
+
+                      {/* Actions Column */}
                       {isPreparing && canEdit && (
-                        <button
-                          className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleRemoveDriver(assignment.driver_user_id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </div>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden space-y-3">
+            {assignments.map((assignment) => (
+              <div
+                key={assignment.driver_user_id}
+                className="border rounded-lg p-4 space-y-3 bg-card"
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <Truck className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">
+                        {assignment.driver.full_name || "No Name"}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {assignment.driver.email}
+                      </p>
+                    </div>
+                  </div>
+                  {isPreparing && canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive flex-shrink-0"
+                      onClick={() => handleRemoveDriver(assignment.driver_user_id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {/* Fields */}
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Plate Number</p>
+                    {isPreparing && canEdit ? (
+                      <Input
+                        placeholder="Enter plate #"
+                        value={assignment.plate_number}
+                        onChange={(e) =>
+                          handleFieldChange(assignment.driver_user_id, "plate_number", e.target.value)
+                        }
+                        className="h-9"
+                      />
+                    ) : (
+                      <p className="font-mono">{assignment.plate_number || "—"}</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Added By</p>
+                    <p className="truncate">
+                      {assignment.creator?.full_name || assignment.creator?.email || "—"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Date */}
+                {assignment.created_at && (
+                  <p className="text-xs text-muted-foreground">
+                    Added: {formatManilaTime(assignment.created_at)}
+                  </p>
+                )}
+
+                {/* Evidence */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">Evidence Photos</p>
+                    {isPreparing && canEdit && (
+                      <>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          ref={(el) => {
+                            fileInputRefs.current[`mobile-${assignment.driver_user_id}`] = el;
+                          }}
+                          onChange={(e) =>
+                            handleFileSelect(assignment.driver_user_id, e.target.files)
+                          }
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
                           onClick={() =>
-                            handleRemoveEvidence(assignment.driver_user_id, index)
+                            fileInputRefs.current[`mobile-${assignment.driver_user_id}`]?.click()
                           }
                         >
-                          <X className="h-3 w-3" />
-                        </button>
-                      )}
+                          <Upload className="h-3 w-3 mr-1" />
+                          Upload
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  
+                  {assignment.evidence.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {assignment.evidence.map((evidence, index) => (
+                        <div
+                          key={index}
+                          className="relative group"
+                        >
+                          <img
+                            src={evidence.file_url}
+                            alt={evidence.file_name}
+                            className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => {
+                              const event = new CustomEvent("open-lightbox", {
+                                detail: {
+                                  images: assignment.evidence.map((e) => ({
+                                    url: e.file_url,
+                                    name: e.file_name,
+                                  })),
+                                  startIndex: index,
+                                },
+                              });
+                              window.dispatchEvent(event);
+                            }}
+                          />
+                          {evidence.isUploading && (
+                            <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
+                              <Loader2 className="h-4 w-4 animate-spin text-white" />
+                            </div>
+                          )}
+                          {isPreparing && canEdit && (
+                            <button
+                              className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() =>
+                                handleRemoveEvidence(assignment.driver_user_id, index)
+                              }
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">No evidence uploaded</p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">
-                  No evidence uploaded
-                </p>
-              )}
-            </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
-      {/* Save Button (only in preparing) */}
+      {/* Save Button */}
       {isPreparing && canEdit && assignments.length > 0 && (
         <Button
           className="w-full"
