@@ -6,8 +6,6 @@ import { logActivity } from "@/lib/activityLogger";
 import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Table,
   TableBody,
@@ -31,18 +29,13 @@ import {
 } from "@/components/ui/popover";
 import {
   Loader2,
-  UserPlus,
   X,
   Upload,
   Truck,
   Check,
-  ChevronsUpDown,
-  Pencil,
   Trash2,
   Plus,
-  Image as ImageIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface Driver {
   id: string;
@@ -100,7 +93,6 @@ export function TrackingAssignmentSection({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [driverSearchOpen, setDriverSearchOpen] = useState(false);
-  const [selectedDriverForAdd, setSelectedDriverForAdd] = useState<Driver | null>(null);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   const canEdit = !readOnly && (isSuperAdmin() || isAdmin() || canProcessLogistics());
@@ -233,7 +225,6 @@ export function TrackingAssignmentSection({
       },
     ]);
     setDriverSearchOpen(false);
-    setSelectedDriverForAdd(null);
   };
 
   const handleRemoveDriver = async (driverUserId: string) => {
@@ -509,12 +500,12 @@ export function TrackingAssignmentSection({
         </div>
       )}
 
-      {/* Driver Table - Desktop */}
+      {/* Driver Table - Desktop with horizontal scroll */}
       {assignments.length > 0 && (
         <>
           {/* Desktop Table View */}
           <div className="hidden md:block border rounded-lg overflow-hidden">
-            <ScrollArea className="w-full">
+            <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/50">
@@ -661,7 +652,7 @@ export function TrackingAssignmentSection({
                   ))}
                 </TableBody>
               </Table>
-            </ScrollArea>
+            </div>
           </div>
 
           {/* Mobile Card View */}
