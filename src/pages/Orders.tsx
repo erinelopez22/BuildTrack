@@ -242,21 +242,7 @@ export default function Orders() {
       render: (order) =>
         order.expected_delivery_date ? format(new Date(order.expected_delivery_date), "MMM d, yyyy") : "-",
     },
-    {
-      key: "total",
-      header: (
-        <button
-          className="flex items-center gap-1 hover:text-primary transition-colors"
-          onClick={() => handleSort("total_amount")}
-        >
-          Amount
-          {getSortIcon("total_amount")}
-        </button>
-      ) as unknown as string,
-      render: (order) =>
-        order.total_amount ? `₱${order.total_amount.toLocaleString("en-PH", { minimumFractionDigits: 2 })}` : "-",
-      className: "text-right",
-    },
+
     {
       key: "created",
       header: (
