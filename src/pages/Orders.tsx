@@ -172,7 +172,8 @@ export default function Orders() {
       } else {
         matchesStatus = order.status === statusFilter;
       }
-
+      console.log(matchesSearch);
+      console.log(matchesStatus);
       return matchesSearch && matchesStatus;
     });
 
