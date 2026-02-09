@@ -72,6 +72,8 @@ export default function Orders() {
   }, [statusFilter, searchParams, setSearchParams]);
 
   const fetchData = async () => {
+    console.log(ordersData);
+
     // Fetch all orders with project info, including closed orders
     const { data: ordersData } = await supabase
       .from("orders")
