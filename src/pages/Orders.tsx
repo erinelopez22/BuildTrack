@@ -88,7 +88,7 @@ export default function Orders() {
         "closed",
       ])
       .order("created_at", { ascending: false });
-    console.log(ordersData);
+
     // Filter to only show orders from active projects
     const activeProjectOrders = (ordersData || []).filter((order: any) => order.project?.status === "active");
 
@@ -172,8 +172,7 @@ export default function Orders() {
       } else {
         matchesStatus = order.status === statusFilter;
       }
-      console.log(matchesSearch);
-      console.log(matchesStatus);
+
       return matchesSearch && matchesStatus;
     });
 
