@@ -116,16 +116,9 @@ export function OrderCard({ order, onClick, onQuickAction, showHoverActions = tr
             </p>
 
             {/* Supplier */}
-            {order.supplier_name && (
-              <p className="text-xs text-muted-foreground truncate">
-                {order.supplier_name}
-              </p>
-            )}
-            {!order.supplier_name && (
-              <p className="text-xs text-muted-foreground/60 italic">
-                No supplier
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground truncate">
+              {order.supplier_name?.trim() || 'Warehouse'}
+            </p>
           </div>
         </CardContent>
       </Card>

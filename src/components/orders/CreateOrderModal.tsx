@@ -57,6 +57,7 @@ interface CreateOrderModalProps {
     materials: { materialId: string; name: string; unit: string; quantity: number }[];
     expectedDeliveryDate: Date | null;
     notes: string;
+    supplierName: string;
   }) => Promise<void>;
   isSubmitting: boolean;
   onAddQuotation?: () => void;
@@ -81,6 +82,7 @@ export function CreateOrderModal({
   const [hasQuotation, setHasQuotation] = useState(false);
   const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<Date | undefined>();
   const [notes, setNotes] = useState('');
+  const [supplierName, setSupplierName] = useState('Warehouse');
   const [errors, setErrors] = useState<{ materials?: string; notes?: string }>({});
 
   // Calculate remaining allowed quantity for a material
@@ -346,6 +348,7 @@ export function CreateOrderModal({
       materials: validatedMaterials,
       expectedDeliveryDate: expectedDeliveryDate || null,
       notes: notes.trim(),
+      supplierName: supplierName.trim() || 'Warehouse',
     });
 
     // Reset form on successful submission
@@ -356,6 +359,7 @@ export function CreateOrderModal({
     setMaterials([{ id: crypto.randomUUID(), materialId: '', materialName: '', unit: '', quantity: 1 }]);
     setExpectedDeliveryDate(undefined);
     setNotes('');
+    setSupplierName('Warehouse');
     setErrors({});
   };
 
@@ -533,6 +537,17 @@ export function CreateOrderModal({
               {errors.materials && (
                 <p className="text-sm text-destructive">{errors.materials}</p>
               )}
+            </div>
+
+            {/* Supplier Name */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Supplier Name</Label>
+              <Input
+                placeholder="Warehouse"
+                value={supplierName}
+                onChange={(e) => setSupplierName(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Defaults to "Warehouse" if left empty</p>
             </div>
 
             {/* Expected Delivery Date */}

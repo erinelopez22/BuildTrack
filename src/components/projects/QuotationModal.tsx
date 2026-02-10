@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock } from "lucide-react";
+import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -18,6 +18,19 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Tooltip,
   TooltipContent,
@@ -104,6 +117,25 @@ export function QuotationModal({
 
   // Track material usage in orders for validation
   const [materialOrderUsage, setMaterialOrderUsage] = useState<Map<string, MaterialOrderUsage>>(new Map());
+
+  // SKU catalogue suggestions
+  const [skuCatalogue, setSkuCatalogue] = useState<{ id: string; name: string; unit: string; sku_code: string }[]>([]);
+  const [skuPopoverOpen, setSkuPopoverOpen] = useState<string | null>(null);
+
+  // Fetch SKU catalogue
+  useEffect(() => {
+    const fetchSKUs = async () => {
+      const { data } = await supabase
+        .from("skus")
+        .select("id, name, unit_of_measure, sku_code")
+        .eq("is_active", true)
+        .order("name");
+      if (data) {
+        setSkuCatalogue(data.map(s => ({ id: s.id, name: s.name, unit: s.unit_of_measure, sku_code: s.sku_code })));
+      }
+    };
+    if (open) fetchSKUs();
+  }, [open]);
 
   // Check if user can delete quotation (Project Engineer, Admin, Super Admin)
   useEffect(() => {
@@ -863,12 +895,89 @@ export function QuotationModal({
                     <div key={item.id} className="space-y-1">
                       <div className="flex gap-2 items-center p-2 border rounded-lg bg-card">
                         <div className="flex-1">
-                          <Input
-                            placeholder="Material name"
-                            value={item.material_name}
-                            onChange={(e) => updateItem(item.id, "material_name", e.target.value)}
-                            disabled={!isEditMode}
-                          />
+                          {isEditMode ? (
+                            <Popover
+                              open={skuPopoverOpen === item.id}
+                              onOpenChange={(open) => setSkuPopoverOpen(open ? item.id : null)}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  className="w-full justify-between font-normal h-9 text-left"
+                                >
+                                  <span className={item.material_name ? "" : "text-muted-foreground"}>
+                                    {item.material_name || "Search or type material..."}
+                                  </span>
+                                  <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-[300px] p-0" align="start">
+                                <Command>
+                                  <CommandInput
+                                    placeholder="Search SKU catalogue..."
+                                    onValueChange={(val) => {
+                                      // Allow typing custom value
+                                    }}
+                                  />
+                                  <CommandList>
+                                    <CommandEmpty>
+                                      <button
+                                        type="button"
+                                        className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded cursor-pointer"
+                                        onClick={() => {
+                                          setSkuPopoverOpen(null);
+                                        }}
+                                      >
+                                        Use custom material name
+                                      </button>
+                                    </CommandEmpty>
+                                    <CommandGroup heading="SKU Catalogue">
+                                      {skuCatalogue.map((sku) => (
+                                        <CommandItem
+                                          key={sku.id}
+                                          value={`${sku.name} ${sku.sku_code}`}
+                                          onSelect={() => {
+                                            updateItem(item.id, "material_name", sku.name);
+                                            updateItem(item.id, "unit", sku.unit);
+                                            setSkuPopoverOpen(null);
+                                          }}
+                                        >
+                                          <div className="flex flex-col">
+                                            <span className="font-medium">{sku.name}</span>
+                                            <span className="text-xs text-muted-foreground">
+                                              {sku.sku_code} • {sku.unit}
+                                            </span>
+                                          </div>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                                {/* Custom entry input */}
+                                <div className="border-t p-2">
+                                  <Input
+                                    placeholder="Or type custom name..."
+                                    value={item.material_name}
+                                    onChange={(e) => updateItem(item.id, "material_name", e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        setSkuPopoverOpen(null);
+                                      }
+                                    }}
+                                    className="h-8 text-sm"
+                                  />
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          ) : (
+                            <Input
+                              placeholder="Material name"
+                              value={item.material_name}
+                              disabled
+                            />
+                          )}
                         </div>
                         <div className="w-20">
                           <Input
