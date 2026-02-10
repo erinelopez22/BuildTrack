@@ -413,7 +413,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                         <Building2 className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                         <div className="min-w-0">
                           <p className="text-sm text-muted-foreground">Supplier</p>
-                          <p className="font-medium truncate">{order.supplier_name || "Not specified"}</p>
+                          <p className="font-medium truncate">{order.supplier_name?.trim() || "Warehouse"}</p>
                           {order.supplier_contact && (
                             <p className="text-sm text-muted-foreground truncate">{order.supplier_contact}</p>
                           )}
