@@ -1,18 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import {
-  Plus,
-  Trash2,
-  Loader2,
-  Clock,
-  Package,
-  Pencil,
-  CheckCircle2,
-  AlertCircle,
-  AlertTriangle,
-  Lock,
-  ChevronsUpDown,
-} from "lucide-react";
+import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock, ChevronsUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -30,9 +18,25 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -127,7 +131,7 @@ export function QuotationModal({
         .eq("is_active", true)
         .order("name");
       if (data) {
-        setSkuCatalogue(data.map((s) => ({ id: s.id, name: s.name, unit: s.unit_of_measure, sku_code: s.sku_code })));
+        setSkuCatalogue(data.map(s => ({ id: s.id, name: s.name, unit: s.unit_of_measure, sku_code: s.sku_code })));
       }
     };
     if (open) fetchSKUs();
@@ -205,7 +209,7 @@ export function QuotationModal({
 
         // Fetch delivered materials progress
         await fetchDeliveredMaterials(quotationData.id, itemsData || []);
-
+        
         // Fetch material order usage for validation
         await fetchMaterialOrderUsage(itemsData || []);
       } else {
@@ -264,22 +268,21 @@ export function QuotationModal({
       const receivedClosedOrderIds = orders
         .filter((o) => o.status === "delivered" || o.status === "closed")
         .map((o) => o.id);
-      const activeOrderIds = orders.filter((o) => o.status !== "delivered" && o.status !== "closed").map((o) => o.id);
+      const activeOrderIds = orders
+        .filter((o) => o.status !== "delivered" && o.status !== "closed")
+        .map((o) => o.id);
 
       // Get order items for all orders
       const { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
         .select("quotation_item_id, quantity_ordered, quantity_received, order_id")
-        .in(
-          "order_id",
-          orders.map((o) => o.id),
-        );
+        .in("order_id", orders.map((o) => o.id));
 
       if (itemsError) throw itemsError;
 
       // Build usage map
       const usageMap = new Map<string, MaterialOrderUsage>();
-
+      
       quotationItems.forEach((qItem) => {
         let orderedQty = 0;
         let receivedClosedQty = 0;
@@ -288,7 +291,7 @@ export function QuotationModal({
         orderItems?.forEach((oi) => {
           if (oi.quotation_item_id === qItem.id) {
             isUsedInOrders = true;
-
+            
             if (receivedClosedOrderIds.includes(oi.order_id)) {
               // For received/closed orders, use quantity_received
               receivedClosedQty += oi.quantity_received ?? 0;
@@ -453,46 +456,37 @@ export function QuotationModal({
     setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
-  // Check for duplicate material+unit within the quotation
-  const hasDuplicateMaterialUnit = (): { hasDup: boolean; dupName?: string } => {
-    const seen = new Set<string>();
-    for (const item of items) {
-      const name = normalizeMaterialName(item.material_name);
-      const unit = item.unit.trim().toUpperCase();
-      if (!name) continue;
-      const key = `${name}|||${unit}`;
-      if (seen.has(key)) {
-        return { hasDup: true, dupName: name };
-      }
-      seen.add(key);
-    }
-    return { hasDup: false };
-  };
-
   // Merge duplicates and normalize material names before save
-  const consolidateItems = (): QuotationItem[] | null => {
-    // First check for duplicate name+unit combos
-    const { hasDup, dupName } = hasDuplicateMaterialUnit();
-    if (hasDup) {
-      toast({
-        title: "Duplicate material",
-        description: `Duplicate material is not allowed in the quotation: ${dupName}`,
-        variant: "destructive",
-      });
-      return null;
-    }
-
+  const consolidateItems = (): QuotationItem[] => {
     const consolidated: Map<string, QuotationItem> = new Map();
+    const mergedMaterials: string[] = [];
 
     items.forEach((item) => {
       const normalizedName = normalizeMaterialName(item.material_name);
-      if (!normalizedName) return;
+      if (!normalizedName) return; // Skip empty names
 
-      consolidated.set(normalizedName, {
-        ...item,
-        material_name: normalizedName,
-      });
+      if (consolidated.has(normalizedName)) {
+        // Merge quantity into existing item
+        const existing = consolidated.get(normalizedName)!;
+        existing.quantity += item.quantity || 0;
+        mergedMaterials.push(normalizedName);
+      } else {
+        // Add new consolidated item
+        consolidated.set(normalizedName, {
+          ...item,
+          material_name: normalizedName,
+        });
+      }
     });
+
+    // Show toast for merged materials
+    if (mergedMaterials.length > 0) {
+      const uniqueMerged = [...new Set(mergedMaterials)];
+      toast({
+        title: "Materials Merged",
+        description: `${uniqueMerged.join(", ")} already exists — quantity added to existing item.`,
+      });
+    }
 
     return Array.from(consolidated.values());
   };
@@ -500,9 +494,8 @@ export function QuotationModal({
   const handleSave = async () => {
     if (!user) return;
 
-    // First consolidate and normalize items (check duplicates)
+    // First consolidate and normalize items (merge duplicates)
     const consolidatedItems = consolidateItems();
-    if (!consolidatedItems) return; // duplicate detected
 
     // Validate - check if we have at least one valid item
     if (consolidatedItems.length === 0) {
@@ -580,10 +573,11 @@ export function QuotationModal({
         // Process consolidated items - update existing, insert new
         for (const item of consolidatedItems) {
           const normalizedName = normalizeMaterialName(item.material_name);
-
+          
           // Check if this item exists (by ID or by normalized name)
-          const existingId =
-            item.id && existingItems?.find((ei) => ei.id === item.id) ? item.id : existingItemMap.get(normalizedName);
+          const existingId = item.id && existingItems?.find((ei) => ei.id === item.id)
+            ? item.id
+            : existingItemMap.get(normalizedName);
 
           if (existingId) {
             // Update existing item
@@ -610,11 +604,11 @@ export function QuotationModal({
         // Delete items that are no longer in the list (only if not used in orders)
         const consolidatedIds = consolidatedItems.map((ci) => ci.id);
         const consolidatedNames = consolidatedItems.map((ci) => normalizeMaterialName(ci.material_name));
-
+        
         for (const existingItem of existingItems || []) {
-          const isInConsolidated =
-            consolidatedIds.includes(existingItem.id) || consolidatedNames.includes(existingItem.material_name);
-
+          const isInConsolidated = consolidatedIds.includes(existingItem.id) || 
+            consolidatedNames.includes(existingItem.material_name);
+          
           if (!isInConsolidated) {
             // Check if we can delete this item
             const usage = materialOrderUsage.get(existingItem.id);
@@ -950,7 +944,7 @@ export function QuotationModal({
                                           }}
                                         >
                                           <div className="flex flex-col">
-                                            <span className="font-medium uppercase">{sku.name}</span>
+                                            <span className="font-medium">{sku.name}</span>
                                             <span className="text-xs text-muted-foreground">
                                               {sku.sku_code} • {sku.unit}
                                             </span>
@@ -965,13 +959,24 @@ export function QuotationModal({
                                   <Input
                                     placeholder="Or type custom name..."
                                     value={item.material_name}
+                                    onChange={(e) => updateItem(item.id, "material_name", e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") {
+                                        e.preventDefault();
+                                        setSkuPopoverOpen(null);
+                                      }
+                                    }}
                                     className="h-8 text-sm"
                                   />
                                 </div>
                               </PopoverContent>
                             </Popover>
                           ) : (
-                            <Input placeholder="Material name" value={item.material_name} disabled />
+                            <Input
+                              placeholder="Material name"
+                              value={item.material_name}
+                              disabled
+                            />
                           )}
                         </div>
                         <div className="w-20">
@@ -1025,8 +1030,7 @@ export function QuotationModal({
                       {/* Show minimum quantity hint for materials used in orders */}
                       {isEditMode && isUsedInOrders && minAllowedQty > 0 && (
                         <p className="text-xs text-muted-foreground pl-2">
-                          Min qty: {minAllowedQty} (Ordered: {usage?.orderedQty || 0}, Received:{" "}
-                          {usage?.receivedClosedQty || 0})
+                          Min qty: {minAllowedQty} (Ordered: {usage?.orderedQty || 0}, Received: {usage?.receivedClosedQty || 0})
                         </p>
                       )}
                     </div>
