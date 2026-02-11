@@ -904,88 +904,65 @@ export function QuotationModal({
                   return (
                     <div key={item.id} className="space-y-1">
                       <div className="flex gap-2 items-center p-2 border rounded-lg bg-card">
-                        <div className="flex-1">
+                      <div className="flex-1 flex gap-1 items-center">
                           {isEditMode ? (
-                            <Popover
-                              open={skuPopoverOpen === item.id}
-                              onOpenChange={(open) => setSkuPopoverOpen(open ? item.id : null)}
-                            >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  className="w-full justify-between font-normal h-9 text-left"
-                                >
-                                  <span className={item.material_name ? "" : "text-muted-foreground"}>
-                                    {item.material_name || "Search or type material..."}
-                                  </span>
-                                  <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[300px] p-0" align="start">
-                                <Command>
-                                  <CommandInput
-                                    placeholder="Search SKU catalogue..."
-                                    onValueChange={(val) => {
-                                      // Allow typing custom value
-                                    }}
-                                  />
-                                  <CommandList>
-                                    <CommandEmpty>
-                                      <button
-                                        type="button"
-                                        className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded cursor-pointer"
-                                        onClick={() => {
-                                          setSkuPopoverOpen(null);
-                                        }}
-                                      >
-                                        Use custom material name
-                                      </button>
-                                    </CommandEmpty>
-                                    <CommandGroup heading="SKU Catalogue">
-                                      {skuCatalogue.map((sku) => (
-                                        <CommandItem
-                                          key={sku.id}
-                                          value={`${sku.name} ${sku.sku_code}`}
-                                          onSelect={() => {
-                                            updateItem(item.id, "material_name", sku.name);
-                                            updateItem(item.id, "unit", sku.unit);
-                                            setSkuPopoverOpen(null);
-                                          }}
-                                        >
-                                          <div className="flex flex-col">
-                                            <span className="font-medium uppercase">{sku.name}</span>
-                                            <span className="text-xs text-muted-foreground">
-                                              {sku.sku_code} • {sku.unit}
-                                            </span>
-                                          </div>
-                                        </CommandItem>
-                                      ))}
-                                    </CommandGroup>
-                                  </CommandList>
-                                </Command>
-                                {/* Custom entry input */}
-                                <div className="border-t p-2">
-                                  <Input
-                                    placeholder="Or type custom name..."
-                                    value={item.material_name}
-                                    onChange={(e) => updateItem(item.id, "material_name", e.target.value.toUpperCase())}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        setSkuPopoverOpen(null);
-                                      }
-                                    }}
-                                    className="h-8 text-sm"
-                                  />
-                                </div>
-                              </PopoverContent>
-                            </Popover>
+                            <>
+                              <Input
+                                placeholder="Material name"
+                                value={item.material_name}
+                                onChange={(e) => updateItem(item.id, "material_name", e.target.value)}
+                                className="h-9 flex-1 uppercase"
+                              />
+                              <Popover
+                                open={skuPopoverOpen === item.id}
+                                onOpenChange={(open) => setSkuPopoverOpen(open ? item.id : null)}
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className="h-9 w-9 shrink-0"
+                                    title="Pick from SKU Catalogue"
+                                  >
+                                    <ChevronsUpDown className="h-3.5 w-3.5 opacity-60" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[300px] p-0" align="end">
+                                  <Command>
+                                    <CommandInput placeholder="Search SKU catalogue..." />
+                                    <CommandList>
+                                      <CommandEmpty>No matching SKU found.</CommandEmpty>
+                                      <CommandGroup heading="SKU Catalogue">
+                                        {skuCatalogue.map((sku) => (
+                                          <CommandItem
+                                            key={sku.id}
+                                            value={`${sku.name} ${sku.sku_code}`}
+                                            onSelect={() => {
+                                              updateItem(item.id, "material_name", sku.name.toUpperCase());
+                                              updateItem(item.id, "unit", sku.unit);
+                                              setSkuPopoverOpen(null);
+                                            }}
+                                          >
+                                            <div className="flex flex-col">
+                                              <span className="font-medium uppercase">{sku.name}</span>
+                                              <span className="text-xs text-muted-foreground">
+                                                {sku.sku_code} • {sku.unit}
+                                              </span>
+                                            </div>
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                            </>
                           ) : (
                             <Input
                               placeholder="Material name"
                               value={item.material_name}
                               disabled
+                              className="uppercase"
                             />
                           )}
                         </div>
