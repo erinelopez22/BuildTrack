@@ -478,48 +478,51 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         </div>
       </div>
 
-      {/* Separated Section for On-hold and Rejected */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-        {SPECIAL_STATUS_LANES.map((lane) => {
-          const laneOrders = getOrdersForLane(lane.key);
-          return (
-            <div key={lane.key} className={`rounded-xl border-2 ${lane.color} p-4`}>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  {lane.icon === "hold" ? (
-                    <div className="p-1.5 rounded-lg bg-amber-500/20">
-                      <Loader2 className="h-4 w-4 text-amber-600" />
-                    </div>
-                  ) : (
-                    <div className="p-1.5 rounded-lg bg-destructive/20">
-                      <XCircle className="h-4 w-4 text-destructive" />
-                    </div>
-                  )}
-                  <h3 className="font-semibold text-foreground">{lane.label}</h3>
+      {/* Exceptions Section — On-Hold & Rejected (Vertical Stack) */}
+      <div className="space-y-2 mt-6">
+        <h3 className="text-sm font-medium text-muted-foreground px-1">Exceptions</h3>
+        <div className="flex flex-col gap-4">
+          {SPECIAL_STATUS_LANES.map((lane) => {
+            const laneOrders = getOrdersForLane(lane.key);
+            return (
+              <div key={lane.key} className={`rounded-xl border-2 ${lane.color} p-4`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    {lane.icon === "hold" ? (
+                      <div className="p-1.5 rounded-lg bg-amber-500/20">
+                        <Loader2 className="h-4 w-4 text-amber-600" />
+                      </div>
+                    ) : (
+                      <div className="p-1.5 rounded-lg bg-destructive/20">
+                        <XCircle className="h-4 w-4 text-destructive" />
+                      </div>
+                    )}
+                    <h3 className="font-semibold text-foreground">{lane.label}</h3>
+                  </div>
+                  <span className="text-sm text-muted-foreground bg-background/80 px-2.5 py-1 rounded-full">
+                    {laneOrders.length} {laneOrders.length === 1 ? "order" : "orders"}
+                  </span>
                 </div>
-                <span className="text-sm text-muted-foreground bg-background/80 px-2.5 py-1 rounded-full">
-                  {laneOrders.length} {laneOrders.length === 1 ? "order" : "orders"}
-                </span>
-              </div>
 
-              {laneOrders.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">No {lane.label.toLowerCase()} orders</p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {laneOrders.map((order) => (
-                    <OrderCard
-                      key={order.id}
-                      order={order}
-                      onClick={() => setSelectedOrderId(order.id)}
-                      onQuickAction={(action) => handleQuickAction(order, action)}
-                      showHoverActions={lane.key === "on_hold"} // Only show for on_hold, not rejected
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
+                {laneOrders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No {lane.label.toLowerCase()} orders</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+                    {laneOrders.map((order) => (
+                      <OrderCard
+                        key={order.id}
+                        order={order}
+                        onClick={() => setSelectedOrderId(order.id)}
+                        onQuickAction={(action) => handleQuickAction(order, action)}
+                        showHoverActions={lane.key === "on_hold"}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Create Order Modal */}

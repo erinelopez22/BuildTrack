@@ -456,37 +456,46 @@ export function QuotationModal({
     setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
+  // Check for duplicate material+unit within the quotation
+  const hasDuplicateMaterialUnit = (): { hasDup: boolean; dupName?: string } => {
+    const seen = new Set<string>();
+    for (const item of items) {
+      const name = normalizeMaterialName(item.material_name);
+      const unit = item.unit.trim().toUpperCase();
+      if (!name) continue;
+      const key = `${name}|||${unit}`;
+      if (seen.has(key)) {
+        return { hasDup: true, dupName: name };
+      }
+      seen.add(key);
+    }
+    return { hasDup: false };
+  };
+
   // Merge duplicates and normalize material names before save
-  const consolidateItems = (): QuotationItem[] => {
+  const consolidateItems = (): QuotationItem[] | null => {
+    // First check for duplicate name+unit combos
+    const { hasDup, dupName } = hasDuplicateMaterialUnit();
+    if (hasDup) {
+      toast({
+        title: "Duplicate material",
+        description: `Duplicate material is not allowed in the quotation: ${dupName}`,
+        variant: "destructive",
+      });
+      return null;
+    }
+
     const consolidated: Map<string, QuotationItem> = new Map();
-    const mergedMaterials: string[] = [];
 
     items.forEach((item) => {
       const normalizedName = normalizeMaterialName(item.material_name);
-      if (!normalizedName) return; // Skip empty names
+      if (!normalizedName) return;
 
-      if (consolidated.has(normalizedName)) {
-        // Merge quantity into existing item
-        const existing = consolidated.get(normalizedName)!;
-        existing.quantity += item.quantity || 0;
-        mergedMaterials.push(normalizedName);
-      } else {
-        // Add new consolidated item
-        consolidated.set(normalizedName, {
-          ...item,
-          material_name: normalizedName,
-        });
-      }
-    });
-
-    // Show toast for merged materials
-    if (mergedMaterials.length > 0) {
-      const uniqueMerged = [...new Set(mergedMaterials)];
-      toast({
-        title: "Materials Merged",
-        description: `${uniqueMerged.join(", ")} already exists — quantity added to existing item.`,
+      consolidated.set(normalizedName, {
+        ...item,
+        material_name: normalizedName,
       });
-    }
+    });
 
     return Array.from(consolidated.values());
   };
@@ -494,8 +503,9 @@ export function QuotationModal({
   const handleSave = async () => {
     if (!user) return;
 
-    // First consolidate and normalize items (merge duplicates)
+    // First consolidate and normalize items (check duplicates)
     const consolidatedItems = consolidateItems();
+    if (!consolidatedItems) return; // duplicate detected
 
     // Validate - check if we have at least one valid item
     if (consolidatedItems.length === 0) {
@@ -944,7 +954,7 @@ export function QuotationModal({
                                           }}
                                         >
                                           <div className="flex flex-col">
-                                            <span className="font-medium">{sku.name}</span>
+                                            <span className="font-medium uppercase">{sku.name}</span>
                                             <span className="text-xs text-muted-foreground">
                                               {sku.sku_code} • {sku.unit}
                                             </span>
@@ -959,7 +969,7 @@ export function QuotationModal({
                                   <Input
                                     placeholder="Or type custom name..."
                                     value={item.material_name}
-                                    onChange={(e) => updateItem(item.id, "material_name", e.target.value)}
+                                    onChange={(e) => updateItem(item.id, "material_name", e.target.value.toUpperCase())}
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter") {
                                         e.preventDefault();
