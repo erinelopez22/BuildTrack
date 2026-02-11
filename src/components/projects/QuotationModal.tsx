@@ -434,6 +434,7 @@ export function QuotationModal({
     if (field === "material_name" && typeof value === "string") {
       // Auto-convert to uppercase while typing
       value = value.toUpperCase();
+      console.log(value.toUpperCase() + "1");
     }
 
     // Handle quantity validation
