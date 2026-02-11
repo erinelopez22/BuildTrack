@@ -965,12 +965,6 @@ export function QuotationModal({
                                   <Input
                                     placeholder="Or type custom name..."
                                     value={item.material_name}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        setSkuPopoverOpen(null);
-                                      }
-                                    }}
                                     className="h-8 text-sm"
                                   />
                                 </div>
