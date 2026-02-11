@@ -106,7 +106,6 @@ export function QuotationModal({
   const [notes, setNotes] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
   const [creatorName, setCreatorName] = useState<string>("");
-  const [Material_Name, setMaterial_Name] = useState<string>("");
   const [canDelete, setCanDelete] = useState(false);
 
   // Delivery progress tracking (for progress bars only)
@@ -435,7 +434,6 @@ export function QuotationModal({
     if (field === "material_name" && typeof value === "string") {
       // Auto-convert to uppercase while typing
       value = value.toUpperCase();
-      setMaterial_Name(value);
     }
 
     // Handle quantity validation
@@ -966,7 +964,7 @@ export function QuotationModal({
                                 <div className="border-t p-2">
                                   <Input
                                     placeholder="Or type custom name..."
-                                    value={Material_Name}
+                                    value={item.material_name}
                                     onKeyDown={(e) => {
                                       if (e.key === "Enter") {
                                         e.preventDefault();
