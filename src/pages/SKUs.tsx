@@ -80,6 +80,7 @@ export default function SKUs() {
   const [formCustomUnit, setFormCustomUnit] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formStatus, setFormStatus] = useState<'active' | 'inactive'>('active');
+  const [formError, setFormError] = useState<string | null>(null);
 
   const fetchSKUs = async () => {
     const { data, error } = await supabase
@@ -145,8 +146,28 @@ export default function SKUs() {
     setModalMode('view');
   };
 
+  const checkDuplicate = async (name: string, unit: string, excludeId?: string): Promise<boolean> => {
+    const normalizedName = name.trim().toUpperCase();
+    const normalizedUnit = unit.trim().toUpperCase();
+    
+    let query = supabase
+      .from('skus')
+      .select('id')
+      .ilike('name', normalizedName)
+      .ilike('unit_of_measure', normalizedUnit)
+      .limit(1);
+    
+    if (excludeId) {
+      query = query.neq('id', excludeId);
+    }
+    
+    const { data } = await query;
+    return (data && data.length > 0) || false;
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     if (!formName.trim()) return;
 
     const unit = formUnit === 'custom' ? formCustomUnit.trim() : formUnit;
@@ -155,13 +176,24 @@ export default function SKUs() {
       return;
     }
 
+    const normalizedName = formName.trim().toUpperCase();
+    const normalizedUnit = unit.trim().toUpperCase();
+
     setSaving(true);
+
+    // Check for duplicates
+    const isDuplicate = await checkDuplicate(normalizedName, normalizedUnit, modalMode === 'edit' ? selectedSku?.id : undefined);
+    if (isDuplicate) {
+      setFormError('Material already exists with the same unit.');
+      setSaving(false);
+      return;
+    }
 
     if (modalMode === 'add') {
       const { error } = await supabase.from('skus').insert({
-        name: formName.trim(),
+        name: normalizedName,
         sku_code: '',
-        unit_of_measure: unit,
+        unit_of_measure: normalizedUnit,
         description: formDescription.trim() || null,
         is_active: true,
         created_by: user?.id,
@@ -178,8 +210,8 @@ export default function SKUs() {
       const { error } = await supabase
         .from('skus')
         .update({
-          name: formName.trim(),
-          unit_of_measure: unit,
+          name: normalizedName,
+          unit_of_measure: normalizedUnit,
           description: formDescription.trim() || null,
           is_active: formStatus === 'active',
         })
@@ -327,10 +359,14 @@ export default function SKUs() {
                 </Label>
                 <Input
                   value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="e.g., Portland Cement"
+                  onChange={(e) => { setFormName(e.target.value.toUpperCase()); setFormError(null); }}
+                  placeholder="e.g., PORTLAND CEMENT"
                   required
+                  style={{ textTransform: 'uppercase' }}
                 />
+                {formError && (
+                  <p className="text-sm text-destructive">{formError}</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -487,7 +523,7 @@ export default function SKUs() {
                   <TableCell className="font-mono text-xs">{sku.sku_code}</TableCell>
                   <TableCell>
                     <div>
-                      <p className="font-medium">{sku.name}</p>
+                      <p className="font-medium uppercase">{sku.name}</p>
                       {sku.description && (
                         <p className="text-xs text-muted-foreground line-clamp-1">{sku.description}</p>
                       )}
