@@ -449,7 +449,7 @@ export function QuotationModal({
         value = minAllowed;
       }
     }
-
+    console.log(value.toUpperCase());
     setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
   };
 
