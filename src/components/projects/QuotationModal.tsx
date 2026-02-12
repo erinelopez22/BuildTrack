@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock, ChevronsUpDown } from "lucide-react";
+import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -19,19 +19,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -49,6 +36,7 @@ interface QuotationItem {
   unit: string;
   quantity: number;
   received_quantity?: number;
+  duplicateError?: string;
 }
 
 interface Quotation {
@@ -120,7 +108,8 @@ export function QuotationModal({
 
   // SKU catalogue suggestions
   const [skuCatalogue, setSkuCatalogue] = useState<{ id: string; name: string; unit: string; sku_code: string }[]>([]);
-  const [skuPopoverOpen, setSkuPopoverOpen] = useState<string | null>(null);
+  const [activeAutocomplete, setActiveAutocomplete] = useState<string | null>(null);
+  const [autocompleteFilter, setAutocompleteFilter] = useState('');
 
   // Fetch SKU catalogue
   useEffect(() => {
@@ -402,6 +391,14 @@ export function QuotationModal({
     return name.trim().toUpperCase();
   };
 
+  // Close autocomplete on click outside
+  useEffect(() => {
+    if (!activeAutocomplete) return;
+    const handler = () => setActiveAutocomplete(null);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, [activeAutocomplete]);
+
   const addItem = () => {
     setItems([...items, { id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
   };
@@ -435,7 +432,7 @@ export function QuotationModal({
 
   const updateItem = (id: string, field: keyof QuotationItem, value: string | number) => {
     if (field === "material_name" && typeof value === "string") {
-      // Auto-convert to uppercase while typing
+      // Auto-convert to uppercase, normalize spaces
       value = value.toUpperCase();
     }
 
@@ -453,10 +450,32 @@ export function QuotationModal({
       }
     }
 
-    setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+    setItems((prev) => {
+      const updated = prev.map((item) => (item.id === id ? { ...item, [field]: value, duplicateError: undefined } : item));
+      
+      // Check for duplicate material+unit within the quotation
+      if (field === "material_name" || field === "unit") {
+        return updated.map((item) => {
+          const normalizedName = normalizeMaterialName(item.material_name);
+          if (!normalizedName) return { ...item, duplicateError: undefined };
+          const normalizedUnit = item.unit.trim().toUpperCase();
+          const isDuplicate = updated.some(
+            (other) =>
+              other.id !== item.id &&
+              normalizeMaterialName(other.material_name) === normalizedName &&
+              other.unit.trim().toUpperCase() === normalizedUnit
+          );
+          return {
+            ...item,
+            duplicateError: isDuplicate ? "This material and unit is already added in the quotation." : undefined,
+          };
+        });
+      }
+      return updated;
+    });
   };
 
-  // Merge duplicates and normalize material names before save
+  // Merge duplicates by name+unit and normalize material names before save
   const consolidateItems = (): QuotationItem[] => {
     const consolidated: Map<string, QuotationItem> = new Map();
     const mergedMaterials: string[] = [];
@@ -465,14 +484,16 @@ export function QuotationModal({
       const normalizedName = normalizeMaterialName(item.material_name);
       if (!normalizedName) return; // Skip empty names
 
-      if (consolidated.has(normalizedName)) {
+      const key = `${normalizedName}||${item.unit.trim().toUpperCase()}`;
+
+      if (consolidated.has(key)) {
         // Merge quantity into existing item
-        const existing = consolidated.get(normalizedName)!;
+        const existing = consolidated.get(key)!;
         existing.quantity += item.quantity || 0;
         mergedMaterials.push(normalizedName);
       } else {
         // Add new consolidated item
-        consolidated.set(normalizedName, {
+        consolidated.set(key, {
           ...item,
           material_name: normalizedName,
         });
@@ -894,88 +915,79 @@ export function QuotationModal({
                   return (
                     <div key={item.id} className="space-y-1">
                       <div className="flex gap-2 items-center p-2 border rounded-lg bg-card">
-                        <div className="flex-1">
+                        <div className="flex-1 relative">
                           {isEditMode ? (
-                            <Popover
-                              open={skuPopoverOpen === item.id}
-                              onOpenChange={(open) => setSkuPopoverOpen(open ? item.id : null)}
-                            >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  role="combobox"
-                                  className="w-full justify-between font-normal h-9 text-left"
-                                >
-                                  <span className={item.material_name ? "" : "text-muted-foreground"}>
-                                    {item.material_name || "Search or type material..."}
-                                  </span>
-                                  <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[300px] p-0" align="start">
-                                <Command>
-                                  <CommandInput
-                                    placeholder="Search SKU catalogue..."
-                                    onValueChange={(val) => {
-                                      // Allow typing custom value
-                                    }}
-                                  />
-                                  <CommandList>
-                                    <CommandEmpty>
+                            <div className="relative">
+                              <Input
+                                placeholder="Search or type material..."
+                                value={item.material_name}
+                                onChange={(e) => {
+                                  updateItem(item.id, "material_name", e.target.value);
+                                  setActiveAutocomplete(item.id);
+                                  setAutocompleteFilter(e.target.value.toUpperCase());
+                                }}
+                                onFocus={() => {
+                                  setActiveAutocomplete(item.id);
+                                  setAutocompleteFilter(item.material_name);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Escape") {
+                                    setActiveAutocomplete(null);
+                                  }
+                                }}
+                                onPaste={(e) => {
+                                  e.preventDefault();
+                                  const pasted = e.clipboardData.getData("text").toUpperCase();
+                                  updateItem(item.id, "material_name", pasted);
+                                  setActiveAutocomplete(item.id);
+                                  setAutocompleteFilter(pasted);
+                                }}
+                                className="h-9 text-sm uppercase"
+                                style={{ textTransform: "uppercase" }}
+                                autoComplete="off"
+                              />
+                              {activeAutocomplete === item.id && (() => {
+                                const filter = autocompleteFilter.trim().toUpperCase();
+                                const filtered = skuCatalogue.filter(
+                                  (sku) =>
+                                    !filter ||
+                                    sku.name.toUpperCase().includes(filter) ||
+                                    sku.sku_code.toUpperCase().includes(filter)
+                                );
+                                if (filtered.length === 0) return null;
+                                return (
+                                  <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
+                                    {filtered.map((sku) => (
                                       <button
+                                        key={sku.id}
                                         type="button"
-                                        className="w-full text-left px-2 py-1.5 text-sm hover:bg-accent rounded cursor-pointer"
-                                        onClick={() => {
-                                          setSkuPopoverOpen(null);
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex flex-col"
+                                        onMouseDown={(e) => {
+                                          e.preventDefault();
+                                          updateItem(item.id, "material_name", sku.name);
+                                          updateItem(item.id, "unit", sku.unit);
+                                          setActiveAutocomplete(null);
                                         }}
                                       >
-                                        Use custom material name
+                                        <span className="font-medium">{sku.name}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {sku.sku_code} • {sku.unit}
+                                        </span>
                                       </button>
-                                    </CommandEmpty>
-                                    <CommandGroup heading="SKU Catalogue">
-                                      {skuCatalogue.map((sku) => (
-                                        <CommandItem
-                                          key={sku.id}
-                                          value={`${sku.name} ${sku.sku_code}`}
-                                          onSelect={() => {
-                                            updateItem(item.id, "material_name", sku.name);
-                                            updateItem(item.id, "unit", sku.unit);
-                                            setSkuPopoverOpen(null);
-                                          }}
-                                        >
-                                          <div className="flex flex-col">
-                                            <span className="font-medium">{sku.name}</span>
-                                            <span className="text-xs text-muted-foreground">
-                                              {sku.sku_code} • {sku.unit}
-                                            </span>
-                                          </div>
-                                        </CommandItem>
-                                      ))}
-                                    </CommandGroup>
-                                  </CommandList>
-                                </Command>
-                                {/* Custom entry input */}
-                                <div className="border-t p-2">
-                                  <Input
-                                    placeholder="Or type custom name..."
-                                    value={item.material_name}
-                                    onChange={(e) => updateItem(item.id, "material_name", e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") {
-                                        e.preventDefault();
-                                        setSkuPopoverOpen(null);
-                                      }
-                                    }}
-                                    className="h-8 text-sm"
-                                  />
-                                </div>
-                              </PopoverContent>
-                            </Popover>
+                                    ))}
+                                  </div>
+                                );
+                              })()}
+                              {item.duplicateError && (
+                                <p className="text-xs text-destructive mt-0.5">{item.duplicateError}</p>
+                              )}
+                            </div>
                           ) : (
                             <Input
                               placeholder="Material name"
                               value={item.material_name}
                               disabled
+                              className="uppercase"
                             />
                           )}
                         </div>
