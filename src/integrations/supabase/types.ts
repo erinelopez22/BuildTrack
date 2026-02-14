@@ -449,8 +449,10 @@ export type Database = {
       }
       profiles: {
         Row: {
+          address: string | null
           avatar_url: string | null
           created_at: string | null
+          created_by: string | null
           email: string
           full_name: string | null
           id: string
@@ -459,10 +461,13 @@ export type Database = {
           phone: string | null
           sms_opt_in: boolean | null
           updated_at: string | null
+          username: string | null
         }
         Insert: {
+          address?: string | null
           avatar_url?: string | null
           created_at?: string | null
+          created_by?: string | null
           email: string
           full_name?: string | null
           id: string
@@ -471,10 +476,13 @@ export type Database = {
           phone?: string | null
           sms_opt_in?: boolean | null
           updated_at?: string | null
+          username?: string | null
         }
         Update: {
+          address?: string | null
           avatar_url?: string | null
           created_at?: string | null
+          created_by?: string | null
           email?: string
           full_name?: string | null
           id?: string
@@ -483,6 +491,7 @@ export type Database = {
           phone?: string | null
           sms_opt_in?: boolean | null
           updated_at?: string | null
+          username?: string | null
         }
         Relationships: []
       }

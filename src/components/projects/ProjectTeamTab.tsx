@@ -114,7 +114,7 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
     
     // Filter out users already in the project
     const available = (profiles || []).filter(p => !memberIds.includes(p.id));
-    setAvailableUsers(available as Profile[]);
+    setAvailableUsers(available as unknown as Profile[]);
   };
 
   useEffect(() => {

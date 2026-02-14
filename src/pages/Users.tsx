@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import {
@@ -23,11 +22,14 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Search, UserPlus, Shield } from 'lucide-react';
+import { Plus, Users, Search, UserPlus, Shield, Loader2 } from 'lucide-react';
 import type { Profile, UserRole, AppRole } from '@/types/database';
+import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 
 interface UserWithRoles extends Profile {
   roles: UserRole[];
+  creator_name?: string;
 }
 
 const roleLabels: Record<AppRole, string> = {
@@ -68,12 +70,26 @@ export default function UsersPage() {
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  // Assign role dialog
+  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [selectedRole, setSelectedRole] = useState<AppRole>('viewer');
 
+  // Add user dialog
+  const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [addUserForm, setAddUserForm] = useState({
+    name: '',
+    address: '',
+    email: '',
+    username: '',
+    password: '',
+    role: 'viewer' as AppRole,
+  });
+  const [addUserErrors, setAddUserErrors] = useState<Record<string, string>>({});
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+
   const fetchUsers = async () => {
-    // Fetch profiles
     const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
       .select('*')
@@ -85,16 +101,19 @@ export default function UsersPage() {
       return;
     }
 
-    // Fetch roles
-    const { data: rolesData } = await supabase
-      .from('user_roles')
-      .select('*');
+    const { data: rolesData } = await supabase.from('user_roles').select('*');
 
-    // Combine profiles with their roles
-    const usersWithRoles = (profilesData || []).map((profile) => ({
-      ...profile,
-      roles: (rolesData || []).filter((role) => role.user_id === profile.id) as UserRole[],
-    })) as UserWithRoles[];
+    const profilesList = profilesData || [];
+    const usersWithRoles = profilesList.map((profile) => {
+      const creatorProfile = profile.created_by
+        ? profilesList.find((p) => p.id === profile.created_by)
+        : null;
+      return {
+        ...profile,
+        roles: (rolesData || []).filter((role) => role.user_id === profile.id) as UserRole[],
+        creator_name: creatorProfile?.full_name || undefined,
+      };
+    }) as unknown as UserWithRoles[];
 
     setUsers(usersWithRoles);
     setLoading(false);
@@ -110,16 +129,10 @@ export default function UsersPage() {
 
   const handleAssignRole = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!selectedUser) return;
 
-    // Only Super Admin can assign super_admin role
     if (selectedRole === 'super_admin' && !isSuperAdmin()) {
-      toast({
-        title: 'Permission Denied',
-        description: 'Only Super Admin can assign Super Admin role',
-        variant: 'destructive',
-      });
+      toast({ title: 'Permission Denied', description: 'Only Super Admin can assign Super Admin role', variant: 'destructive' });
       return;
     }
 
@@ -130,51 +143,33 @@ export default function UsersPage() {
 
     if (error) {
       if (error.code === '23505') {
-        toast({
-          title: 'Error',
-          description: 'User already has this role',
-          variant: 'destructive',
-        });
+        toast({ title: 'Error', description: 'User already has this role', variant: 'destructive' });
       } else {
         toast({ title: 'Error', description: error.message, variant: 'destructive' });
       }
     } else {
       toast({ title: 'Success', description: 'Role assigned successfully' });
-      setIsDialogOpen(false);
+      setIsRoleDialogOpen(false);
       setSelectedUser(null);
       fetchUsers();
     }
   };
 
   const handleRemoveRole = async (userId: string, roleId: string) => {
-    // Find the role being removed
     const userToModify = users.find(u => u.id === userId);
     const roleToRemove = userToModify?.roles.find(r => r.id === roleId);
-    
-    // Only Super Admin can remove super_admin role
+
     if (roleToRemove?.role === 'super_admin' && !isSuperAdmin()) {
-      toast({
-        title: 'Permission Denied',
-        description: 'Only Super Admin can remove Super Admin role',
-        variant: 'destructive',
-      });
+      toast({ title: 'Permission Denied', description: 'Only Super Admin can remove Super Admin role', variant: 'destructive' });
       return;
     }
 
-    // Prevent removing your own super_admin role
     if (roleToRemove?.role === 'super_admin' && userId === authUser?.id) {
-      toast({
-        title: 'Cannot Remove',
-        description: 'You cannot remove your own Super Admin role',
-        variant: 'destructive',
-      });
+      toast({ title: 'Cannot Remove', description: 'You cannot remove your own Super Admin role', variant: 'destructive' });
       return;
     }
 
-    const { error } = await supabase
-      .from('user_roles')
-      .delete()
-      .eq('id', roleId);
+    const { error } = await supabase.from('user_roles').delete().eq('id', roleId);
 
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -184,15 +179,81 @@ export default function UsersPage() {
     }
   };
 
+  const handleAddUserRoleChange = (role: AppRole) => {
+    const newForm = { ...addUserForm, role };
+    // Auto-fill defaults for tracking_driver
+    if (role === 'tracking_driver') {
+      if (!newForm.email) newForm.email = 'driver@gmail.com';
+      if (!newForm.username) newForm.username = 'user';
+      if (!newForm.password) newForm.password = 'user';
+    }
+    setAddUserForm(newForm);
+  };
+
+  const validateAddUserForm = () => {
+    const errors: Record<string, string> = {};
+    if (!addUserForm.name.trim()) errors.name = 'Name is required';
+    if (!addUserForm.address.trim()) errors.address = 'Address is required';
+    if (!addUserForm.email.trim()) errors.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addUserForm.email.trim())) errors.email = 'Invalid email format';
+    if (!addUserForm.username.trim()) errors.username = 'Username is required';
+    if (!addUserForm.password) errors.password = 'Password is required';
+    else if (addUserForm.password.length < 8) errors.password = 'Password must be at least 8 characters';
+    if (!addUserForm.role) errors.role = 'Role is required';
+    if (addUserForm.role === 'super_admin' && !isSuperAdmin()) errors.role = 'Only Super Admin can assign this role';
+    setAddUserErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateAddUserForm()) return;
+
+    setIsCreatingUser(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await supabase.functions.invoke('admin-create-user', {
+        body: {
+          name: addUserForm.name.trim(),
+          address: addUserForm.address.trim(),
+          email: addUserForm.email.trim(),
+          username: addUserForm.username.trim().toLowerCase(),
+          password: addUserForm.password,
+          role: addUserForm.role,
+        },
+      });
+
+      if (response.error) {
+        const errMsg = response.error.message || 'Failed to create user';
+        toast({ title: 'Error', description: errMsg, variant: 'destructive' });
+      } else if (response.data?.error) {
+        const errMsg = response.data.error;
+        // Show inline errors for specific fields
+        if (errMsg.includes('Username already exists')) {
+          setAddUserErrors(prev => ({ ...prev, username: errMsg }));
+        } else if (errMsg.includes('Email already exists')) {
+          setAddUserErrors(prev => ({ ...prev, email: errMsg }));
+        } else {
+          toast({ title: 'Error', description: errMsg, variant: 'destructive' });
+        }
+      } else {
+        toast({ title: 'Success', description: 'User created successfully. They can now log in.' });
+        setIsAddUserOpen(false);
+        setAddUserForm({ name: '', address: '', email: '', username: '', password: '', role: 'viewer' });
+        setAddUserErrors({});
+        fetchUsers();
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to create user', variant: 'destructive' });
+    }
+    setIsCreatingUser(false);
+  };
+
   if (!isAdmin()) {
     return (
       <div className="animate-fade-in">
         <PageHeader title="Users & Roles" />
-        <EmptyState
-          icon={Shield}
-          title="Access Denied"
-          description="You don't have permission to view this page. Only administrators can manage users and roles."
-        />
+        <EmptyState icon={Shield} title="Access Denied" description="You don't have permission to view this page." />
       </div>
     );
   }
@@ -200,13 +261,23 @@ export default function UsersPage() {
   const filteredUsers = users.filter(
     (user) =>
       user.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-      user.email?.toLowerCase().includes(search.toLowerCase())
+      user.email?.toLowerCase().includes(search.toLowerCase()) ||
+      (user as any).username?.toLowerCase().includes(search.toLowerCase())
   );
+
+  const formatManilaTime = (dateStr: string) => {
+    try {
+      const zonedDate = toZonedTime(new Date(dateStr), 'Asia/Manila');
+      return format(zonedDate, 'MMM dd, yyyy hh:mm a');
+    } catch {
+      return dateStr;
+    }
+  };
 
   const columns: Column<UserWithRoles>[] = [
     {
       key: 'user',
-      header: 'User',
+      header: 'Name',
       render: (user) => (
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -220,18 +291,17 @@ export default function UsersPage() {
       ),
     },
     {
-      key: 'phone',
-      header: 'Phone',
-      render: (user) => user.phone || '-',
+      key: 'username',
+      header: 'Username',
+      render: (user) => (user as any).username || '-',
     },
     {
       key: 'roles',
-      header: 'Roles',
+      header: 'Role',
       render: (user) => (
         <div className="flex flex-wrap gap-1">
           {user.roles.length > 0 ? (
             user.roles.map((role) => {
-              // Only super_admin can remove super_admin roles, and users can't remove their own super_admin
               const canRemove = role.role !== 'super_admin' || (isSuperAdmin() && user.id !== authUser?.id);
               return (
                 <Badge
@@ -240,9 +310,7 @@ export default function UsersPage() {
                   className={canRemove ? 'cursor-pointer hover:bg-destructive/20' : 'cursor-not-allowed'}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (canRemove) {
-                      handleRemoveRole(user.id, role.id);
-                    }
+                    if (canRemove) handleRemoveRole(user.id, role.id);
                   }}
                 >
                   {roleLabels[role.role]}
@@ -257,16 +325,27 @@ export default function UsersPage() {
       ),
     },
     {
+      key: 'address',
+      header: 'Address',
+      render: (user) => (user as any).address || '-',
+    },
+    {
+      key: 'created_at',
+      header: 'Date Created',
+      render: (user) => formatManilaTime(user.created_at),
+    },
+    {
+      key: 'created_by',
+      header: 'Created By',
+      render: (user) => user.creator_name || '-',
+    },
+    {
       key: 'status',
       header: 'Status',
       render: (user) => (
-        <span
-          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-            user.is_active
-              ? 'bg-success/10 text-success'
-              : 'bg-muted text-muted-foreground'
-          }`}
-        >
+        <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+          user.is_active ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+        }`}>
           {user.is_active ? 'Active' : 'Inactive'}
         </span>
       ),
@@ -275,15 +354,11 @@ export default function UsersPage() {
       key: 'actions',
       header: '',
       render: (user) => (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation();
-            setSelectedUser(user);
-            setIsDialogOpen(true);
-          }}
-        >
+        <Button size="sm" variant="ghost" onClick={(e) => {
+          e.stopPropagation();
+          setSelectedUser(user);
+          setIsRoleDialogOpen(true);
+        }}>
           <UserPlus className="h-4 w-4" />
         </Button>
       ),
@@ -291,47 +366,28 @@ export default function UsersPage() {
     },
   ];
 
-  if (!loading && users.length === 0) {
-    return (
-      <div className="animate-fade-in">
-        <PageHeader
-          title="Users & Roles"
-          description="Manage user accounts and role assignments"
-        />
-        <EmptyState
-          icon={Users}
-          title="No users yet"
-          description="Users will appear here once they sign up."
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="animate-fade-in space-y-6">
       <PageHeader
         title="Users & Roles"
         description="Manage user accounts and role assignments"
+        action={
+          <Button onClick={() => setIsAddUserOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add User
+          </Button>
+        }
       />
 
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search users..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+        <Input placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filteredUsers}
-        loading={loading}
-        emptyMessage="No users found"
-      />
+      <DataTable columns={columns} data={filteredUsers} loading={loading} emptyMessage="No users found" />
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+      {/* Assign Role Dialog */}
+      <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Assign Role to {selectedUser?.full_name || selectedUser?.email}</DialogTitle>
@@ -339,33 +395,106 @@ export default function UsersPage() {
           <form onSubmit={handleAssignRole} className="space-y-4">
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select
-                value={selectedRole}
-                onValueChange={(value: AppRole) => setSelectedRole(value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+              <Select value={selectedRole} onValueChange={(value: AppRole) => setSelectedRole(value)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {roleOptions
-                    .filter((role) => isSuperAdmin() || role !== 'super_admin')
-                    .map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {roleLabels[role]}
-                    </SelectItem>
+                  {roleOptions.filter((role) => isSuperAdmin() || role !== 'super_admin').map((role) => (
+                    <SelectItem key={role} value={role}>{roleLabels[role]}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsDialogOpen(false)}
-              >
-                Cancel
-              </Button>
+              <Button type="button" variant="outline" onClick={() => setIsRoleDialogOpen(false)}>Cancel</Button>
               <Button type="submit">Assign Role</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add User Dialog */}
+      <Dialog open={isAddUserOpen} onOpenChange={(open) => {
+        setIsAddUserOpen(open);
+        if (!open) {
+          setAddUserForm({ name: '', address: '', email: '', username: '', password: '', role: 'viewer' });
+          setAddUserErrors({});
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add User</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Name *</Label>
+              <Input
+                value={addUserForm.name}
+                onChange={(e) => { setAddUserForm(p => ({ ...p, name: e.target.value })); setAddUserErrors(p => ({ ...p, name: '' })); }}
+                placeholder="Full name"
+              />
+              {addUserErrors.name && <p className="text-xs text-destructive">{addUserErrors.name}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Address *</Label>
+              <Input
+                value={addUserForm.address}
+                onChange={(e) => { setAddUserForm(p => ({ ...p, address: e.target.value })); setAddUserErrors(p => ({ ...p, address: '' })); }}
+                placeholder="Address"
+              />
+              {addUserErrors.address && <p className="text-xs text-destructive">{addUserErrors.address}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Role *</Label>
+              <Select value={addUserForm.role} onValueChange={(v: AppRole) => handleAddUserRoleChange(v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {roleOptions.filter(r => isSuperAdmin() || r !== 'super_admin').map(r => (
+                    <SelectItem key={r} value={r}>{roleLabels[r]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {addUserErrors.role && <p className="text-xs text-destructive">{addUserErrors.role}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Email *</Label>
+              <Input
+                type="email"
+                value={addUserForm.email}
+                onChange={(e) => { setAddUserForm(p => ({ ...p, email: e.target.value })); setAddUserErrors(p => ({ ...p, email: '' })); }}
+                placeholder="user@example.com"
+              />
+              {addUserErrors.email && <p className="text-xs text-destructive">{addUserErrors.email}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Username *</Label>
+              <Input
+                value={addUserForm.username}
+                onChange={(e) => { setAddUserForm(p => ({ ...p, username: e.target.value })); setAddUserErrors(p => ({ ...p, username: '' })); }}
+                placeholder="username"
+              />
+              {addUserErrors.username && <p className="text-xs text-destructive">{addUserErrors.username}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Password *</Label>
+              <Input
+                type="password"
+                value={addUserForm.password}
+                onChange={(e) => { setAddUserForm(p => ({ ...p, password: e.target.value })); setAddUserErrors(p => ({ ...p, password: '' })); }}
+                placeholder="Minimum 8 characters"
+              />
+              {addUserErrors.password && <p className="text-xs text-destructive">{addUserErrors.password}</p>}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isCreatingUser}>
+                {isCreatingUser ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...</> : 'Create User'}
+              </Button>
             </div>
           </form>
         </DialogContent>

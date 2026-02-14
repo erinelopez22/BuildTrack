@@ -70,7 +70,7 @@ export default function Members() {
             ...profile,
             roles,
             projects,
-          } as MemberWithDetails;
+          } as unknown as MemberWithDetails;
         });
 
         setMembers(membersWithDetails);
