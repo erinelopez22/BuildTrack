@@ -825,6 +825,27 @@ export type Database = {
         }
         Relationships: []
       }
+      Test: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: number
+          name: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: number
+          name?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: number
+          name?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
