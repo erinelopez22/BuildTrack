@@ -57,7 +57,7 @@ export function ProjectActivityTab({ projectId }: ProjectActivityTabProps) {
 
       const logsWithUsers = logsData.map(log => ({
         ...log,
-        user: (usersData || []).find(u => u.id === log.user_id) as Profile | undefined,
+        user: (usersData || []).find(u => u.id === log.user_id) as unknown as Profile | undefined,
       }));
       setActivities(logsWithUsers);
     } else {

@@ -45,17 +45,16 @@ export interface Profile {
   id: string;
   email: string;
   full_name: string | null;
+  username: string | null;
+  address: string | null;
   phone: string | null;
   avatar_url: string | null;
   sms_opt_in: boolean;
-  notification_preferences: {
-    email: boolean;
-    sms: boolean;
-    push: boolean;
-  };
+  notification_preferences: Record<string, unknown> | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  created_by: string | null;
 }
 
 export interface UserRole {
