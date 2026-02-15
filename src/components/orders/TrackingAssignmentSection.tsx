@@ -28,6 +28,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Loader2,
   X,
   Upload,
@@ -35,6 +42,7 @@ import {
   Check,
   Trash2,
   Plus,
+  Package,
 } from "lucide-react";
 
 interface Driver {
@@ -42,6 +50,14 @@ interface Driver {
   full_name: string | null;
   email: string;
   phone: string | null;
+}
+
+interface MaterialAssignment {
+  order_item_id: string;
+  material_name: string;
+  unit: string;
+  assigned_quantity: number;
+  max_quantity: number;
 }
 
 interface DriverAssignment {
@@ -52,6 +68,7 @@ interface DriverAssignment {
   tracking_reference: string;
   notes: string;
   evidence: EvidenceFile[];
+  materials: MaterialAssignment[];
   created_by?: string;
   created_at?: string;
   creator?: Driver;
@@ -67,6 +84,13 @@ interface EvidenceFile {
   isUploading?: boolean;
   uploaded_by?: string;
   uploaded_at?: string;
+}
+
+interface OrderItemInfo {
+  id: string;
+  sku_name: string;
+  unit: string;
+  quantity_ordered: number;
 }
 
 interface TrackingAssignmentSectionProps {
@@ -90,8 +114,10 @@ export function TrackingAssignmentSection({
   const { toast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [assignments, setAssignments] = useState<DriverAssignment[]>([]);
+  const [orderItems, setOrderItems] = useState<OrderItemInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [hasSaved, setHasSaved] = useState(false);
   const [driverSearchOpen, setDriverSearchOpen] = useState(false);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
@@ -103,16 +129,34 @@ export function TrackingAssignmentSection({
   }, [orderId]);
 
   useEffect(() => {
-    // Validate: at least 1 driver, all have plate numbers
+    // Validate: at least 1 driver, all have plate numbers, and saved
     const isValid =
       assignments.length > 0 &&
-      assignments.every((a) => a.plate_number.trim() !== "");
+      assignments.every((a) => a.plate_number.trim() !== "") &&
+      hasSaved;
     onValidationChange?.(isValid);
-  }, [assignments, onValidationChange]);
+  }, [assignments, hasSaved, onValidationChange]);
 
   const fetchData = async () => {
     setLoading(true);
-    
+
+    // Fetch order items for this order
+    const { data: items } = await supabase
+      .from("order_items")
+      .select("id, quantity_ordered, skus(name, unit_of_measure)")
+      .eq("order_id", orderId);
+
+    if (items) {
+      setOrderItems(
+        items.map((item: any) => ({
+          id: item.id,
+          sku_name: item.skus?.name || "Unknown",
+          unit: item.skus?.unit_of_measure || "pcs",
+          quantity_ordered: item.quantity_ordered,
+        }))
+      );
+    }
+
     // Fetch drivers (users with tracking_driver role)
     const { data: driverRoles } = await supabase
       .from("user_roles")
@@ -139,11 +183,10 @@ export function TrackingAssignmentSection({
       .order("created_at", { ascending: true });
 
     if (existingAssignments && existingAssignments.length > 0) {
-      // Fetch driver profiles for assignments
       const driverIds = existingAssignments.map((a) => a.driver_user_id);
       const creatorIds = existingAssignments.map((a) => a.created_by).filter(Boolean);
       const allProfileIds = [...new Set([...driverIds, ...creatorIds])];
-      
+
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, email, phone")
@@ -173,6 +216,26 @@ export function TrackingAssignmentSection({
         evidenceMap.set(e.order_tracking_assignment_id, list);
       });
 
+      // Fetch material assignments
+      const { data: materialData } = await supabase
+        .from("tracking_driver_materials")
+        .select("*")
+        .in("tracking_assignment_id", assignmentIds);
+
+      const materialMap = new Map<string, MaterialAssignment[]>();
+      (materialData || []).forEach((m: any) => {
+        const list = materialMap.get(m.tracking_assignment_id) || [];
+        const orderItem = items?.find((i: any) => i.id === m.order_item_id);
+        list.push({
+          order_item_id: m.order_item_id,
+          material_name: orderItem?.skus?.name || "Unknown",
+          unit: orderItem?.skus?.unit_of_measure || "pcs",
+          assigned_quantity: m.assigned_quantity,
+          max_quantity: orderItem?.quantity_ordered || 0,
+        });
+        materialMap.set(m.tracking_assignment_id, list);
+      });
+
       const loadedAssignments: DriverAssignment[] = existingAssignments.map((a) => ({
         id: a.id,
         driver_user_id: a.driver_user_id,
@@ -186,12 +249,14 @@ export function TrackingAssignmentSection({
         tracking_reference: "",
         notes: "",
         evidence: evidenceMap.get(a.id) || [],
+        materials: materialMap.get(a.id) || [],
         created_by: a.created_by,
         created_at: a.created_at,
         creator: a.created_by ? profileMap.get(a.created_by) : undefined,
       }));
 
       setAssignments(loadedAssignments);
+      setHasSaved(true);
       onAssignmentsLoaded?.(true);
     } else {
       onAssignmentsLoaded?.(false);
@@ -200,8 +265,21 @@ export function TrackingAssignmentSection({
     setLoading(false);
   };
 
+  // Calculate remaining quantity for a material across all drivers
+  const getRemainingQuantity = (orderItemId: string, excludeDriverUserId?: string) => {
+    const orderItem = orderItems.find((i) => i.id === orderItemId);
+    if (!orderItem) return 0;
+
+    const totalAssigned = assignments.reduce((sum, a) => {
+      if (excludeDriverUserId && a.driver_user_id === excludeDriverUserId) return sum;
+      const mat = a.materials.find((m) => m.order_item_id === orderItemId);
+      return sum + (mat?.assigned_quantity || 0);
+    }, 0);
+
+    return Math.max(0, orderItem.quantity_ordered - totalAssigned);
+  };
+
   const handleAddDriver = (driver: Driver) => {
-    // Check if already assigned
     if (assignments.some((a) => a.driver_user_id === driver.id)) {
       toast({
         title: "Already Assigned",
@@ -220,33 +298,29 @@ export function TrackingAssignmentSection({
         tracking_reference: "",
         notes: "",
         evidence: [],
+        materials: [],
         isNew: true,
         isEditing: true,
       },
     ]);
+    setHasSaved(false);
     setDriverSearchOpen(false);
   };
 
   const handleRemoveDriver = async (driverUserId: string) => {
     const assignment = assignments.find((a) => a.driver_user_id === driverUserId);
-    
-    // If it's a saved assignment, delete from database
+
     if (assignment?.id && !assignment.isNew) {
       const { error } = await supabase
         .from("order_tracking_assignments")
         .delete()
         .eq("id", assignment.id);
-      
+
       if (error) {
-        toast({
-          title: "Error",
-          description: "Failed to remove driver assignment",
-          variant: "destructive",
-        });
+        toast({ title: "Error", description: "Failed to remove driver assignment", variant: "destructive" });
         return;
       }
 
-      // Log activity
       await logActivity({
         action: "tracking_removed",
         tableName: "orders",
@@ -259,7 +333,6 @@ export function TrackingAssignmentSection({
         userId: user?.id,
       });
 
-      // Notify project members
       await notifyProjectMembers({
         projectId,
         title: "Driver Assignment Removed",
@@ -272,6 +345,7 @@ export function TrackingAssignmentSection({
     }
 
     setAssignments((prev) => prev.filter((a) => a.driver_user_id !== driverUserId));
+    setHasSaved(false);
   };
 
   const handleFieldChange = (driverUserId: string, field: keyof DriverAssignment, value: string) => {
@@ -280,44 +354,88 @@ export function TrackingAssignmentSection({
         a.driver_user_id === driverUserId ? { ...a, [field]: value } : a
       )
     );
+    setHasSaved(false);
   };
 
-  const handleFileSelect = async (
-    driverUserId: string,
-    files: FileList | null
-  ) => {
-    if (!files || !user) return;
+  // Material assignment handlers
+  const handleAddMaterial = (driverUserId: string, orderItemId: string) => {
+    const orderItem = orderItems.find((i) => i.id === orderItemId);
+    if (!orderItem) return;
 
-    const assignment = assignments.find((a) => a.driver_user_id === driverUserId);
-    if (!assignment) return;
-
-    const newEvidence: EvidenceFile[] = [];
-
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) {
-        toast({
-          title: "Invalid File",
-          description: "Only image files are allowed.",
-          variant: "destructive",
-        });
-        continue;
-      }
-
-      // Create preview
-      newEvidence.push({
-        file_url: URL.createObjectURL(file),
-        file_name: file.name,
-        file,
-        isUploading: true,
-      });
+    const remaining = getRemainingQuantity(orderItemId);
+    if (remaining <= 0) {
+      toast({ title: "No Remaining", description: "All quantity has been assigned.", variant: "destructive" });
+      return;
     }
 
-    // Add to assignments
+    setAssignments((prev) =>
+      prev.map((a) => {
+        if (a.driver_user_id !== driverUserId) return a;
+        // Check if already has this material
+        if (a.materials.some((m) => m.order_item_id === orderItemId)) {
+          return a;
+        }
+        return {
+          ...a,
+          materials: [
+            ...a.materials,
+            {
+              order_item_id: orderItemId,
+              material_name: orderItem.sku_name,
+              unit: orderItem.unit,
+              assigned_quantity: 1,
+              max_quantity: orderItem.quantity_ordered,
+            },
+          ],
+        };
+      })
+    );
+    setHasSaved(false);
+  };
+
+  const handleRemoveMaterial = (driverUserId: string, orderItemId: string) => {
+    setAssignments((prev) =>
+      prev.map((a) => {
+        if (a.driver_user_id !== driverUserId) return a;
+        return { ...a, materials: a.materials.filter((m) => m.order_item_id !== orderItemId) };
+      })
+    );
+    setHasSaved(false);
+  };
+
+  const handleMaterialQuantityChange = (driverUserId: string, orderItemId: string, qty: number) => {
+    const remaining = getRemainingQuantity(orderItemId, driverUserId);
+    const clampedQty = Math.max(1, Math.min(qty, remaining));
+
+    setAssignments((prev) =>
+      prev.map((a) => {
+        if (a.driver_user_id !== driverUserId) return a;
+        return {
+          ...a,
+          materials: a.materials.map((m) =>
+            m.order_item_id === orderItemId ? { ...m, assigned_quantity: clampedQty } : m
+          ),
+        };
+      })
+    );
+    setHasSaved(false);
+  };
+
+  const handleFileSelect = async (driverUserId: string, files: FileList | null) => {
+    if (!files || !user) return;
+
+    const newEvidence: EvidenceFile[] = [];
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith("image/")) {
+        toast({ title: "Invalid File", description: "Only image files are allowed.", variant: "destructive" });
+        continue;
+      }
+      newEvidence.push({ file_url: URL.createObjectURL(file), file_name: file.name, file, isUploading: true });
+    }
+
     setAssignments((prev) =>
       prev.map((a) =>
-        a.driver_user_id === driverUserId
-          ? { ...a, evidence: [...a.evidence, ...newEvidence] }
-          : a
+        a.driver_user_id === driverUserId ? { ...a, evidence: [...a.evidence, ...newEvidence] } : a
       )
     );
   };
@@ -334,13 +452,29 @@ export function TrackingAssignmentSection({
 
   const handleSaveAssignments = async () => {
     if (!user) return;
+
+    // Validate material quantities
+    for (const oi of orderItems) {
+      const totalAssigned = assignments.reduce((sum, a) => {
+        const mat = a.materials.find((m) => m.order_item_id === oi.id);
+        return sum + (mat?.assigned_quantity || 0);
+      }, 0);
+      if (totalAssigned > oi.quantity_ordered) {
+        toast({
+          title: "Over-allocation",
+          description: `${oi.sku_name} has ${totalAssigned} assigned but only ${oi.quantity_ordered} ordered.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setSaving(true);
 
     try {
       for (const assignment of assignments) {
         let assignmentId = assignment.id;
 
-        // Create or update assignment
         if (assignment.isNew || !assignmentId) {
           const { data: newAssignment, error: insertError } = await supabase
             .from("order_tracking_assignments")
@@ -356,7 +490,6 @@ export function TrackingAssignmentSection({
           if (insertError) throw insertError;
           assignmentId = newAssignment.id;
         } else {
-          // Update plate number
           const { error: updateError } = await supabase
             .from("order_tracking_assignments")
             .update({ plate_number: assignment.plate_number })
@@ -381,7 +514,6 @@ export function TrackingAssignmentSection({
               .from("tracking-evidence")
               .getPublicUrl(fileName);
 
-            // Save evidence record
             const { error: evidenceError } = await supabase
               .from("order_tracking_evidence")
               .insert({
@@ -395,6 +527,28 @@ export function TrackingAssignmentSection({
           }
         }
 
+        // Save material assignments - delete old and re-insert
+        if (assignmentId) {
+          await supabase
+            .from("tracking_driver_materials")
+            .delete()
+            .eq("tracking_assignment_id", assignmentId);
+
+          if (assignment.materials.length > 0) {
+            const materialInserts = assignment.materials.map((m) => ({
+              tracking_assignment_id: assignmentId!,
+              order_item_id: m.order_item_id,
+              assigned_quantity: m.assigned_quantity,
+            }));
+
+            const { error: matError } = await supabase
+              .from("tracking_driver_materials")
+              .insert(materialInserts);
+
+            if (matError) throw matError;
+          }
+        }
+
         // Log activity
         await logActivity({
           action: assignment.isNew ? "tracking_assigned" : "tracking_updated",
@@ -404,6 +558,7 @@ export function TrackingAssignmentSection({
           newValues: {
             driver_name: assignment.driver.full_name || assignment.driver.email,
             plate_number: assignment.plate_number,
+            materials_count: assignment.materials.length,
           },
           userId: user.id,
         });
@@ -413,7 +568,7 @@ export function TrackingAssignmentSection({
       await notifyProjectMembers({
         projectId,
         title: "Tracking Assigned",
-        message: `Tracking drivers have been assigned with ${assignments.length} driver(s)`,
+        message: `Tracking drivers have been assigned with ${assignments.length} driver(s) and materials`,
         type: "order",
         referenceType: "order",
         referenceId: orderId,
@@ -421,8 +576,7 @@ export function TrackingAssignmentSection({
       });
 
       toast({ title: "Saved", description: "Tracking assignments saved successfully." });
-      
-      // Refresh data
+      setHasSaved(true);
       await fetchData();
     } catch (error: unknown) {
       console.error("Error saving assignments:", error);
@@ -500,334 +654,241 @@ export function TrackingAssignmentSection({
         </div>
       )}
 
-      {/* Driver Table - Desktop with horizontal scroll */}
+      {/* Driver Cards */}
       {assignments.length > 0 && (
-        <>
-          {/* Desktop Table View */}
-          <div className="hidden md:block border rounded-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead className="min-w-[150px]">Driver</TableHead>
-                    <TableHead className="min-w-[120px]">Plate Number</TableHead>
-                    <TableHead className="min-w-[100px]">Evidence</TableHead>
-                    <TableHead className="min-w-[120px]">Added By</TableHead>
-                    <TableHead className="min-w-[150px]">Date/Time Added</TableHead>
-                    {isPreparing && canEdit && (
-                      <TableHead className="w-[80px] text-right">Actions</TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {assignments.map((assignment) => (
-                    <TableRow key={assignment.driver_user_id}>
-                      {/* Driver Column */}
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <Truck className="h-4 w-4 text-primary" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm truncate">
-                              {assignment.driver.full_name || "No Name"}
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {assignment.driver.email}
-                            </p>
-                          </div>
+        <div className="space-y-4">
+          {assignments.map((assignment) => (
+            <div
+              key={assignment.driver_user_id}
+              className="border rounded-lg p-4 space-y-3 bg-card"
+            >
+              {/* Driver Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Truck className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{assignment.driver.full_name || "No Name"}</p>
+                    <p className="text-xs text-muted-foreground truncate">{assignment.driver.email}</p>
+                  </div>
+                </div>
+                {isPreparing && canEdit && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive flex-shrink-0"
+                    onClick={() => handleRemoveDriver(assignment.driver_user_id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Plate Number + Meta */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Plate Number</p>
+                  {isPreparing && canEdit ? (
+                    <Input
+                      placeholder="Enter plate #"
+                      value={assignment.plate_number}
+                      onChange={(e) => handleFieldChange(assignment.driver_user_id, "plate_number", e.target.value)}
+                      className="h-9"
+                    />
+                  ) : (
+                    <p className="font-mono">{assignment.plate_number || "—"}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Added By</p>
+                  <p className="truncate">{assignment.creator?.full_name || assignment.creator?.email || "—"}</p>
+                </div>
+                {assignment.created_at && (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Date/Time</p>
+                    <p className="text-sm">{formatManilaTime(assignment.created_at)}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Material Assignment */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <Package className="h-3 w-3" /> Assigned Materials
+                  </p>
+                  {isPreparing && canEdit && orderItems.length > 0 && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-7 text-xs">
+                          <Plus className="h-3 w-3 mr-1" /> Add Material
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[280px] p-2" align="end">
+                        <div className="space-y-1">
+                          {orderItems.map((oi) => {
+                            const remaining = getRemainingQuantity(oi.id);
+                            const alreadyAdded = assignment.materials.some((m) => m.order_item_id === oi.id);
+                            const disabled = alreadyAdded || remaining <= 0;
+                            return (
+                              <button
+                                key={oi.id}
+                                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-muted transition-colors ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+                                onClick={() => !disabled && handleAddMaterial(assignment.driver_user_id, oi.id)}
+                                disabled={disabled}
+                              >
+                                <span className="font-medium">{oi.sku_name}</span>
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  {alreadyAdded ? '(added)' : `Remaining: ${remaining} ${oi.unit}`}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
-                      </TableCell>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                </div>
 
-                      {/* Plate Number Column */}
-                      <TableCell>
-                        {isPreparing && canEdit ? (
-                          <Input
-                            placeholder="Enter plate #"
-                            value={assignment.plate_number}
-                            onChange={(e) =>
-                              handleFieldChange(assignment.driver_user_id, "plate_number", e.target.value)
-                            }
-                            className="h-8 text-sm"
-                          />
-                        ) : (
-                          <span className="font-mono text-sm">
-                            {assignment.plate_number || "—"}
-                          </span>
-                        )}
-                      </TableCell>
-
-                      {/* Evidence Column */}
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {assignment.evidence.length > 0 ? (
-                            <div className="flex -space-x-2">
-                              {assignment.evidence.slice(0, 3).map((evidence, index) => (
-                                <img
-                                  key={index}
-                                  src={evidence.file_url}
-                                  alt={evidence.file_name}
-                                  className="h-8 w-8 rounded border-2 border-background object-cover cursor-pointer hover:z-10 hover:scale-110 transition-transform"
-                                  onClick={() => {
-                                    const event = new CustomEvent("open-lightbox", {
-                                      detail: {
-                                        images: assignment.evidence.map((e) => ({
-                                          url: e.file_url,
-                                          name: e.file_name,
-                                        })),
-                                        startIndex: index,
-                                      },
-                                    });
-                                    window.dispatchEvent(event);
-                                  }}
-                                />
-                              ))}
-                              {assignment.evidence.length > 3 && (
-                                <div className="h-8 w-8 rounded border-2 border-background bg-muted flex items-center justify-center text-xs font-medium">
-                                  +{assignment.evidence.length - 3}
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">None</span>
-                          )}
-                          
-                          {isPreparing && canEdit && (
-                            <>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                multiple
-                                className="hidden"
-                                ref={(el) => {
-                                  fileInputRefs.current[assignment.driver_user_id] = el;
-                                }}
+                {assignment.materials.length > 0 ? (
+                  <div className="border rounded divide-y text-sm">
+                    {assignment.materials.map((mat) => {
+                      const remaining = getRemainingQuantity(mat.order_item_id, assignment.driver_user_id);
+                      const maxForThisDriver = remaining + mat.assigned_quantity;
+                      return (
+                        <div key={mat.order_item_id} className="flex items-center justify-between px-3 py-2 gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium">{mat.material_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Max: {mat.max_quantity} {mat.unit} • Remaining: {remaining} {mat.unit}
+                            </p>
+                          </div>
+                          {isPreparing && canEdit ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={maxForThisDriver}
+                                value={mat.assigned_quantity}
                                 onChange={(e) =>
-                                  handleFileSelect(assignment.driver_user_id, e.target.files)
+                                  handleMaterialQuantityChange(
+                                    assignment.driver_user_id,
+                                    mat.order_item_id,
+                                    parseInt(e.target.value) || 1
+                                  )
                                 }
+                                className="h-8 w-20 text-sm"
                               />
+                              <span className="text-xs text-muted-foreground">{mat.unit}</span>
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8"
-                                onClick={() =>
-                                  fileInputRefs.current[assignment.driver_user_id]?.click()
-                                }
+                                className="h-7 w-7 text-destructive"
+                                onClick={() => handleRemoveMaterial(assignment.driver_user_id, mat.order_item_id)}
                               >
-                                <Upload className="h-4 w-4" />
+                                <X className="h-3 w-3" />
                               </Button>
-                            </>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      {/* Added By Column */}
-                      <TableCell>
-                        <span className="text-sm truncate">
-                          {assignment.creator?.full_name || assignment.creator?.email || "—"}
-                        </span>
-                      </TableCell>
-
-                      {/* Date/Time Column */}
-                      <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          {assignment.created_at ? formatManilaTime(assignment.created_at) : "—"}
-                        </span>
-                      </TableCell>
-
-                      {/* Actions Column */}
-                      {isPreparing && canEdit && (
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            onClick={() => handleRemoveDriver(assignment.driver_user_id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-
-          {/* Mobile Card View */}
-          <div className="md:hidden space-y-3">
-            {assignments.map((assignment) => (
-              <div
-                key={assignment.driver_user_id}
-                className="border rounded-lg p-4 space-y-3 bg-card"
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Truck className="h-5 w-5 text-primary" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">
-                        {assignment.driver.full_name || "No Name"}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {assignment.driver.email}
-                      </p>
-                    </div>
-                  </div>
-                  {isPreparing && canEdit && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive flex-shrink-0"
-                      onClick={() => handleRemoveDriver(assignment.driver_user_id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-
-                {/* Fields */}
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Plate Number</p>
-                    {isPreparing && canEdit ? (
-                      <Input
-                        placeholder="Enter plate #"
-                        value={assignment.plate_number}
-                        onChange={(e) =>
-                          handleFieldChange(assignment.driver_user_id, "plate_number", e.target.value)
-                        }
-                        className="h-9"
-                      />
-                    ) : (
-                      <p className="font-mono">{assignment.plate_number || "—"}</p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Added By</p>
-                    <p className="truncate">
-                      {assignment.creator?.full_name || assignment.creator?.email || "—"}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Date */}
-                {assignment.created_at && (
-                  <p className="text-xs text-muted-foreground">
-                    Added: {formatManilaTime(assignment.created_at)}
-                  </p>
-                )}
-
-                {/* Evidence */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">Evidence Photos</p>
-                    {isPreparing && canEdit && (
-                      <>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          className="hidden"
-                          ref={(el) => {
-                            fileInputRefs.current[`mobile-${assignment.driver_user_id}`] = el;
-                          }}
-                          onChange={(e) =>
-                            handleFileSelect(assignment.driver_user_id, e.target.files)
-                          }
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() =>
-                            fileInputRefs.current[`mobile-${assignment.driver_user_id}`]?.click()
-                          }
-                        >
-                          <Upload className="h-3 w-3 mr-1" />
-                          Upload
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                  
-                  {assignment.evidence.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {assignment.evidence.map((evidence, index) => (
-                        <div
-                          key={index}
-                          className="relative group"
-                        >
-                          <img
-                            src={evidence.file_url}
-                            alt={evidence.file_name}
-                            className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
-                            onClick={() => {
-                              const event = new CustomEvent("open-lightbox", {
-                                detail: {
-                                  images: assignment.evidence.map((e) => ({
-                                    url: e.file_url,
-                                    name: e.file_name,
-                                  })),
-                                  startIndex: index,
-                                },
-                              });
-                              window.dispatchEvent(event);
-                            }}
-                          />
-                          {evidence.isUploading && (
-                            <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
-                              <Loader2 className="h-4 w-4 animate-spin text-white" />
                             </div>
-                          )}
-                          {isPreparing && canEdit && (
-                            <button
-                              className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={() =>
-                                handleRemoveEvidence(assignment.driver_user_id, index)
-                              }
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                          ) : (
+                            <span className="font-mono text-sm">{mat.assigned_quantity} {mat.unit}</span>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic">No evidence uploaded</p>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">No materials assigned to this driver.</p>
+                )}
+              </div>
+
+              {/* Evidence */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Evidence Photos</p>
+                  {isPreparing && canEdit && (
+                    <>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        ref={(el) => { fileInputRefs.current[assignment.driver_user_id] = el; }}
+                        onChange={(e) => handleFileSelect(assignment.driver_user_id, e.target.files)}
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => fileInputRefs.current[assignment.driver_user_id]?.click()}
+                      >
+                        <Upload className="h-3 w-3 mr-1" /> Upload
+                      </Button>
+                    </>
                   )}
                 </div>
+                {assignment.evidence.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {assignment.evidence.map((evidence, index) => (
+                      <div key={index} className="relative group">
+                        <img
+                          src={evidence.file_url}
+                          alt={evidence.file_name}
+                          className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent("open-lightbox", {
+                              detail: {
+                                images: assignment.evidence.map((e) => ({ url: e.file_url, name: e.file_name })),
+                                startIndex: index,
+                              },
+                            }));
+                          }}
+                        />
+                        {evidence.isUploading && (
+                          <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
+                            <Loader2 className="h-4 w-4 animate-spin text-white" />
+                          </div>
+                        )}
+                        {isPreparing && canEdit && (
+                          <button
+                            className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleRemoveEvidence(assignment.driver_user_id, index)}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">No evidence uploaded</p>
+                )}
               </div>
-            ))}
-          </div>
-        </>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* Save Button */}
       {isPreparing && canEdit && assignments.length > 0 && (
-        <Button
-          className="w-full"
-          onClick={handleSaveAssignments}
-          disabled={
-            saving ||
-            assignments.some((a) => !a.plate_number.trim())
-          }
-        >
-          {saving ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <Check className="h-4 w-4 mr-2" />
-              Save Tracking Assignments
-            </>
+        <div className="space-y-2">
+          <Button
+            className="w-full"
+            onClick={handleSaveAssignments}
+            disabled={saving || assignments.some((a) => !a.plate_number.trim())}
+          >
+            {saving ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+            ) : (
+              <><Check className="h-4 w-4 mr-2" /> Save Tracking Assignment</>
+            )}
+          </Button>
+          {!hasSaved && (
+            <p className="text-xs text-amber-600 text-center">
+              Assign and save at least one driver before marking On Transit.
+            </p>
           )}
-        </Button>
+        </div>
       )}
     </div>
   );

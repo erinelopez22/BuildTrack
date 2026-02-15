@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -21,8 +21,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Search, UserPlus, Shield, Loader2 } from 'lucide-react';
+import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff } from 'lucide-react';
 import type { Profile, UserRole, AppRole } from '@/types/database';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -88,6 +89,10 @@ export default function UsersPage() {
   });
   const [addUserErrors, setAddUserErrors] = useState<Record<string, string>>({});
   const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [checkingDuplicates, setCheckingDuplicates] = useState<Record<string, boolean>>({});
+
+  // View user modal
+  const [viewUser, setViewUser] = useState<UserWithRoles | null>(null);
 
   const fetchUsers = async () => {
     const { data: profilesData, error: profilesError } = await supabase
@@ -179,9 +184,58 @@ export default function UsersPage() {
     }
   };
 
+  // --- Debounced duplicate checks ---
+  const checkDuplicate = useCallback(async (field: 'username' | 'email', value: string) => {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return;
+
+    setCheckingDuplicates(prev => ({ ...prev, [field]: true }));
+
+    if (field === 'username') {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('username', trimmed)
+        .limit(1);
+      if (data && data.length > 0) {
+        setAddUserErrors(prev => ({ ...prev, username: 'Username already exists.' }));
+      }
+    } else if (field === 'email') {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .ilike('email', trimmed)
+        .limit(1);
+      if (data && data.length > 0) {
+        setAddUserErrors(prev => ({ ...prev, email: 'Email already exists.' }));
+      }
+    }
+
+    setCheckingDuplicates(prev => ({ ...prev, [field]: false }));
+  }, []);
+
+  // Debounce timer refs
+  const [debounceTimers] = useState<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const handleFieldBlur = (field: 'username' | 'email') => {
+    const value = field === 'username' ? addUserForm.username : addUserForm.email;
+    if (value.trim()) {
+      checkDuplicate(field, value);
+    }
+  };
+
+  const handleFieldChangeDebounced = (field: 'username' | 'email', value: string) => {
+    setAddUserForm(p => ({ ...p, [field]: value }));
+    setAddUserErrors(p => ({ ...p, [field]: '' }));
+
+    if (debounceTimers[field]) clearTimeout(debounceTimers[field]);
+    debounceTimers[field] = setTimeout(() => {
+      if (value.trim()) checkDuplicate(field, value);
+    }, 600);
+  };
+
   const handleAddUserRoleChange = (role: AppRole) => {
     const newForm = { ...addUserForm, role };
-    // Auto-fill defaults for tracking_driver
     if (role === 'tracking_driver') {
       if (!newForm.email) newForm.email = 'driver@gmail.com';
       if (!newForm.username) newForm.username = 'user';
@@ -198,11 +252,22 @@ export default function UsersPage() {
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addUserForm.email.trim())) errors.email = 'Invalid email format';
     if (!addUserForm.username.trim()) errors.username = 'Username is required';
     if (!addUserForm.password) errors.password = 'Password is required';
-    else if (addUserForm.password.length < 8) errors.password = 'Password must be at least 8 characters';
+    else if (addUserForm.password.length < 6) errors.password = 'Password must be at least 6 characters';
     if (!addUserForm.role) errors.role = 'Role is required';
     if (addUserForm.role === 'super_admin' && !isSuperAdmin()) errors.role = 'Only Super Admin can assign this role';
     setAddUserErrors(errors);
     return Object.keys(errors).length === 0;
+  };
+
+  const isFormValid = () => {
+    const f = addUserForm;
+    if (!f.name.trim() || !f.address.trim() || !f.email.trim() || !f.username.trim() || !f.password) return false;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) return false;
+    if (f.password.length < 6) return false;
+    if (f.role === 'super_admin' && !isSuperAdmin()) return false;
+    // Check for existing inline errors
+    if (addUserErrors.username || addUserErrors.email) return false;
+    return true;
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -211,7 +276,6 @@ export default function UsersPage() {
 
     setIsCreatingUser(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
       const response = await supabase.functions.invoke('admin-create-user', {
         body: {
           name: addUserForm.name.trim(),
@@ -228,7 +292,6 @@ export default function UsersPage() {
         toast({ title: 'Error', description: errMsg, variant: 'destructive' });
       } else if (response.data?.error) {
         const errMsg = response.data.error;
-        // Show inline errors for specific fields
         if (errMsg.includes('Username already exists')) {
           setAddUserErrors(prev => ({ ...prev, username: errMsg }));
         } else if (errMsg.includes('Email already exists')) {
@@ -354,15 +417,23 @@ export default function UsersPage() {
       key: 'actions',
       header: '',
       render: (user) => (
-        <Button size="sm" variant="ghost" onClick={(e) => {
-          e.stopPropagation();
-          setSelectedUser(user);
-          setIsRoleDialogOpen(true);
-        }}>
-          <UserPlus className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" onClick={(e) => {
+            e.stopPropagation();
+            setViewUser(user);
+          }} title="View Details">
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="ghost" onClick={(e) => {
+            e.stopPropagation();
+            setSelectedUser(user);
+            setIsRoleDialogOpen(true);
+          }} title="Assign Role">
+            <UserPlus className="h-4 w-4" />
+          </Button>
+        </div>
       ),
-      className: 'w-12',
+      className: 'w-24',
     },
   ];
 
@@ -460,22 +531,30 @@ export default function UsersPage() {
 
             <div className="space-y-2">
               <Label>Email *</Label>
-              <Input
-                type="email"
-                value={addUserForm.email}
-                onChange={(e) => { setAddUserForm(p => ({ ...p, email: e.target.value })); setAddUserErrors(p => ({ ...p, email: '' })); }}
-                placeholder="user@example.com"
-              />
+              <div className="relative">
+                <Input
+                  type="email"
+                  value={addUserForm.email}
+                  onChange={(e) => handleFieldChangeDebounced('email', e.target.value)}
+                  onBlur={() => handleFieldBlur('email')}
+                  placeholder="user@example.com"
+                />
+                {checkingDuplicates.email && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
               {addUserErrors.email && <p className="text-xs text-destructive">{addUserErrors.email}</p>}
             </div>
 
             <div className="space-y-2">
               <Label>Username *</Label>
-              <Input
-                value={addUserForm.username}
-                onChange={(e) => { setAddUserForm(p => ({ ...p, username: e.target.value })); setAddUserErrors(p => ({ ...p, username: '' })); }}
-                placeholder="username"
-              />
+              <div className="relative">
+                <Input
+                  value={addUserForm.username}
+                  onChange={(e) => handleFieldChangeDebounced('username', e.target.value)}
+                  onBlur={() => handleFieldBlur('username')}
+                  placeholder="username"
+                />
+                {checkingDuplicates.username && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
+              </div>
               {addUserErrors.username && <p className="text-xs text-destructive">{addUserErrors.username}</p>}
             </div>
 
@@ -485,20 +564,97 @@ export default function UsersPage() {
                 type="password"
                 value={addUserForm.password}
                 onChange={(e) => { setAddUserForm(p => ({ ...p, password: e.target.value })); setAddUserErrors(p => ({ ...p, password: '' })); }}
-                placeholder="Minimum 8 characters"
+                placeholder="Minimum 6 characters"
               />
               {addUserErrors.password && <p className="text-xs text-destructive">{addUserErrors.password}</p>}
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setIsAddUserOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isCreatingUser}>
+              <Button
+                type="submit"
+                disabled={isCreatingUser || !isFormValid()}
+                title={!isFormValid() ? 'Please fix validation errors before saving.' : undefined}
+              >
                 {isCreatingUser ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating...</> : 'Create User'}
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* View User Details Modal */}
+      <ViewUserModal
+        user={viewUser}
+        open={!!viewUser}
+        onOpenChange={(open) => !open && setViewUser(null)}
+        formatManilaTime={formatManilaTime}
+        users={users}
+      />
+    </div>
+  );
+}
+
+// --- View User Details Modal Component ---
+function ViewUserModal({
+  user,
+  open,
+  onOpenChange,
+  formatManilaTime,
+  users,
+}: {
+  user: UserWithRoles | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  formatManilaTime: (d: string) => string;
+  users: UserWithRoles[];
+}) {
+  if (!user) return null;
+
+  const creatorName = user.created_by
+    ? users.find(u => u.id === user.created_by)?.full_name || 'Unknown'
+    : '-';
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>User Details</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <DetailRow label="Full Name" value={user.full_name || '-'} />
+          <DetailRow label="Email" value={user.email || '-'} />
+          <DetailRow label="Username" value={(user as any).username || '-'} />
+          <DetailRow label="Address" value={(user as any).address || '-'} />
+          <Separator />
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Role(s)</p>
+            <div className="flex flex-wrap gap-1">
+              {user.roles.length > 0 ? user.roles.map(r => (
+                <Badge key={r.id} variant="secondary">
+                  {roleLabels[r.role]}
+                </Badge>
+              )) : <span className="text-muted-foreground text-sm">No roles</span>}
+            </div>
+          </div>
+          <Separator />
+          <DetailRow label="Status" value={user.is_active ? 'Active' : 'Inactive'} />
+          <DetailRow label="Created At" value={user.created_at ? formatManilaTime(user.created_at) : '-'} />
+          <DetailRow label="Created By" value={creatorName} />
+          {user.updated_at && (
+            <DetailRow label="Updated At" value={formatManilaTime(user.updated_at)} />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium">{value}</p>
     </div>
   );
 }

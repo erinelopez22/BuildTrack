@@ -846,6 +846,45 @@ export type Database = {
         }
         Relationships: []
       }
+      tracking_driver_materials: {
+        Row: {
+          assigned_quantity: number
+          created_at: string
+          id: string
+          order_item_id: string
+          tracking_assignment_id: string
+        }
+        Insert: {
+          assigned_quantity: number
+          created_at?: string
+          id?: string
+          order_item_id: string
+          tracking_assignment_id: string
+        }
+        Update: {
+          assigned_quantity?: number
+          created_at?: string
+          id?: string
+          order_item_id?: string
+          tracking_assignment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tracking_driver_materials_order_item_id_fkey"
+            columns: ["order_item_id"]
+            isOneToOne: false
+            referencedRelation: "order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tracking_driver_materials_tracking_assignment_id_fkey"
+            columns: ["tracking_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "order_tracking_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string | null
