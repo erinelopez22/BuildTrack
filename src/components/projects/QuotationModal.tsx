@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import * as XLSX from "xlsx";
 import { format } from "date-fns";
 import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock, Upload, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -407,7 +408,7 @@ export function QuotationModal({
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const XLSX = await import("xlsx");
+      //const XLSX = await import("xlsx");
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -439,7 +440,7 @@ export function QuotationModal({
   };
 
   const handleDownloadTemplate = async () => {
-    const XLSX = await import("xlsx");
+    //const XLSX = await import("xlsx");
     const ws = XLSX.utils.aoa_to_sheet([["Material Name", "Unit", "Qty"], ["SAMPLE MATERIAL", "pcs", 10]]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Template");
