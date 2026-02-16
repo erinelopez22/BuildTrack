@@ -6,14 +6,9 @@ import { logActivity } from "@/lib/activityLogger";
 import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Command,
   CommandEmpty,
@@ -28,12 +23,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Loader2,
   X,
@@ -43,6 +41,13 @@ import {
   Trash2,
   Plus,
   Package,
+  ChevronDown,
+  ChevronRight,
+  MapPin,
+  PauseCircle,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 
 interface Driver {
@@ -74,6 +79,11 @@ interface DriverAssignment {
   creator?: Driver;
   isNew?: boolean;
   isEditing?: boolean;
+  // Per-driver status fields
+  tracking_status: string; // 'on_transit' | 'arrived' | 'on_hold'
+  arrived_at?: string | null;
+  hold_remarks?: string | null;
+  held_at?: string | null;
 }
 
 interface EvidenceFile {
@@ -99,6 +109,7 @@ interface TrackingAssignmentSectionProps {
   status: string;
   onValidationChange?: (isValid: boolean) => void;
   onAssignmentsLoaded?: (hasAssignments: boolean) => void;
+  onAllDriversArrived?: (allArrived: boolean) => void;
   readOnly?: boolean;
 }
 
@@ -108,9 +119,10 @@ export function TrackingAssignmentSection({
   status,
   onValidationChange,
   onAssignmentsLoaded,
+  onAllDriversArrived,
   readOnly = false,
 }: TrackingAssignmentSectionProps) {
-  const { user, isSuperAdmin, isAdmin, canProcessLogistics } = useAuth();
+  const { user, isSuperAdmin, isAdmin, canProcessLogistics, canReceiveOrders } = useAuth();
   const { toast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [assignments, setAssignments] = useState<DriverAssignment[]>([]);
@@ -119,17 +131,22 @@ export function TrackingAssignmentSection({
   const [saving, setSaving] = useState(false);
   const [hasSaved, setHasSaved] = useState(false);
   const [driverSearchOpen, setDriverSearchOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [holdDialogDriverId, setHoldDialogDriverId] = useState<string | null>(null);
+  const [holdRemarks, setHoldRemarks] = useState("");
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   const canEdit = !readOnly && (isSuperAdmin() || isAdmin() || canProcessLogistics());
+  const canDoDriverActions = isSuperAdmin() || isAdmin() || canProcessLogistics() || canReceiveOrders();
   const isPreparing = status === "preparing";
+  const isInTransit = status === "in_transit";
 
   useEffect(() => {
     fetchData();
   }, [orderId]);
 
   useEffect(() => {
-    // Validate: at least 1 driver, all have plate numbers, and saved
     const isValid =
       assignments.length > 0 &&
       assignments.every((a) => a.plate_number.trim() !== "") &&
@@ -137,10 +154,18 @@ export function TrackingAssignmentSection({
     onValidationChange?.(isValid);
   }, [assignments, hasSaved, onValidationChange]);
 
+  useEffect(() => {
+    if (assignments.length > 0) {
+      const allArrived = assignments.every((a) => a.tracking_status === "arrived");
+      onAllDriversArrived?.(allArrived);
+    } else {
+      onAllDriversArrived?.(false);
+    }
+  }, [assignments, onAllDriversArrived]);
+
   const fetchData = async () => {
     setLoading(true);
 
-    // Fetch order items for this order
     const { data: items } = await supabase
       .from("order_items")
       .select("id, quantity_ordered, skus(name, unit_of_measure)")
@@ -157,7 +182,6 @@ export function TrackingAssignmentSection({
       );
     }
 
-    // Fetch drivers (users with tracking_driver role)
     const { data: driverRoles } = await supabase
       .from("user_roles")
       .select("user_id")
@@ -175,7 +199,6 @@ export function TrackingAssignmentSection({
       }
     }
 
-    // Fetch existing assignments
     const { data: existingAssignments } = await supabase
       .from("order_tracking_assignments")
       .select("*")
@@ -192,11 +215,8 @@ export function TrackingAssignmentSection({
         .select("id, full_name, email, phone")
         .in("id", allProfileIds);
 
-      const profileMap = new Map(
-        (profiles || []).map((d) => [d.id, d])
-      );
+      const profileMap = new Map((profiles || []).map((d) => [d.id, d]));
 
-      // Fetch evidence for all assignments
       const assignmentIds = existingAssignments.map((a) => a.id);
       const { data: evidenceData } = await supabase
         .from("order_tracking_evidence")
@@ -216,7 +236,6 @@ export function TrackingAssignmentSection({
         evidenceMap.set(e.order_tracking_assignment_id, list);
       });
 
-      // Fetch material assignments
       const { data: materialData } = await supabase
         .from("tracking_driver_materials")
         .select("*")
@@ -236,7 +255,7 @@ export function TrackingAssignmentSection({
         materialMap.set(m.tracking_assignment_id, list);
       });
 
-      const loadedAssignments: DriverAssignment[] = existingAssignments.map((a) => ({
+      const loadedAssignments: DriverAssignment[] = existingAssignments.map((a: any) => ({
         id: a.id,
         driver_user_id: a.driver_user_id,
         driver: profileMap.get(a.driver_user_id) || {
@@ -253,6 +272,10 @@ export function TrackingAssignmentSection({
         created_by: a.created_by,
         created_at: a.created_at,
         creator: a.created_by ? profileMap.get(a.created_by) : undefined,
+        tracking_status: a.tracking_status || "on_transit",
+        arrived_at: a.arrived_at,
+        hold_remarks: a.hold_remarks,
+        held_at: a.held_at,
       }));
 
       setAssignments(loadedAssignments);
@@ -265,7 +288,6 @@ export function TrackingAssignmentSection({
     setLoading(false);
   };
 
-  // Calculate remaining quantity for a material across all drivers
   const getRemainingQuantity = (orderItemId: string, excludeDriverUserId?: string) => {
     const orderItem = orderItems.find((i) => i.id === orderItemId);
     if (!orderItem) return 0;
@@ -283,7 +305,7 @@ export function TrackingAssignmentSection({
     if (assignments.some((a) => a.driver_user_id === driver.id)) {
       toast({
         title: "Already Assigned",
-        description: `${driver.full_name || driver.email} is already assigned to this order.`,
+        description: `${driver.full_name || driver.email} is already assigned.`,
         variant: "destructive",
       });
       return;
@@ -301,10 +323,12 @@ export function TrackingAssignmentSection({
         materials: [],
         isNew: true,
         isEditing: true,
+        tracking_status: "on_transit",
       },
     ]);
     setHasSaved(false);
     setDriverSearchOpen(false);
+    setIsExpanded(true);
   };
 
   const handleRemoveDriver = async (driverUserId: string) => {
@@ -325,10 +349,7 @@ export function TrackingAssignmentSection({
         action: "tracking_removed",
         tableName: "orders",
         recordId: orderId,
-        oldValues: {
-          driver_name: assignment.driver.full_name || assignment.driver.email,
-          plate_number: assignment.plate_number,
-        },
+        oldValues: { driver_name: assignment.driver.full_name || assignment.driver.email, plate_number: assignment.plate_number },
         newValues: null,
         userId: user?.id,
       });
@@ -357,7 +378,6 @@ export function TrackingAssignmentSection({
     setHasSaved(false);
   };
 
-  // Material assignment handlers
   const handleAddMaterial = (driverUserId: string, orderItemId: string) => {
     const orderItem = orderItems.find((i) => i.id === orderItemId);
     if (!orderItem) return;
@@ -371,10 +391,7 @@ export function TrackingAssignmentSection({
     setAssignments((prev) =>
       prev.map((a) => {
         if (a.driver_user_id !== driverUserId) return a;
-        // Check if already has this material
-        if (a.materials.some((m) => m.order_item_id === orderItemId)) {
-          return a;
-        }
+        if (a.materials.some((m) => m.order_item_id === orderItemId)) return a;
         return {
           ...a,
           materials: [
@@ -450,10 +467,111 @@ export function TrackingAssignmentSection({
     );
   };
 
+  // === PER-DRIVER ACTIONS (On Transit page) ===
+
+  const handleTrackArrived = async (assignmentId: string, driverName: string) => {
+    if (!user || !assignmentId) return;
+    setActionLoading(assignmentId);
+
+    const arrivedAt = new Date().toISOString();
+    const { error } = await supabase
+      .from("order_tracking_assignments")
+      .update({ tracking_status: "arrived", arrived_at: arrivedAt })
+      .eq("id", assignmentId);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      setActionLoading(null);
+      return;
+    }
+
+    setAssignments((prev) =>
+      prev.map((a) =>
+        a.id === assignmentId ? { ...a, tracking_status: "arrived", arrived_at: arrivedAt } : a
+      )
+    );
+
+    await logActivity({
+      action: "driver_arrived",
+      tableName: "orders",
+      recordId: orderId,
+      oldValues: { tracking_status: "on_transit" },
+      newValues: { tracking_status: "arrived", driver_name: driverName, arrived_at: arrivedAt },
+      userId: user.id,
+    });
+
+    await notifyProjectMembers({
+      projectId,
+      title: "Driver Arrived",
+      message: `Driver ${driverName} has arrived for the order`,
+      type: "order",
+      referenceType: "order",
+      referenceId: orderId,
+      excludeUserId: user.id,
+    });
+
+    toast({ title: "Driver Arrived", description: `${driverName} marked as arrived.` });
+    setActionLoading(null);
+  };
+
+  const handleHoldDriver = async () => {
+    if (!user || !holdDialogDriverId || !holdRemarks.trim()) return;
+    
+    const assignment = assignments.find((a) => a.id === holdDialogDriverId);
+    if (!assignment) return;
+
+    setActionLoading(holdDialogDriverId);
+    const heldAt = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("order_tracking_assignments")
+      .update({ tracking_status: "on_hold", hold_remarks: holdRemarks.trim(), held_at: heldAt })
+      .eq("id", holdDialogDriverId);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      setActionLoading(null);
+      return;
+    }
+
+    const driverName = assignment.driver.full_name || assignment.driver.email;
+
+    setAssignments((prev) =>
+      prev.map((a) =>
+        a.id === holdDialogDriverId
+          ? { ...a, tracking_status: "on_hold", hold_remarks: holdRemarks.trim(), held_at: heldAt }
+          : a
+      )
+    );
+
+    await logActivity({
+      action: "driver_hold",
+      tableName: "orders",
+      recordId: orderId,
+      oldValues: { tracking_status: "on_transit" },
+      newValues: { tracking_status: "on_hold", driver_name: driverName, hold_remarks: holdRemarks.trim() },
+      userId: user.id,
+    });
+
+    await notifyProjectMembers({
+      projectId,
+      title: "Driver On Hold",
+      message: `Driver ${driverName} placed on hold: ${holdRemarks.trim()}`,
+      type: "order",
+      referenceType: "order",
+      referenceId: orderId,
+      excludeUserId: user.id,
+    });
+
+    toast({ title: "Driver On Hold", description: `${driverName} placed on hold.` });
+    setHoldDialogDriverId(null);
+    setHoldRemarks("");
+    setActionLoading(null);
+  };
+
   const handleSaveAssignments = async () => {
     if (!user) return;
 
-    // Validate material quantities
     for (const oi of orderItems) {
       const totalAssigned = assignments.reduce((sum, a) => {
         const mat = a.materials.find((m) => m.order_item_id === oi.id);
@@ -527,7 +645,7 @@ export function TrackingAssignmentSection({
           }
         }
 
-        // Save material assignments - delete old and re-insert
+        // Save material assignments
         if (assignmentId) {
           await supabase
             .from("tracking_driver_materials")
@@ -549,7 +667,6 @@ export function TrackingAssignmentSection({
           }
         }
 
-        // Log activity
         await logActivity({
           action: assignment.isNew ? "tracking_assigned" : "tracking_updated",
           tableName: "orders",
@@ -564,7 +681,6 @@ export function TrackingAssignmentSection({
         });
       }
 
-      // Notify project members
       await notifyProjectMembers({
         projectId,
         title: "Tracking Assigned",
@@ -590,6 +706,18 @@ export function TrackingAssignmentSection({
     }
   };
 
+  // === STATUS BADGE HELPER ===
+  const getDriverStatusBadge = (trackingStatus: string) => {
+    switch (trackingStatus) {
+      case "arrived":
+        return <Badge className="bg-success/20 text-success border-success/30 text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Arrived</Badge>;
+      case "on_hold":
+        return <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]"><PauseCircle className="h-3 w-3 mr-1" />Hold</Badge>;
+      default:
+        return <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-[10px]"><Truck className="h-3 w-3 mr-1" />On Transit</Badge>;
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-4">
@@ -600,6 +728,305 @@ export function TrackingAssignmentSection({
 
   const availableDrivers = drivers.filter(
     (d) => !assignments.some((a) => a.driver_user_id === d.id)
+  );
+
+  // === COLLAPSED VIEW (compact summary per driver) ===
+  const CollapsedView = () => (
+    <div className="space-y-1.5">
+      {assignments.map((a) => (
+        <div key={a.driver_user_id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
+          <div className="flex items-center gap-2 min-w-0">
+            <Truck className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            <span className="font-medium truncate">{a.driver.full_name || a.driver.email}</span>
+            <span className="text-xs text-muted-foreground font-mono">{a.plate_number || "—"}</span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {getDriverStatusBadge(a.tracking_status)}
+            <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+              {a.tracking_status === "arrived" && a.arrived_at
+                ? `Arrived: ${formatManilaTime(a.arrived_at)}`
+                : a.tracking_status === "on_hold" && a.held_at
+                ? `Held: ${formatManilaTime(a.held_at)}`
+                : a.created_at
+                ? `Since: ${formatManilaTime(a.created_at)}`
+                : ""}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // === EXPANDED VIEW (full details + actions) ===
+  const ExpandedView = () => (
+    <div className="space-y-4">
+      {assignments.map((assignment) => (
+        <div
+          key={assignment.driver_user_id}
+          className="border rounded-lg p-4 space-y-3 bg-card"
+        >
+          {/* Driver Header */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Truck className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="font-medium truncate">{assignment.driver.full_name || "No Name"}</p>
+                  {getDriverStatusBadge(assignment.tracking_status)}
+                </div>
+                <p className="text-xs text-muted-foreground truncate">{assignment.driver.email}</p>
+              </div>
+            </div>
+            {isPreparing && canEdit && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive flex-shrink-0"
+                onClick={() => handleRemoveDriver(assignment.driver_user_id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+
+          {/* Plate Number + Meta */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Plate Number</p>
+              {isPreparing && canEdit ? (
+                <Input
+                  placeholder="Enter plate #"
+                  value={assignment.plate_number}
+                  onChange={(e) => handleFieldChange(assignment.driver_user_id, "plate_number", e.target.value)}
+                  className="h-9"
+                />
+              ) : (
+                <p className="font-mono">{assignment.plate_number || "—"}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Added By</p>
+              <p className="truncate">{assignment.creator?.full_name || assignment.creator?.email || "—"}</p>
+            </div>
+            {assignment.created_at && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Date/Time</p>
+                <p className="text-sm">{formatManilaTime(assignment.created_at)}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Arrival / Hold info */}
+          {assignment.tracking_status === "arrived" && assignment.arrived_at && (
+            <div className="flex items-center gap-2 text-sm bg-success/10 border border-success/20 rounded-md px-3 py-2">
+              <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
+              <span className="text-success font-medium">Arrived at: {formatManilaTime(assignment.arrived_at)}</span>
+            </div>
+          )}
+
+          {assignment.tracking_status === "on_hold" && (
+            <div className="space-y-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
+              <div className="flex items-center gap-2 text-sm">
+                <PauseCircle className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                <span className="font-medium text-amber-700 dark:text-amber-400">
+                  Held at: {assignment.held_at ? formatManilaTime(assignment.held_at) : "—"}
+                </span>
+              </div>
+              {assignment.hold_remarks && (
+                <p className="text-xs text-amber-700 dark:text-amber-400 pl-6">
+                  <span className="font-semibold">HOLD REMARKS:</span> {assignment.hold_remarks}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Per-driver action buttons (On Transit page only) */}
+          {isInTransit && canDoDriverActions && assignment.id && assignment.tracking_status === "on_transit" && (
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-success border-success/30 hover:bg-success/10"
+                onClick={() => handleTrackArrived(assignment.id!, assignment.driver.full_name || assignment.driver.email)}
+                disabled={actionLoading === assignment.id}
+              >
+                {actionLoading === assignment.id ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <MapPin className="h-3.5 w-3.5" />
+                )}
+                Track Arrived
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
+                onClick={() => setHoldDialogDriverId(assignment.id!)}
+                disabled={actionLoading === assignment.id}
+              >
+                <PauseCircle className="h-3.5 w-3.5" />
+                Hold
+              </Button>
+            </div>
+          )}
+
+          {/* Material Assignment */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <Package className="h-3 w-3" /> Assigned Materials
+              </p>
+              {isPreparing && canEdit && orderItems.length > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-7 text-xs">
+                      <Plus className="h-3 w-3 mr-1" /> Add Material
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[280px] p-2" align="end">
+                    <div className="space-y-1">
+                      {orderItems.map((oi) => {
+                        const remaining = getRemainingQuantity(oi.id);
+                        const alreadyAdded = assignment.materials.some((m) => m.order_item_id === oi.id);
+                        const disabled = alreadyAdded || remaining <= 0;
+                        return (
+                          <button
+                            key={oi.id}
+                            className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-muted transition-colors ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                            onClick={() => !disabled && handleAddMaterial(assignment.driver_user_id, oi.id)}
+                            disabled={disabled}
+                          >
+                            <span className="font-medium">{oi.sku_name}</span>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              {alreadyAdded ? "(added)" : `Remaining: ${remaining} ${oi.unit}`}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+
+            {assignment.materials.length > 0 ? (
+              <div className="border rounded divide-y text-sm">
+                {assignment.materials.map((mat) => {
+                  const remaining = getRemainingQuantity(mat.order_item_id, assignment.driver_user_id);
+                  const maxForThisDriver = remaining + mat.assigned_quantity;
+                  return (
+                    <div key={mat.order_item_id} className="flex items-center justify-between px-3 py-2 gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{mat.material_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Max: {mat.max_quantity} {mat.unit} • Remaining: {remaining} {mat.unit}
+                        </p>
+                      </div>
+                      {isPreparing && canEdit ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={maxForThisDriver}
+                            value={mat.assigned_quantity}
+                            onChange={(e) =>
+                              handleMaterialQuantityChange(
+                                assignment.driver_user_id,
+                                mat.order_item_id,
+                                parseInt(e.target.value) || 1
+                              )
+                            }
+                            className="h-8 w-20 text-sm"
+                          />
+                          <span className="text-xs text-muted-foreground">{mat.unit}</span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive"
+                            onClick={() => handleRemoveMaterial(assignment.driver_user_id, mat.order_item_id)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="font-mono text-sm">{mat.assigned_quantity} {mat.unit}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No materials assigned to this driver.</p>
+            )}
+          </div>
+
+          {/* Evidence */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Evidence Photos</p>
+              {isPreparing && canEdit && (
+                <>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    ref={(el) => { fileInputRefs.current[assignment.driver_user_id] = el; }}
+                    onChange={(e) => handleFileSelect(assignment.driver_user_id, e.target.files)}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => fileInputRefs.current[assignment.driver_user_id]?.click()}
+                  >
+                    <Upload className="h-3 w-3 mr-1" /> Upload
+                  </Button>
+                </>
+              )}
+            </div>
+            {assignment.evidence.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {assignment.evidence.map((evidence, index) => (
+                  <div key={index} className="relative group">
+                    <img
+                      src={evidence.file_url}
+                      alt={evidence.file_name}
+                      className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent("open-lightbox", {
+                          detail: {
+                            images: assignment.evidence.map((e) => ({ url: e.file_url, name: e.file_name })),
+                            startIndex: index,
+                          },
+                        }));
+                      }}
+                    />
+                    {evidence.isUploading && (
+                      <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin text-white" />
+                      </div>
+                    )}
+                    {isPreparing && canEdit && (
+                      <button
+                        className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleRemoveEvidence(assignment.driver_user_id, index)}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No evidence uploaded</p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 
   return (
@@ -654,219 +1081,31 @@ export function TrackingAssignmentSection({
         </div>
       )}
 
-      {/* Driver Cards */}
+      {/* Driver Tracking - Collapsible */}
       {assignments.length > 0 && (
-        <div className="space-y-4">
-          {assignments.map((assignment) => (
-            <div
-              key={assignment.driver_user_id}
-              className="border rounded-lg p-4 space-y-3 bg-card"
-            >
-              {/* Driver Header */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Truck className="h-5 w-5 text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{assignment.driver.full_name || "No Name"}</p>
-                    <p className="text-xs text-muted-foreground truncate">{assignment.driver.email}</p>
-                  </div>
-                </div>
-                {isPreparing && canEdit && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive flex-shrink-0"
-                    onClick={() => handleRemoveDriver(assignment.driver_user_id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+        <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center justify-between w-full px-3 py-2 rounded-md border bg-muted/50 hover:bg-muted transition-colors text-sm font-medium">
+              <div className="flex items-center gap-2">
+                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                <span>Driver Tracking ({assignments.length})</span>
+                {isInTransit && (
+                  <span className="text-[10px] text-muted-foreground">
+                    {assignments.filter((a) => a.tracking_status === "arrived").length}/{assignments.length} arrived
+                  </span>
                 )}
               </div>
+            </button>
+          </CollapsibleTrigger>
 
-              {/* Plate Number + Meta */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Plate Number</p>
-                  {isPreparing && canEdit ? (
-                    <Input
-                      placeholder="Enter plate #"
-                      value={assignment.plate_number}
-                      onChange={(e) => handleFieldChange(assignment.driver_user_id, "plate_number", e.target.value)}
-                      className="h-9"
-                    />
-                  ) : (
-                    <p className="font-mono">{assignment.plate_number || "—"}</p>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Added By</p>
-                  <p className="truncate">{assignment.creator?.full_name || assignment.creator?.email || "—"}</p>
-                </div>
-                {assignment.created_at && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Date/Time</p>
-                    <p className="text-sm">{formatManilaTime(assignment.created_at)}</p>
-                  </div>
-                )}
-              </div>
+          {/* Collapsed summary */}
+          {!isExpanded && <div className="mt-2"><CollapsedView /></div>}
 
-              {/* Material Assignment */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                    <Package className="h-3 w-3" /> Assigned Materials
-                  </p>
-                  {isPreparing && canEdit && orderItems.length > 0 && (
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="h-7 text-xs">
-                          <Plus className="h-3 w-3 mr-1" /> Add Material
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[280px] p-2" align="end">
-                        <div className="space-y-1">
-                          {orderItems.map((oi) => {
-                            const remaining = getRemainingQuantity(oi.id);
-                            const alreadyAdded = assignment.materials.some((m) => m.order_item_id === oi.id);
-                            const disabled = alreadyAdded || remaining <= 0;
-                            return (
-                              <button
-                                key={oi.id}
-                                className={`w-full text-left px-3 py-2 rounded text-sm hover:bg-muted transition-colors ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
-                                onClick={() => !disabled && handleAddMaterial(assignment.driver_user_id, oi.id)}
-                                disabled={disabled}
-                              >
-                                <span className="font-medium">{oi.sku_name}</span>
-                                <span className="text-xs text-muted-foreground ml-2">
-                                  {alreadyAdded ? '(added)' : `Remaining: ${remaining} ${oi.unit}`}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                </div>
-
-                {assignment.materials.length > 0 ? (
-                  <div className="border rounded divide-y text-sm">
-                    {assignment.materials.map((mat) => {
-                      const remaining = getRemainingQuantity(mat.order_item_id, assignment.driver_user_id);
-                      const maxForThisDriver = remaining + mat.assigned_quantity;
-                      return (
-                        <div key={mat.order_item_id} className="flex items-center justify-between px-3 py-2 gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate font-medium">{mat.material_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Max: {mat.max_quantity} {mat.unit} • Remaining: {remaining} {mat.unit}
-                            </p>
-                          </div>
-                          {isPreparing && canEdit ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
-                                min={1}
-                                max={maxForThisDriver}
-                                value={mat.assigned_quantity}
-                                onChange={(e) =>
-                                  handleMaterialQuantityChange(
-                                    assignment.driver_user_id,
-                                    mat.order_item_id,
-                                    parseInt(e.target.value) || 1
-                                  )
-                                }
-                                className="h-8 w-20 text-sm"
-                              />
-                              <span className="text-xs text-muted-foreground">{mat.unit}</span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive"
-                                onClick={() => handleRemoveMaterial(assignment.driver_user_id, mat.order_item_id)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <span className="font-mono text-sm">{mat.assigned_quantity} {mat.unit}</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">No materials assigned to this driver.</p>
-                )}
-              </div>
-
-              {/* Evidence */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Evidence Photos</p>
-                  {isPreparing && canEdit && (
-                    <>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        className="hidden"
-                        ref={(el) => { fileInputRefs.current[assignment.driver_user_id] = el; }}
-                        onChange={(e) => handleFileSelect(assignment.driver_user_id, e.target.files)}
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => fileInputRefs.current[assignment.driver_user_id]?.click()}
-                      >
-                        <Upload className="h-3 w-3 mr-1" /> Upload
-                      </Button>
-                    </>
-                  )}
-                </div>
-                {assignment.evidence.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {assignment.evidence.map((evidence, index) => (
-                      <div key={index} className="relative group">
-                        <img
-                          src={evidence.file_url}
-                          alt={evidence.file_name}
-                          className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => {
-                            window.dispatchEvent(new CustomEvent("open-lightbox", {
-                              detail: {
-                                images: assignment.evidence.map((e) => ({ url: e.file_url, name: e.file_name })),
-                                startIndex: index,
-                              },
-                            }));
-                          }}
-                        />
-                        {evidence.isUploading && (
-                          <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
-                            <Loader2 className="h-4 w-4 animate-spin text-white" />
-                          </div>
-                        )}
-                        {isPreparing && canEdit && (
-                          <button
-                            className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={() => handleRemoveEvidence(assignment.driver_user_id, index)}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">No evidence uploaded</p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+          {/* Expanded full view */}
+          <CollapsibleContent className="mt-3">
+            <ExpandedView />
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
       {/* Save Button */}
@@ -890,6 +1129,40 @@ export function TrackingAssignmentSection({
           )}
         </div>
       )}
+
+      {/* Hold Remarks Dialog */}
+      <AlertDialog open={!!holdDialogDriverId} onOpenChange={(open) => { if (!open) { setHoldDialogDriverId(null); setHoldRemarks(""); } }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
+              <PauseCircle className="h-5 w-5" />
+              Hold Driver
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Please provide remarks for placing this driver on hold.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Textarea
+              placeholder="e.g. Hold because the material arrived is wrong..."
+              value={holdRemarks}
+              onChange={(e) => setHoldRemarks(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setHoldDialogDriverId(null); setHoldRemarks(""); }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleHoldDriver}
+              disabled={!holdRemarks.trim() || !!actionLoading}
+              className="bg-amber-500 text-white hover:bg-amber-600"
+            >
+              {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Place On Hold
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

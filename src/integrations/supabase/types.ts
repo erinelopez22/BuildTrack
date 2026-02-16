@@ -308,28 +308,40 @@ export type Database = {
       }
       order_tracking_assignments: {
         Row: {
+          arrived_at: string | null
           created_at: string
           created_by: string
           driver_user_id: string
+          held_at: string | null
+          hold_remarks: string | null
           id: string
           order_id: string
           plate_number: string
+          tracking_status: string
         }
         Insert: {
+          arrived_at?: string | null
           created_at?: string
           created_by: string
           driver_user_id: string
+          held_at?: string | null
+          hold_remarks?: string | null
           id?: string
           order_id: string
           plate_number: string
+          tracking_status?: string
         }
         Update: {
+          arrived_at?: string | null
           created_at?: string
           created_by?: string
           driver_user_id?: string
+          held_at?: string | null
+          hold_remarks?: string | null
           id?: string
           order_id?: string
           plate_number?: string
+          tracking_status?: string
         }
         Relationships: [
           {

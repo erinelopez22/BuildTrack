@@ -79,6 +79,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   // Tracking validation state
   const [trackingValid, setTrackingValid] = useState(false);
   const [hasTrackingAssignments, setHasTrackingAssignments] = useState(false);
+  const [allDriversArrived, setAllDriversArrived] = useState(false);
 
   // Lightbox state
   const lightbox = useLightbox();
@@ -317,6 +318,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
               action: () => handleStatusChange("delivered"),
               icon: <CheckCircle2 className="h-4 w-4 mr-2" />,
               variant: "default",
+              disabled: !allDriversArrived,
             },
             {
               label: "On-Hold",
@@ -356,8 +358,8 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
   const availableActions = getAvailableActions();
 
-  // Check if tracking section should be shown
-  const showTrackingSection = order && (order.status === "preparing" || order.status === "in_transit");
+  // Show tracking section for preparing, in_transit, and delivered
+  const showTrackingSection = order && ["preparing", "in_transit", "delivered"].includes(order.status);
 
   if (!open) return null;
 
@@ -527,7 +529,8 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                         status={order.status}
                         onValidationChange={setTrackingValid}
                         onAssignmentsLoaded={setHasTrackingAssignments}
-                        readOnly={order.status === "in_transit"}
+                        onAllDriversArrived={setAllDriversArrived}
+                        readOnly={false}
                       />
                       {order.status === "preparing" && !trackingValid && (
                         <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded mt-3">
@@ -554,19 +557,28 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
           {/* Sticky Footer with Actions */}
           {availableActions.length > 0 && (
             <DialogFooter className="flex-shrink-0 px-4 sm:px-6 py-4 border-t bg-background gap-2 flex-wrap">
-              {availableActions.map((action, index) => (
-                <Button
-                  key={index}
-                  variant={action.variant}
-                  onClick={action.action}
-                  disabled={actionLoading || action.disabled}
-                  className="flex-1 sm:flex-none min-w-[120px]"
-                  size="default"
-                >
-                  {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : action.icon}
-                  {action.label}
-                </Button>
-              ))}
+              <div className="w-full space-y-2">
+                <div className="flex gap-2 flex-wrap">
+                  {availableActions.map((action, index) => (
+                    <Button
+                      key={index}
+                      variant={action.variant}
+                      onClick={action.action}
+                      disabled={actionLoading || action.disabled}
+                      className="flex-1 sm:flex-none min-w-[120px]"
+                      size="default"
+                    >
+                      {actionLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : action.icon}
+                      {action.label}
+                    </Button>
+                  ))}
+                </div>
+                {order?.status === "in_transit" && !allDriversArrived && (
+                  <p className="text-xs text-amber-600 text-center">
+                    All tracking drivers must be marked as arrived before marking as Delivered.
+                  </p>
+                )}
+              </div>
             </DialogFooter>
           )}
         </DialogContent>
