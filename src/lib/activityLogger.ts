@@ -55,6 +55,10 @@ export function formatActivityDescription(log: {
         const newStatus = newVals?.status;
         return `Order status changed from ${formatStatus(oldStatus)} to ${formatStatus(newStatus)}`;
       }
+      if (action === 'driver_resumed') {
+        const driverName = newVals?.driver_name || 'Driver';
+        return `Driver ${driverName} resumed from hold`;
+      }
       return `Order ${action}`;
       
     case 'project_members':
