@@ -792,7 +792,7 @@ export function TrackingAssignmentSection({
   );
 
   // === COLLAPSED VIEW (compact summary per driver) ===
-  const CollapsedView = () => (
+  const collapsedViewContent = (
     <div className="space-y-1.5">
       {assignments.map((a) => (
         <div key={a.driver_user_id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
@@ -821,7 +821,7 @@ export function TrackingAssignmentSection({
   );
 
   // === EXPANDED VIEW (full details + actions) ===
-  const ExpandedView = () => (
+  const expandedViewContent = (
     <div className="space-y-4">
       {assignments.map((assignment) => (
         <div
@@ -1200,11 +1200,11 @@ export function TrackingAssignmentSection({
           </CollapsibleTrigger>
 
           {/* Collapsed summary */}
-          {!isExpanded && <div className="mt-2"><CollapsedView /></div>}
+          {!isExpanded && <div className="mt-2">{collapsedViewContent}</div>}
 
           {/* Expanded full view */}
           <CollapsibleContent className="mt-3">
-            <ExpandedView />
+            {expandedViewContent}
           </CollapsibleContent>
         </Collapsible>
       )}
