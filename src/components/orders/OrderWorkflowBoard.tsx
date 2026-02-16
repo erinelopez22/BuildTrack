@@ -442,6 +442,24 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         </div>
       </div>
 
+      {/* Process Legend */}
+      <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground text-sm mb-1.5">Process Legend</p>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="font-medium">Order Request</span><span>→</span>
+          <span className="font-medium">Approved</span><span>→</span>
+          <span className="font-medium">Submitted</span><span>→</span>
+          <span className="font-medium">Preparing</span><span>→</span>
+          <span className="font-medium">On Transit</span><span>→</span>
+          <span className="font-medium">Delivered</span><span>→</span>
+          <span className="font-medium">Completed</span>
+        </div>
+        <div className="mt-1 flex gap-4">
+          <span><span className="font-medium text-amber-600">On-Hold</span> — Order temporarily paused</span>
+          <span><span className="font-medium text-destructive">Rejected</span> — Order denied by approver</span>
+        </div>
+      </div>
+
       {/* Main Workflow Board - Active Status Lanes */}
       <div className="space-y-2">
         <h3 className="text-sm font-medium text-muted-foreground px-1">Active Workflow</h3>
@@ -478,8 +496,8 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         </div>
       </div>
 
-      {/* Separated Section for On-hold and Rejected */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+      {/* Separated Section for On-hold and Rejected - Stacked Vertically */}
+      <div className="space-y-4 mt-6">
         {SPECIAL_STATUS_LANES.map((lane) => {
           const laneOrders = getOrdersForLane(lane.key);
           return (
@@ -512,7 +530,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                       order={order}
                       onClick={() => setSelectedOrderId(order.id)}
                       onQuickAction={(action) => handleQuickAction(order, action)}
-                      showHoverActions={lane.key === "on_hold"} // Only show for on_hold, not rejected
+                      showHoverActions={lane.key === "on_hold"}
                     />
                   ))}
                 </div>

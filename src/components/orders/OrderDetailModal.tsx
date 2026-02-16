@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +37,9 @@ import {
   PauseCircle,
   FileText,
   ListOrdered,
+  ChevronDown,
+  ChevronRight,
+  History,
 } from "lucide-react";
 import type { Order, Profile, OrderStatus } from "@/types/database";
 import { TrackingAssignmentSection } from "./TrackingAssignmentSection";
@@ -81,14 +85,48 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   const [hasTrackingAssignments, setHasTrackingAssignments] = useState(false);
   const [allDriversArrived, setAllDriversArrived] = useState(false);
 
+  // Collapsible section states
+  const [materialsExpanded, setMaterialsExpanded] = useState(false);
+  const [notesExpanded, setNotesExpanded] = useState(false);
+  const [activityExpanded, setActivityExpanded] = useState(false);
+
+  // Activity log
+  const [activityLogs, setActivityLogs] = useState<any[]>([]);
+
   // Lightbox state
   const lightbox = useLightbox();
 
   useEffect(() => {
     if (orderId && open) {
       fetchOrderDetails();
+      fetchActivityLog();
     }
   }, [orderId, open]);
+
+  const fetchActivityLog = async () => {
+    if (!orderId) return;
+    const { data } = await supabase
+      .from("audit_logs")
+      .select("*")
+      .eq("table_name", "orders")
+      .eq("record_id", orderId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (data) {
+      // Fetch user profiles for logs
+      const userIds = [...new Set(data.map(l => l.user_id).filter(Boolean))];
+      const { data: profiles } = userIds.length > 0
+        ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+        : { data: [] };
+      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
+      setActivityLogs(data.map(log => ({
+        ...log,
+        user_profile: log.user_id ? profileMap.get(log.user_id) : null,
+      })));
+    }
+  };
 
   const fetchOrderDetails = async () => {
     if (!orderId) return;
@@ -471,41 +509,53 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
                 <Separator />
 
-                {/* Materials Section */}
-                <section>
-                  <h3 className="flex items-center gap-2 text-sm font-semibold mb-3">
-                    <ListOrdered className="h-4 w-4 text-muted-foreground" />
-                    Materials ({orderItems.length})
-                  </h3>
-                  {orderItems.length > 0 ? (
-                    <div className="rounded-lg border bg-muted/30 divide-y">
-                      {orderItems.map((item) => (
-                        <div key={item.id} className="px-4 py-3 flex justify-between items-center gap-2">
-                          <span className="text-sm truncate">{item.sku?.name || "Unknown Material"}</span>
-                          <span className="text-sm text-muted-foreground whitespace-nowrap">
-                            {item.quantity_ordered} {item.sku?.unit_of_measure || "pcs"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">No materials listed</p>
-                  )}
-                </section>
+                {/* Materials Section - Collapsible */}
+                <Collapsible open={materialsExpanded} onOpenChange={setMaterialsExpanded}>
+                  <CollapsibleTrigger asChild>
+                    <button className="flex items-center justify-between w-full text-sm font-semibold py-1 hover:text-primary transition-colors">
+                      <span className="flex items-center gap-2">
+                        {materialsExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        <ListOrdered className="h-4 w-4 text-muted-foreground" />
+                        Materials ({orderItems.length} items)
+                      </span>
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2">
+                    {orderItems.length > 0 ? (
+                      <div className="rounded-lg border bg-muted/30 divide-y">
+                        {orderItems.map((item) => (
+                          <div key={item.id} className="px-4 py-2 flex justify-between items-center gap-2">
+                            <span className="text-sm truncate">{item.sku?.name || "Unknown Material"}</span>
+                            <span className="text-sm text-muted-foreground whitespace-nowrap">
+                              {item.quantity_ordered} {item.sku?.unit_of_measure || "pcs"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">No materials listed</p>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
 
-                {/* Notes Section */}
+                {/* Notes Section - Collapsible */}
                 {order.notes && (
                   <>
                     <Separator />
-                    <section>
-                      <h3 className="flex items-center gap-2 text-sm font-semibold mb-3">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        Notes
-                      </h3>
-                      <div className="rounded-lg border bg-muted/30 p-4">
-                        <p className="text-sm whitespace-pre-wrap">{order.notes}</p>
-                      </div>
-                    </section>
+                    <Collapsible open={notesExpanded} onOpenChange={setNotesExpanded}>
+                      <CollapsibleTrigger asChild>
+                        <button className="flex items-center gap-2 w-full text-sm font-semibold py-1 hover:text-primary transition-colors">
+                          {notesExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          Notes
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2">
+                        <div className="rounded-lg border bg-muted/30 p-3">
+                          <p className="text-sm whitespace-pre-wrap">{order.notes}</p>
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
                   </>
                 )}
 
@@ -534,12 +584,69 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                       />
                       {order.status === "preparing" && !trackingValid && (
                         <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded mt-3">
-                          Assign at least one driver with a plate number before moving to transit.
+                          Assign at least one driver with a plate number and evidence before moving to transit.
                         </p>
                       )}
                     </section>
                   </>
                 )}
+
+                {/* Activity Log - Collapsible */}
+                <Separator />
+                <Collapsible open={activityExpanded} onOpenChange={setActivityExpanded}>
+                  <CollapsibleTrigger asChild>
+                    <button className="flex items-center gap-2 w-full text-sm font-semibold py-1 hover:text-primary transition-colors">
+                      {activityExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      <History className="h-4 w-4 text-muted-foreground" />
+                      Activity Log ({activityLogs.length})
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2">
+                    {activityLogs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic">No activity recorded yet.</p>
+                    ) : (
+                      <div className="rounded-lg border bg-muted/30 divide-y max-h-[200px] overflow-y-auto">
+                        {activityLogs.map((log) => {
+                          const profile = log.user_profile;
+                          const userName = profile?.full_name || profile?.email || "System";
+                          const newVals = log.new_values as Record<string, any> | null;
+                          const oldVals = log.old_values as Record<string, any> | null;
+                          let summary = log.action;
+                          if (log.action === "status_change" && newVals?.status) {
+                            summary = `Status changed from ${oldVals?.status || "?"} to ${newVals.status}`;
+                          } else if (log.action === "approve") {
+                            summary = "Order approved";
+                          } else if (log.action === "reject") {
+                            summary = `Order rejected${newVals?.rejection_reason ? `: ${newVals.rejection_reason}` : ""}`;
+                          } else if (log.action === "create") {
+                            summary = "Order created";
+                          } else if (log.action === "on_hold") {
+                            summary = `Order placed on hold${newVals?.on_hold_reason ? `: ${newVals.on_hold_reason}` : ""}`;
+                          } else if (log.action === "tracking_assigned") {
+                            summary = `Driver ${newVals?.driver_name || ""} assigned`;
+                          } else if (log.action === "driver_arrived") {
+                            summary = `Driver ${newVals?.driver_name || ""} arrived`;
+                          } else if (log.action === "driver_hold") {
+                            summary = `Driver ${newVals?.driver_name || ""} placed on hold`;
+                          } else if (log.action === "driver_resumed") {
+                            summary = `Driver ${newVals?.driver_name || ""} resumed`;
+                          }
+                          return (
+                            <div key={log.id} className="px-3 py-2 text-xs">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium">{userName}</span>
+                                <span className="text-muted-foreground whitespace-nowrap">
+                                  {log.created_at ? formatManilaTime(log.created_at) : ""}
+                                </span>
+                              </div>
+                              <p className="text-muted-foreground mt-0.5">{summary}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CollapsibleContent>
+                </Collapsible>
 
                 {/* Read-only notice for rejected orders */}
                 {order.status === "rejected" && (
