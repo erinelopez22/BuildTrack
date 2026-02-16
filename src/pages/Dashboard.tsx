@@ -151,7 +151,7 @@ export default function Dashboard() {
           variant="default"
           href="/orders?status=active"
         />
-        <StatCard title="Total SKUs" value={loading ? "..." : stats.totalSkus} icon={Package} variant="default" />
+        <StatCard title="Total SKUs" value={loading ? "..." : stats.totalSkus} icon={Package} variant="default" href="/skus" />
         {isAdmin() && (
           <StatCard title="Active Members" value={stats.activeMembers} icon={Users} variant="default" href="/members" />
         )}

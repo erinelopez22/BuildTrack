@@ -153,7 +153,7 @@ export function TrackingAssignmentSection({
   useEffect(() => {
     const isValid =
       assignments.length > 0 &&
-      assignments.every((a) => a.plate_number.trim() !== "") &&
+      assignments.every((a) => a.plate_number.trim() !== "" && a.evidence.length > 0) &&
       hasSaved;
     onValidationChange?.(isValid);
   }, [assignments, hasSaved, onValidationChange]);
@@ -862,8 +862,11 @@ export function TrackingAssignmentSection({
                 <Input
                   placeholder="Enter plate #"
                   value={assignment.plate_number}
-                  onChange={(e) => handleFieldChange(assignment.driver_user_id, "plate_number", e.target.value)}
-                  className="h-9"
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9\s\-]/g, "");
+                    handleFieldChange(assignment.driver_user_id, "plate_number", val);
+                  }}
+                  className="h-9 uppercase"
                 />
               ) : (
                 <p className="font-mono">{assignment.plate_number || "—"}</p>
@@ -1212,7 +1215,7 @@ export function TrackingAssignmentSection({
           <Button
             className="w-full"
             onClick={handleSaveAssignments}
-            disabled={saving || assignments.some((a) => !a.plate_number.trim())}
+            disabled={saving || assignments.some((a) => !a.plate_number.trim()) || assignments.some((a) => a.evidence.length === 0)}
           >
             {saving ? (
               <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
@@ -1222,7 +1225,12 @@ export function TrackingAssignmentSection({
           </Button>
           {!hasSaved && (
             <p className="text-xs text-amber-600 text-center">
-              Assign and save at least one driver before marking On Transit.
+              Assign at least one driver with a plate number and evidence photo before marking On Transit.
+            </p>
+          )}
+          {assignments.some((a) => a.evidence.length === 0) && (
+            <p className="text-xs text-destructive text-center">
+              Evidence photo is required for each driver assignment.
             </p>
           )}
         </div>

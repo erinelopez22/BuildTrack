@@ -83,7 +83,6 @@ export default function UsersPage() {
     name: '',
     address: '',
     email: '',
-    username: '',
     password: '',
     role: 'viewer' as AppRole,
   });
@@ -185,22 +184,13 @@ export default function UsersPage() {
   };
 
   // --- Debounced duplicate checks ---
-  const checkDuplicate = useCallback(async (field: 'username' | 'email', value: string) => {
+  const checkDuplicate = useCallback(async (field: 'email', value: string) => {
     const trimmed = value.trim().toLowerCase();
     if (!trimmed) return;
 
     setCheckingDuplicates(prev => ({ ...prev, [field]: true }));
 
-    if (field === 'username') {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .ilike('username', trimmed)
-        .limit(1);
-      if (data && data.length > 0) {
-        setAddUserErrors(prev => ({ ...prev, username: 'Username already exists.' }));
-      }
-    } else if (field === 'email') {
+    if (field === 'email') {
       const { data } = await supabase
         .from('profiles')
         .select('id')
@@ -217,14 +207,14 @@ export default function UsersPage() {
   // Debounce timer refs
   const [debounceTimers] = useState<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const handleFieldBlur = (field: 'username' | 'email') => {
-    const value = field === 'username' ? addUserForm.username : addUserForm.email;
+  const handleFieldBlur = (field: 'email') => {
+    const value = addUserForm.email;
     if (value.trim()) {
       checkDuplicate(field, value);
     }
   };
 
-  const handleFieldChangeDebounced = (field: 'username' | 'email', value: string) => {
+  const handleFieldChangeDebounced = (field: 'email', value: string) => {
     setAddUserForm(p => ({ ...p, [field]: value }));
     setAddUserErrors(p => ({ ...p, [field]: '' }));
 
@@ -238,8 +228,7 @@ export default function UsersPage() {
     const newForm = { ...addUserForm, role };
     if (role === 'tracking_driver') {
       if (!newForm.email) newForm.email = 'driver@gmail.com';
-      if (!newForm.username) newForm.username = 'user';
-      if (!newForm.password) newForm.password = 'user';
+      if (!newForm.password) newForm.password = 'password';
     }
     setAddUserForm(newForm);
   };
@@ -250,7 +239,6 @@ export default function UsersPage() {
     if (!addUserForm.address.trim()) errors.address = 'Address is required';
     if (!addUserForm.email.trim()) errors.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addUserForm.email.trim())) errors.email = 'Invalid email format';
-    if (!addUserForm.username.trim()) errors.username = 'Username is required';
     if (!addUserForm.password) errors.password = 'Password is required';
     else if (addUserForm.password.length < 6) errors.password = 'Password must be at least 6 characters';
     if (!addUserForm.role) errors.role = 'Role is required';
@@ -261,12 +249,11 @@ export default function UsersPage() {
 
   const isFormValid = () => {
     const f = addUserForm;
-    if (!f.name.trim() || !f.address.trim() || !f.email.trim() || !f.username.trim() || !f.password) return false;
+    if (!f.name.trim() || !f.address.trim() || !f.email.trim() || !f.password) return false;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) return false;
     if (f.password.length < 6) return false;
     if (f.role === 'super_admin' && !isSuperAdmin()) return false;
-    // Check for existing inline errors
-    if (addUserErrors.username || addUserErrors.email) return false;
+    if (addUserErrors.email) return false;
     return true;
   };
 
@@ -281,7 +268,7 @@ export default function UsersPage() {
           name: addUserForm.name.trim(),
           address: addUserForm.address.trim(),
           email: addUserForm.email.trim(),
-          username: addUserForm.username.trim().toLowerCase(),
+          username: addUserForm.email.trim().toLowerCase(),
           password: addUserForm.password,
           role: addUserForm.role,
         },
@@ -292,9 +279,7 @@ export default function UsersPage() {
         toast({ title: 'Error', description: errMsg, variant: 'destructive' });
       } else if (response.data?.error) {
         const errMsg = response.data.error;
-        if (errMsg.includes('Username already exists')) {
-          setAddUserErrors(prev => ({ ...prev, username: errMsg }));
-        } else if (errMsg.includes('Email already exists')) {
+        if (errMsg.includes('Email already exists')) {
           setAddUserErrors(prev => ({ ...prev, email: errMsg }));
         } else {
           toast({ title: 'Error', description: errMsg, variant: 'destructive' });
@@ -302,7 +287,7 @@ export default function UsersPage() {
       } else {
         toast({ title: 'Success', description: 'User created successfully. They can now log in.' });
         setIsAddUserOpen(false);
-        setAddUserForm({ name: '', address: '', email: '', username: '', password: '', role: 'viewer' });
+        setAddUserForm({ name: '', address: '', email: '', password: '', role: 'viewer' });
         setAddUserErrors({});
         fetchUsers();
       }
@@ -352,11 +337,6 @@ export default function UsersPage() {
           </div>
         </div>
       ),
-    },
-    {
-      key: 'username',
-      header: 'Username',
-      render: (user) => (user as any).username || '-',
     },
     {
       key: 'roles',
@@ -487,7 +467,7 @@ export default function UsersPage() {
       <Dialog open={isAddUserOpen} onOpenChange={(open) => {
         setIsAddUserOpen(open);
         if (!open) {
-          setAddUserForm({ name: '', address: '', email: '', username: '', password: '', role: 'viewer' });
+          setAddUserForm({ name: '', address: '', email: '', password: '', role: 'viewer' });
           setAddUserErrors({});
         }
       }}>
@@ -544,19 +524,6 @@ export default function UsersPage() {
               {addUserErrors.email && <p className="text-xs text-destructive">{addUserErrors.email}</p>}
             </div>
 
-            <div className="space-y-2">
-              <Label>Username *</Label>
-              <div className="relative">
-                <Input
-                  value={addUserForm.username}
-                  onChange={(e) => handleFieldChangeDebounced('username', e.target.value)}
-                  onBlur={() => handleFieldBlur('username')}
-                  placeholder="username"
-                />
-                {checkingDuplicates.username && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
-              </div>
-              {addUserErrors.username && <p className="text-xs text-destructive">{addUserErrors.username}</p>}
-            </div>
 
             <div className="space-y-2">
               <Label>Password *</Label>
@@ -624,7 +591,6 @@ function ViewUserModal({
         <div className="space-y-4">
           <DetailRow label="Full Name" value={user.full_name || '-'} />
           <DetailRow label="Email" value={user.email || '-'} />
-          <DetailRow label="Username" value={(user as any).username || '-'} />
           <DetailRow label="Address" value={(user as any).address || '-'} />
           <Separator />
           <div>

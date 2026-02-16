@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock } from "lucide-react";
+import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock, Upload, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -401,6 +401,49 @@ export function QuotationModal({
 
   const addItem = () => {
     setItems([...items, { id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
+  };
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const XLSX = await import("xlsx");
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(sheet);
+      
+      const newItems: QuotationItem[] = rows
+        .filter((row) => row["Material Name"] || row["material_name"] || row["MATERIAL NAME"])
+        .map((row) => ({
+          id: crypto.randomUUID(),
+          material_name: (row["Material Name"] || row["material_name"] || row["MATERIAL NAME"] || "").toString().trim().toUpperCase(),
+          unit: (row["Unit"] || row["unit"] || row["UNIT"] || "pcs").toString().trim().toLowerCase(),
+          quantity: parseInt(row["Qty"] || row["qty"] || row["QTY"] || row["Quantity"] || "0") || 0,
+        }));
+
+      if (newItems.length === 0) {
+        toast({ title: "No Data", description: "No valid rows found. Ensure headers: Material Name, Unit, Qty", variant: "destructive" });
+        return;
+      }
+
+      setItems((prev) => {
+        const filtered = prev.filter((i) => i.material_name.trim() !== "");
+        return [...filtered, ...newItems];
+      });
+      toast({ title: "Imported", description: `${newItems.length} material(s) imported from Excel.` });
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to parse Excel file.", variant: "destructive" });
+    }
+    e.target.value = "";
+  };
+
+  const handleDownloadTemplate = async () => {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.aoa_to_sheet([["Material Name", "Unit", "Qty"], ["SAMPLE MATERIAL", "pcs", 10]]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "quotation_template.xlsx");
   };
 
   // Check if a material can be deleted (not used in any order)
@@ -1051,10 +1094,27 @@ export function QuotationModal({
               </div>
 
               {isEditMode && (
-                <Button type="button" variant="outline" size="sm" onClick={addItem} className="w-full">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Material
-                </Button>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={addItem} className="flex-1">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Material
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('excel-upload')?.click()}>
+                    <Upload className="h-4 w-4 mr-1" />
+                    Upload Excel
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={handleDownloadTemplate}>
+                    <Download className="h-4 w-4 mr-1" />
+                    Template
+                  </Button>
+                  <input
+                    id="excel-upload"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden"
+                    onChange={handleExcelUpload}
+                  />
+                </div>
               )}
             </div>
 

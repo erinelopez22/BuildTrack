@@ -68,11 +68,11 @@ export default function Login() {
           <form onSubmit={handleSignIn}>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="login-id">Username or Email</Label>
+                <Label htmlFor="login-id">Email</Label>
                 <Input
                   id="login-id"
-                  type="text"
-                  placeholder="Enter username or email"
+                  type="email"
+                  placeholder="Enter email"
                   value={loginId}
                   onChange={(e) => setLoginId(e.target.value)}
                   required
