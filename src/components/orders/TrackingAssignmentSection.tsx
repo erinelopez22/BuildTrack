@@ -856,10 +856,7 @@ export function TrackingAssignmentSection({
 
           {/* Plate Number + Meta */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-
-            {assignments.map((assignment) => (
-            <div key={assignment.driver_user_id}>
-            
+            <div>
               <p className="text-xs text-muted-foreground mb-1">Plate Number</p>
               {isPreparing && canEdit ? (
                 <Input
@@ -875,8 +872,6 @@ export function TrackingAssignmentSection({
                 <p className="font-mono">{assignment.plate_number || "—"}</p>
               )}
             </div>
-
-            
             <div>
               <p className="text-xs text-muted-foreground mb-1">Added By</p>
               <p className="truncate">{assignment.creator?.full_name || assignment.creator?.email || "—"}</p>
