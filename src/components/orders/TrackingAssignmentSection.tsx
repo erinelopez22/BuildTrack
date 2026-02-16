@@ -84,6 +84,8 @@ interface DriverAssignment {
   arrived_at?: string | null;
   hold_remarks?: string | null;
   held_at?: string | null;
+  resumed_at?: string | null;
+  resume_remarks?: string | null;
 }
 
 interface EvidenceFile {
@@ -134,6 +136,8 @@ export function TrackingAssignmentSection({
   const [isExpanded, setIsExpanded] = useState(false);
   const [holdDialogDriverId, setHoldDialogDriverId] = useState<string | null>(null);
   const [holdRemarks, setHoldRemarks] = useState("");
+  const [resumeDialogDriverId, setResumeDialogDriverId] = useState<string | null>(null);
+  const [resumeRemarks, setResumeRemarks] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
@@ -276,6 +280,8 @@ export function TrackingAssignmentSection({
         arrived_at: a.arrived_at,
         hold_remarks: a.hold_remarks,
         held_at: a.held_at,
+        resumed_at: a.resumed_at,
+        resume_remarks: a.resume_remarks,
       }));
 
       setAssignments(loadedAssignments);
@@ -569,6 +575,61 @@ export function TrackingAssignmentSection({
     setActionLoading(null);
   };
 
+  const handleResumeDriver = async () => {
+    if (!user || !resumeDialogDriverId || !resumeRemarks.trim()) return;
+
+    const assignment = assignments.find((a) => a.id === resumeDialogDriverId);
+    if (!assignment) return;
+
+    setActionLoading(resumeDialogDriverId);
+    const resumedAt = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("order_tracking_assignments")
+      .update({ tracking_status: "on_transit", resumed_at: resumedAt, resume_remarks: resumeRemarks.trim() })
+      .eq("id", resumeDialogDriverId);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      setActionLoading(null);
+      return;
+    }
+
+    const driverName = assignment.driver.full_name || assignment.driver.email;
+
+    setAssignments((prev) =>
+      prev.map((a) =>
+        a.id === resumeDialogDriverId
+          ? { ...a, tracking_status: "on_transit", resumed_at: resumedAt, resume_remarks: resumeRemarks.trim() }
+          : a
+      )
+    );
+
+    await logActivity({
+      action: "driver_resumed",
+      tableName: "orders",
+      recordId: orderId,
+      oldValues: { tracking_status: "on_hold", hold_remarks: assignment.hold_remarks },
+      newValues: { tracking_status: "on_transit", driver_name: driverName, resume_remarks: resumeRemarks.trim(), resumed_at: resumedAt },
+      userId: user.id,
+    });
+
+    await notifyProjectMembers({
+      projectId,
+      title: "Driver Resumed",
+      message: `Driver ${driverName} resumed from hold: ${resumeRemarks.trim()}`,
+      type: "order",
+      referenceType: "order",
+      referenceId: orderId,
+      excludeUserId: user.id,
+    });
+
+    toast({ title: "Driver Resumed", description: `${driverName} is back on transit.` });
+    setResumeDialogDriverId(null);
+    setResumeRemarks("");
+    setActionLoading(null);
+  };
+
   const handleSaveAssignments = async () => {
     if (!user) return;
 
@@ -747,6 +808,8 @@ export function TrackingAssignmentSection({
                 ? `Arrived: ${formatManilaTime(a.arrived_at)}`
                 : a.tracking_status === "on_hold" && a.held_at
                 ? `Held: ${formatManilaTime(a.held_at)}`
+                : a.tracking_status === "on_transit" && a.resumed_at
+                ? `Since: ${formatManilaTime(a.resumed_at)}`
                 : a.created_at
                 ? `Since: ${formatManilaTime(a.created_at)}`
                 : ""}
@@ -842,6 +905,21 @@ export function TrackingAssignmentSection({
             </div>
           )}
 
+          {/* Resume info */}
+          {assignment.resumed_at && (
+            <div className="flex items-center gap-2 text-sm bg-blue-500/10 border border-blue-500/20 rounded-md px-3 py-2">
+              <Truck className="h-4 w-4 text-blue-600 flex-shrink-0" />
+              <div>
+                <span className="text-blue-600 font-medium">Resumed at: {formatManilaTime(assignment.resumed_at)}</span>
+                {assignment.resume_remarks && (
+                  <p className="text-xs text-blue-600 mt-0.5">
+                    <span className="font-semibold">RESUME REMARKS:</span> {assignment.resume_remarks}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Per-driver action buttons (On Transit page only) */}
           {isInTransit && canDoDriverActions && assignment.id && assignment.tracking_status === "on_transit" && (
             <div className="flex items-center gap-2 pt-1">
@@ -868,6 +946,26 @@ export function TrackingAssignmentSection({
               >
                 <PauseCircle className="h-3.5 w-3.5" />
                 Hold
+              </Button>
+            </div>
+          )}
+
+          {/* Resume button for On Hold drivers */}
+          {isInTransit && canDoDriverActions && assignment.id && assignment.tracking_status === "on_hold" && (
+            <div className="flex items-center gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-blue-600 border-blue-500/30 hover:bg-blue-500/10"
+                onClick={() => setResumeDialogDriverId(assignment.id!)}
+                disabled={actionLoading === assignment.id}
+              >
+                {actionLoading === assignment.id ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Truck className="h-3.5 w-3.5" />
+                )}
+                Resume
               </Button>
             </div>
           )}
@@ -1159,6 +1257,40 @@ export function TrackingAssignmentSection({
             >
               {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Place On Hold
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Resume Remarks Dialog */}
+      <AlertDialog open={!!resumeDialogDriverId} onOpenChange={(open) => { if (!open) { setResumeDialogDriverId(null); setResumeRemarks(""); } }}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-blue-600">
+              <Truck className="h-5 w-5" />
+              Resume Driver
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Please provide remarks for resuming this driver from hold.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Textarea
+              placeholder="e.g. Issue resolved, materials replaced..."
+              value={resumeRemarks}
+              onChange={(e) => setResumeRemarks(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setResumeDialogDriverId(null); setResumeRemarks(""); }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResumeDriver}
+              disabled={!resumeRemarks.trim() || !!actionLoading}
+              className="bg-blue-500 text-white hover:bg-blue-600"
+            >
+              {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Resume Transit
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

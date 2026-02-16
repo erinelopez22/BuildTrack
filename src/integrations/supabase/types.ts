@@ -317,6 +317,8 @@ export type Database = {
           id: string
           order_id: string
           plate_number: string
+          resume_remarks: string | null
+          resumed_at: string | null
           tracking_status: string
         }
         Insert: {
@@ -329,6 +331,8 @@ export type Database = {
           id?: string
           order_id: string
           plate_number: string
+          resume_remarks?: string | null
+          resumed_at?: string | null
           tracking_status?: string
         }
         Update: {
@@ -341,6 +345,8 @@ export type Database = {
           id?: string
           order_id?: string
           plate_number?: string
+          resume_remarks?: string | null
+          resumed_at?: string | null
           tracking_status?: string
         }
         Relationships: [
