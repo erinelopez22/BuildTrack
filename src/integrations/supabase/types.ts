@@ -50,6 +50,111 @@ export type Database = {
         }
         Relationships: []
       }
+      borrow_transactions: {
+        Row: {
+          asset_id: string
+          borrowed_at: string
+          borrowed_by: string
+          borrowed_qty: number
+          created_at: string
+          expected_return_date: string | null
+          id: string
+          project_id: string
+          return_remarks: string | null
+          returned_at: string | null
+          returned_qty: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          borrowed_at?: string
+          borrowed_by: string
+          borrowed_qty: number
+          created_at?: string
+          expected_return_date?: string | null
+          id?: string
+          project_id: string
+          return_remarks?: string | null
+          returned_at?: string | null
+          returned_qty?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          borrowed_at?: string
+          borrowed_by?: string
+          borrowed_qty?: number
+          created_at?: string
+          expected_return_date?: string | null
+          id?: string
+          project_id?: string
+          return_remarks?: string | null
+          returned_at?: string | null
+          returned_qty?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "borrow_transactions_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "company_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "borrow_transactions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_assets: {
+        Row: {
+          asset_code: string | null
+          asset_name: string
+          asset_type: string
+          condition: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          total_quantity: number
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          asset_code?: string | null
+          asset_name: string
+          asset_type?: string
+          condition?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          total_quantity?: number
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asset_code?: string | null
+          asset_name?: string
+          asset_type?: string
+          condition?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          total_quantity?: number
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       deliveries: {
         Row: {
           carrier: string | null
@@ -311,6 +416,8 @@ export type Database = {
           arrived_at: string | null
           created_at: string
           created_by: string
+          delivered_at: string | null
+          delivery_remarks: string | null
           driver_user_id: string
           held_at: string | null
           hold_remarks: string | null
@@ -325,6 +432,8 @@ export type Database = {
           arrived_at?: string | null
           created_at?: string
           created_by: string
+          delivered_at?: string | null
+          delivery_remarks?: string | null
           driver_user_id: string
           held_at?: string | null
           hold_remarks?: string | null
@@ -339,6 +448,8 @@ export type Database = {
           arrived_at?: string | null
           created_at?: string
           created_by?: string
+          delivered_at?: string | null
+          delivery_remarks?: string | null
           driver_user_id?: string
           held_at?: string | null
           hold_remarks?: string | null
@@ -601,6 +712,7 @@ export type Database = {
       }
       project_quotations: {
         Row: {
+          category: string
           created_at: string
           created_by: string
           id: string
@@ -609,6 +721,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category?: string
           created_at?: string
           created_by: string
           id?: string
@@ -617,6 +730,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category?: string
           created_at?: string
           created_by?: string
           id?: string
@@ -681,6 +795,66 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      quotation_change_requests: {
+        Row: {
+          change_type: string
+          created_at: string
+          id: string
+          payload: Json
+          project_id: string
+          quotation_id: string | null
+          requested_by: string
+          review_remarks: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          change_type: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          project_id: string
+          quotation_id?: string | null
+          requested_by: string
+          review_remarks?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          change_type?: string
+          created_at?: string
+          id?: string
+          payload?: Json
+          project_id?: string
+          quotation_id?: string | null
+          requested_by?: string
+          review_remarks?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quotation_change_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quotation_change_requests_quotation_id_fkey"
+            columns: ["quotation_id"]
+            isOneToOne: false
+            referencedRelation: "project_quotations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quotation_items: {
         Row: {
