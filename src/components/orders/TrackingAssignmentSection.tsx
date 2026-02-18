@@ -98,6 +98,15 @@ interface EvidenceFile {
   uploaded_at?: string;
 }
 
+interface ReceiverEvidenceFile {
+  id: string;
+  file_url: string;
+  file_name: string;
+  uploaded_by: string;
+  uploaded_at: string;
+  remarks?: string;
+}
+
 interface OrderItemInfo {
   id: string;
   sku_name: string;
@@ -139,6 +148,7 @@ export function TrackingAssignmentSection({
   const [resumeDialogDriverId, setResumeDialogDriverId] = useState<string | null>(null);
   const [resumeRemarks, setResumeRemarks] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [receiverEvidence, setReceiverEvidence] = useState<Record<string, ReceiverEvidenceFile[]>>({});
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   const canEdit = !readOnly && (isSuperAdmin() || isAdmin() || canProcessLogistics());
@@ -287,6 +297,27 @@ export function TrackingAssignmentSection({
       setAssignments(loadedAssignments);
       setHasSaved(true);
       onAssignmentsLoaded?.(true);
+
+      // Fetch receiver evidence separately
+      const { data: recEvData } = await supabase
+        .from("receiver_evidence")
+        .select("*")
+        .in("order_tracking_assignment_id", assignmentIds);
+
+      const recEvMap: Record<string, ReceiverEvidenceFile[]> = {};
+      (recEvData || []).forEach((re: any) => {
+        const list = recEvMap[re.order_tracking_assignment_id] || [];
+        list.push({
+          id: re.id,
+          file_url: re.file_url,
+          file_name: re.file_name,
+          uploaded_by: re.uploaded_by,
+          uploaded_at: re.uploaded_at,
+          remarks: re.remarks,
+        });
+        recEvMap[re.order_tracking_assignment_id] = list;
+      });
+      setReceiverEvidence(recEvMap);
     } else {
       onAssignmentsLoaded?.(false);
     }
@@ -534,13 +565,93 @@ export function TrackingAssignmentSection({
     toast({ title: "Uploaded", description: "Evidence photo uploaded successfully." });
   };
 
+  // Upload receiver's evidence (separate from preparing evidence)
+  const handleReceiverEvidenceUpload = async (assignmentId: string, files: FileList | null) => {
+    if (!files || !user || !assignmentId) return;
+
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith("image/")) {
+        toast({ title: "Invalid File", description: "Only image files are allowed.", variant: "destructive" });
+        continue;
+      }
+
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${orderId}/receiver/${assignmentId}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("tracking-evidence")
+        .upload(fileName, file);
+
+      if (uploadError) {
+        toast({ title: "Upload Error", description: uploadError.message, variant: "destructive" });
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("tracking-evidence")
+        .getPublicUrl(fileName);
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("receiver_evidence")
+        .insert({
+          order_tracking_assignment_id: assignmentId,
+          file_url: urlData.publicUrl,
+          file_name: file.name,
+          uploaded_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        toast({ title: "Error", description: insertError.message, variant: "destructive" });
+        continue;
+      }
+
+      // Update local state
+      setReceiverEvidence((prev) => ({
+        ...prev,
+        [assignmentId]: [
+          ...(prev[assignmentId] || []),
+          {
+            id: inserted.id,
+            file_url: urlData.publicUrl,
+            file_name: file.name,
+            uploaded_by: user.id,
+            uploaded_at: new Date().toISOString(),
+          },
+        ],
+      }));
+    }
+
+    await logActivity({
+      action: "receiver_evidence_uploaded",
+      tableName: "orders",
+      recordId: orderId,
+      oldValues: null,
+      newValues: { assignment_id: assignmentId, uploaded_by: user.id },
+      userId: user.id,
+    });
+
+    await notifyProjectMembers({
+      projectId,
+      title: "Receiver Evidence Uploaded",
+      message: `Receiver evidence has been uploaded for order tracking`,
+      type: "order",
+      referenceType: "order",
+      referenceId: orderId,
+      excludeUserId: user.id,
+    });
+
+    toast({ title: "Uploaded", description: "Receiver's evidence uploaded successfully." });
+  };
+
   const handleTrackArrived = async (assignmentId: string, driverName: string) => {
     if (!user || !assignmentId) return;
 
-    // Check evidence exists
-    const assignment = assignments.find((a) => a.id === assignmentId);
-    if (!assignment || assignment.evidence.length === 0) {
-      toast({ title: "Evidence Required", description: "Evidence photo is required before tracking arrived.", variant: "destructive" });
+    // Check RECEIVER evidence exists (not preparing evidence)
+    const recEv = receiverEvidence[assignmentId] || [];
+    if (recEv.length === 0) {
+      toast({ title: "Evidence Required", description: "Receiver's evidence photo is required before tracking arrived.", variant: "destructive" });
       return;
     }
 
@@ -991,38 +1102,64 @@ export function TrackingAssignmentSection({
           )}
 
           {/* Per-driver action buttons (On Transit page only) */}
-          {isInTransit && canDoDriverActions && assignment.id && assignment.tracking_status === "on_transit" && (
+          {isInTransit && canDoDriverActions && assignment.id && assignment.tracking_status === "on_transit" && (() => {
+            const driverReceiverEv = receiverEvidence[assignment.id!] || [];
+            const hasReceiverEvidence = driverReceiverEv.length > 0;
+            return (
             <div className="space-y-3 pt-1">
-              {/* Evidence requirement notice */}
-              {assignment.evidence.length === 0 && (
+              {/* Receiver's Evidence requirement notice */}
+              {!hasReceiverEvidence && (
                 <div className="flex items-center gap-2 text-xs bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2 text-amber-600">
                   <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                  Evidence photo is required before tracking arrived.
+                  Receiver's evidence photo is required before tracking arrived.
                 </div>
               )}
-              {/* On Transit Evidence Upload */}
+              {/* Receiver's Evidence Upload */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs text-muted-foreground">Arrival Evidence</p>
+                  <p className="text-xs font-medium text-muted-foreground">Receiver's Evidence</p>
                   <div>
                     <input
                       type="file"
                       accept="image/*"
                       multiple
                       className="hidden"
-                      ref={(el) => { fileInputRefs.current[`transit_${assignment.driver_user_id}`] = el; }}
-                      onChange={(e) => handleInTransitEvidenceUpload(assignment.id!, assignment.driver_user_id, e.target.files)}
+                      ref={(el) => { fileInputRefs.current[`receiver_${assignment.id}`] = el; }}
+                      onChange={(e) => handleReceiverEvidenceUpload(assignment.id!, e.target.files)}
                     />
                     <Button
                       variant="outline"
                       size="sm"
                       className="h-7 text-xs"
-                      onClick={() => fileInputRefs.current[`transit_${assignment.driver_user_id}`]?.click()}
+                      onClick={() => fileInputRefs.current[`receiver_${assignment.id}`]?.click()}
                     >
-                      <Upload className="h-3 w-3 mr-1" /> Upload Evidence
+                      <Upload className="h-3 w-3 mr-1" /> Upload Receiver Evidence
                     </Button>
                   </div>
                 </div>
+                {driverReceiverEv.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {driverReceiverEv.map((ev, index) => (
+                      <div key={ev.id} className="relative group">
+                        <img
+                          src={ev.file_url}
+                          alt={ev.file_name}
+                          className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => {
+                            window.dispatchEvent(new CustomEvent("open-lightbox", {
+                              detail: {
+                                images: driverReceiverEv.map((e) => ({ url: e.file_url, name: e.file_name })),
+                                startIndex: index,
+                              },
+                            }));
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">No receiver evidence uploaded yet</p>
+                )}
               </div>
               {/* Action buttons */}
               <div className="flex items-center gap-2">
@@ -1031,7 +1168,7 @@ export function TrackingAssignmentSection({
                   variant="outline"
                   className="gap-1.5 text-success border-success/30 hover:bg-success/10"
                   onClick={() => handleTrackArrived(assignment.id!, assignment.driver.full_name || assignment.driver.email)}
-                  disabled={actionLoading === assignment.id || assignment.evidence.length === 0}
+                  disabled={actionLoading === assignment.id || !hasReceiverEvidence}
                 >
                   {actionLoading === assignment.id ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1052,7 +1189,8 @@ export function TrackingAssignmentSection({
                 </Button>
               </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* Resume button for On Hold drivers */}
           {isInTransit && canDoDriverActions && assignment.id && assignment.tracking_status === "on_hold" && (
@@ -1226,6 +1364,32 @@ export function TrackingAssignmentSection({
               <p className="text-xs text-muted-foreground italic">No evidence uploaded</p>
             )}
           </div>
+
+          {/* Receiver's Evidence (read-only display for all statuses) */}
+          {assignment.id && (receiverEvidence[assignment.id] || []).length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Receiver's Evidence ({(receiverEvidence[assignment.id] || []).length})</p>
+              <div className="flex flex-wrap gap-2">
+                {(receiverEvidence[assignment.id] || []).map((ev, index) => (
+                  <div key={ev.id} className="relative group">
+                    <img
+                      src={ev.file_url}
+                      alt={ev.file_name}
+                      className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent("open-lightbox", {
+                          detail: {
+                            images: (receiverEvidence[assignment.id!] || []).map((e) => ({ url: e.file_url, name: e.file_name })),
+                            startIndex: index,
+                          },
+                        }));
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       ))}
     </div>
