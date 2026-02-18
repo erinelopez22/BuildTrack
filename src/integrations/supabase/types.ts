@@ -897,6 +897,44 @@ export type Database = {
           },
         ]
       }
+      receiver_evidence: {
+        Row: {
+          file_name: string
+          file_url: string
+          id: string
+          order_tracking_assignment_id: string
+          remarks: string | null
+          uploaded_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          file_name: string
+          file_url: string
+          id?: string
+          order_tracking_assignment_id: string
+          remarks?: string | null
+          uploaded_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          file_name?: string
+          file_url?: string
+          id?: string
+          order_tracking_assignment_id?: string
+          remarks?: string | null
+          uploaded_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receiver_evidence_order_tracking_assignment_id_fkey"
+            columns: ["order_tracking_assignment_id"]
+            isOneToOne: false
+            referencedRelation: "order_tracking_assignments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       skus: {
         Row: {
           brand: string | null
