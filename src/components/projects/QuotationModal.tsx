@@ -655,11 +655,12 @@ export function QuotationModal({
 
     toast({
       title: "Change Request Submitted",
-      description: "Your change request has been submitted for admin approval.",
+      description: "Changes submitted for approval. Awaiting Admin/Super Admin approval.",
     });
 
-    setIsEditMode(false);
-    fetchQuotation();
+    // Close modal and refresh data
+    onOpenChange(false);
+    onQuotationChange?.();
   };
 
   // Handle approve/reject change request (admin only)
@@ -669,6 +670,12 @@ export function QuotationModal({
     const request = pendingRequests.find((r) => r.id === requestId);
     if (!request) return;
 
+    // Guard: block if already processed
+    if (request.status !== "pending") {
+      toast({ title: "Error", description: "This request has already been processed.", variant: "destructive" });
+      return;
+    }
+
     const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
     const userName = userProfile?.full_name || "Admin";
 
@@ -677,14 +684,16 @@ export function QuotationModal({
       const payload = request.payload as any;
 
       if (request.change_type === "create") {
+        // For create: upsert to handle unique constraint on project_id
         const { data: newQuotation, error: createError } = await supabase
           .from("project_quotations")
-          .insert({
+          .upsert({
             project_id: projectId,
             created_by: request.requested_by,
             notes: payload.notes || null,
             category: payload.category || "initial",
-          })
+            updated_at: new Date().toISOString(),
+          }, { onConflict: "project_id" })
           .select()
           .single();
 
@@ -704,72 +713,54 @@ export function QuotationModal({
           );
         }
       } else if (request.change_type === "update" && request.quotation_id) {
-          // Create an "additional" quotation to preserve Initial vs Updates/Added separation
-          const { data: additionalQuotation, error: addError } = await supabase
+          // UPDATE the existing quotation row - DO NOT insert a new one
+          await supabase
             .from("project_quotations")
-            .insert({
-              project_id: projectId,
-              created_by: request.requested_by,
-              notes: payload.notes || null,
-              category: "additional",
-            })
-            .select()
-            .single();
-
-          if (addError) {
-            toast({ title: "Error", description: addError.message, variant: "destructive" });
-            return;
-          }
+            .update({ updated_at: new Date().toISOString(), notes: payload.notes || null })
+            .eq("id", request.quotation_id);
 
           if (payload.items) {
-            // Fetch existing initial items to determine deltas
-            const { data: initialItems } = await supabase
+            // Fetch existing items for this quotation to determine changes
+            const { data: existingItems } = await supabase
               .from("quotation_items")
-              .select("material_name, unit, quantity")
+              .select("id, material_name, unit, quantity")
               .eq("quotation_id", request.quotation_id);
 
-            const initialMap = new Map(
-              (initialItems || []).map((i: any) => [
+            const existingMap = new Map(
+              (existingItems || []).map((i: any) => [
                 `${i.material_name.toUpperCase()}||${i.unit.toLowerCase()}`,
-                i.quantity,
+                i,
               ])
             );
 
-            const additionalItems = payload.items
-              .map((item: any) => {
-                const key = `${item.material_name.toUpperCase()}||${item.unit.toLowerCase()}`;
-                const initialQty = initialMap.get(key);
-                if (initialQty !== undefined) {
-                  const delta = item.quantity - initialQty;
-                  if (delta > 0) {
-                    return {
-                      quotation_id: additionalQuotation.id,
-                      material_name: item.material_name,
-                      unit: item.unit,
-                      quantity: delta,
-                    };
-                  }
-                  return null;
+            // Process each item in the payload
+            for (const item of payload.items) {
+              const key = `${item.material_name.toUpperCase()}||${item.unit.toLowerCase()}`;
+              const existing = existingMap.get(key);
+
+              if (existing) {
+                // Existing material - update quantity if changed
+                if (item.quantity !== existing.quantity) {
+                  await supabase
+                    .from("quotation_items")
+                    .update({
+                      quantity: item.quantity,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", existing.id);
                 }
-                return {
-                  quotation_id: additionalQuotation.id,
+                existingMap.delete(key);
+              } else {
+                // New material - insert into same quotation
+                await supabase.from("quotation_items").insert({
+                  quotation_id: request.quotation_id,
                   material_name: item.material_name,
                   unit: item.unit,
                   quantity: item.quantity,
-                };
-              })
-              .filter(Boolean);
-
-            if (additionalItems.length > 0) {
-              await supabase.from("quotation_items").insert(additionalItems);
+                });
+              }
             }
           }
-
-          // Update initial quotation's updated_at
-          await supabase
-            .from("project_quotations")
-            .update({ updated_at: new Date().toISOString() })
-            .eq("id", request.quotation_id);
         } else if (request.change_type === "delete" && request.quotation_id) {
           await supabase.from("quotation_items").delete().eq("quotation_id", request.quotation_id);
           await supabase.from("project_quotations").delete().eq("id", request.quotation_id);
@@ -958,7 +949,7 @@ export function QuotationModal({
           excludeUserId: user.id,
         });
 
-        toast({ title: "Success", description: "Quotation updated successfully" });
+        toast({ title: "Success", description: "Quotation updated." });
       } else {
         const { data: newQuotation, error: createError } = await supabase
           .from("project_quotations")
@@ -1008,11 +999,11 @@ export function QuotationModal({
           excludeUserId: user.id,
         });
 
-        toast({ title: "Success", description: "Quotation created successfully" });
+        toast({ title: "Success", description: "Quotation updated." });
       }
 
-      setIsEditMode(false);
-      fetchQuotation();
+      // Close modal and refresh data
+      onOpenChange(false);
       onQuotationChange?.();
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Failed to save quotation", variant: "destructive" });
