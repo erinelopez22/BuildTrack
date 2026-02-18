@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock, Upload, Download } from "lucide-react";
+import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock, Upload, Download, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -46,6 +46,7 @@ interface Quotation {
   created_at: string;
   updated_at: string;
   notes: string | null;
+  category: string;
 }
 
 interface MaterialDeliveryProgress {
@@ -59,13 +60,23 @@ interface MaterialDeliveryProgress {
   isFullyDelivered: boolean;
 }
 
-// Tracks materials that are used in orders and their minimum allowed quantities
 interface MaterialOrderUsage {
   quotationItemId: string;
-  orderedQty: number; // SUM from non-received/closed orders
-  receivedClosedQty: number; // SUM from received/closed orders
-  minimumAllowedQty: number; // orderedQty + receivedClosedQty
+  orderedQty: number;
+  receivedClosedQty: number;
+  minimumAllowedQty: number;
   isUsedInOrders: boolean;
+}
+
+interface ChangeRequest {
+  id: string;
+  change_type: string;
+  status: string;
+  payload: any;
+  requested_by: string;
+  created_at: string;
+  quotation_id: string | null;
+  requester_name?: string;
 }
 
 interface QuotationModalProps {
@@ -87,31 +98,36 @@ export function QuotationModal({
   hasExistingQuotation,
   onQuotationChange,
 }: QuotationModalProps) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [quotation, setQuotation] = useState<Quotation | null>(null);
+  const [additionalQuotations, setAdditionalQuotations] = useState<Quotation[]>([]);
   const [items, setItems] = useState<QuotationItem[]>([]);
   const [notes, setNotes] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
   const [creatorName, setCreatorName] = useState<string>("");
   const [canDelete, setCanDelete] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
 
-  // Delivery progress tracking (for progress bars only)
+  // Category for new quotation
+  const [editCategory, setEditCategory] = useState<'initial' | 'additional'>('initial');
+  // Currently viewing quotation (for additional quotes)
+  const [viewingQuotationId, setViewingQuotationId] = useState<string | null>(null);
+
+  // Change requests
+  const [pendingRequests, setPendingRequests] = useState<ChangeRequest[]>([]);
+
   const [materialProgress, setMaterialProgress] = useState<MaterialDeliveryProgress[]>();
-
-  // Track material usage in orders for validation
   const [materialOrderUsage, setMaterialOrderUsage] = useState<Map<string, MaterialOrderUsage>>(new Map());
 
-  // SKU catalogue suggestions
   const [skuCatalogue, setSkuCatalogue] = useState<{ id: string; name: string; unit: string; sku_code: string }[]>([]);
   const [activeAutocomplete, setActiveAutocomplete] = useState<string | null>(null);
   const [autocompleteFilter, setAutocompleteFilter] = useState('');
 
-  // Fetch SKU catalogue
   useEffect(() => {
     const fetchSKUs = async () => {
       const { data } = await supabase
@@ -126,25 +142,24 @@ export function QuotationModal({
     if (open) fetchSKUs();
   }, [open]);
 
-  // Check if user can delete quotation (Project Engineer, Admin, Super Admin)
+  // Check admin status and delete permission
   useEffect(() => {
-    const checkDeletePermission = async () => {
+    const checkPermissions = async () => {
       if (!user) {
         setCanDelete(false);
+        setIsAdminUser(false);
         return;
       }
 
-      // Check global roles (admin, super_admin)
       const { data: userRoles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
-
       const hasAdminRole = userRoles?.some((r) => r.role === "admin" || r.role === "super_admin");
+      setIsAdminUser(!!hasAdminRole);
 
       if (hasAdminRole) {
         setCanDelete(true);
         return;
       }
 
-      // Check project role (project_manager = Project Engineer)
       const { data: projectRole } = await supabase
         .from("project_members")
         .select("role")
@@ -156,59 +171,63 @@ export function QuotationModal({
     };
 
     if (open) {
-      checkDeletePermission();
+      checkPermissions();
     }
   }, [open, user, projectId]);
 
   const fetchQuotation = async () => {
     setLoading(true);
     try {
-      // Fetch quotation
-      const { data: quotationData, error: quotationError } = await supabase
+      // Fetch all quotations for this project
+      const { data: allQuotations, error: quotationError } = await supabase
         .from("project_quotations")
         .select("*")
         .eq("project_id", projectId)
-        .maybeSingle();
+        .order("created_at", { ascending: true });
 
       if (quotationError) throw quotationError;
 
-      if (quotationData) {
-        setQuotation(quotationData);
-        setNotes(quotationData.notes || "");
+      const initialQuotation = allQuotations?.find(q => q.category === 'initial') || allQuotations?.[0] || null;
+      const additionalQuotes = allQuotations?.filter(q => q.category === 'additional') || [];
+
+      if (initialQuotation) {
+        setQuotation(initialQuotation as Quotation);
+        setAdditionalQuotations(additionalQuotes as Quotation[]);
+        setNotes(initialQuotation.notes || "");
         setIsEditMode(false);
 
-        // Fetch creator name
         const { data: profileData } = await supabase
           .from("profiles")
           .select("full_name")
-          .eq("id", quotationData.created_by)
+          .eq("id", initialQuotation.created_by)
           .maybeSingle();
 
         setCreatorName(profileData?.full_name || "Unknown");
 
-        // Fetch quotation items
         const { data: itemsData, error: itemsError } = await supabase
           .from("quotation_items")
           .select("*")
-          .eq("quotation_id", quotationData.id)
+          .eq("quotation_id", initialQuotation.id)
           .order("created_at", { ascending: true });
 
         if (itemsError) throw itemsError;
         setItems(itemsData || []);
 
-        // Fetch delivered materials progress
-        await fetchDeliveredMaterials(quotationData.id, itemsData || []);
-        
-        // Fetch material order usage for validation
+        await fetchDeliveredMaterials(initialQuotation.id, itemsData || []);
         await fetchMaterialOrderUsage(itemsData || []);
       } else {
         setQuotation(null);
+        setAdditionalQuotations([]);
         setItems([{ id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
         setNotes("");
         setIsEditMode(true);
+        setEditCategory('initial');
         setMaterialProgress([]);
         setMaterialOrderUsage(new Map());
       }
+
+      // Fetch pending change requests
+      await fetchChangeRequests();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -220,7 +239,29 @@ export function QuotationModal({
     }
   };
 
-  // Fetch material usage in orders for delete/qty validation
+  const fetchChangeRequests = async () => {
+    const { data: requests } = await supabase
+      .from("quotation_change_requests")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+
+    if (requests && requests.length > 0) {
+      // Fetch requester names
+      const userIds = [...new Set(requests.map(r => r.requested_by))];
+      const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", userIds);
+      const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
+
+      setPendingRequests(requests.map(r => ({
+        ...r,
+        requester_name: profileMap.get(r.requested_by) || "Unknown",
+      })));
+    } else {
+      setPendingRequests([]);
+    }
+  };
+
   const fetchMaterialOrderUsage = async (quotationItems: QuotationItem[]) => {
     try {
       if (quotationItems.length === 0) {
@@ -228,7 +269,6 @@ export function QuotationModal({
         return;
       }
 
-      // Get all orders for this project (exclude cancelled)
       const { data: orders, error: ordersError } = await supabase
         .from("orders")
         .select("id, status")
@@ -238,7 +278,6 @@ export function QuotationModal({
       if (ordersError) throw ordersError;
 
       if (!orders || orders.length === 0) {
-        // No orders - all materials can be deleted/modified freely
         const emptyUsage = new Map<string, MaterialOrderUsage>();
         quotationItems.forEach((qItem) => {
           emptyUsage.set(qItem.id, {
@@ -253,7 +292,6 @@ export function QuotationModal({
         return;
       }
 
-      // Separate orders by status category
       const receivedClosedOrderIds = orders
         .filter((o) => o.status === "delivered" || o.status === "closed")
         .map((o) => o.id);
@@ -261,7 +299,6 @@ export function QuotationModal({
         .filter((o) => o.status !== "delivered" && o.status !== "closed")
         .map((o) => o.id);
 
-      // Get order items for all orders
       const { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
         .select("quotation_item_id, quantity_ordered, quantity_received, order_id")
@@ -269,7 +306,6 @@ export function QuotationModal({
 
       if (itemsError) throw itemsError;
 
-      // Build usage map
       const usageMap = new Map<string, MaterialOrderUsage>();
       
       quotationItems.forEach((qItem) => {
@@ -282,10 +318,8 @@ export function QuotationModal({
             isUsedInOrders = true;
             
             if (receivedClosedOrderIds.includes(oi.order_id)) {
-              // For received/closed orders, use quantity_received
               receivedClosedQty += oi.quantity_received ?? 0;
             } else if (activeOrderIds.includes(oi.order_id)) {
-              // For active orders (not received/closed), use quantity_ordered
               orderedQty += oi.quantity_ordered ?? 0;
             }
           }
@@ -308,7 +342,6 @@ export function QuotationModal({
 
   const fetchDeliveredMaterials = async (quotationId: string, quotationItems: QuotationItem[]) => {
     try {
-      // Get DELIVERED and CLOSED orders for this project (Received + Completed)
       const { data: orders, error: ordersError } = await supabase
         .from("orders")
         .select("id, order_number, updated_at")
@@ -319,7 +352,6 @@ export function QuotationModal({
       if (ordersError) throw ordersError;
 
       if (!orders || orders.length === 0) {
-        // No received orders - set empty progress
         const emptyProgress = quotationItems.map((qItem) => ({
           quotationItemId: qItem.id,
           materialName: qItem.material_name,
@@ -334,30 +366,23 @@ export function QuotationModal({
         return;
       }
 
-      // Get order items with quotation_item_id reference
       const { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
         .select("order_id, quotation_item_id, quantity_received")
-        .in(
-          "order_id",
-          orders.map((o) => o.id),
-        );
+        .in("order_id", orders.map((o) => o.id));
 
       if (itemsError) throw itemsError;
 
-      // Build received quantities map by quotation_item_id - use ONLY quantity_received
       const receivedByQuotationItemId: Record<string, number> = {};
 
       orderItems?.forEach((item: any) => {
         if (item.quotation_item_id) {
-          // Use ONLY quantity_received (not quantity_ordered)
           const qty = item.quantity_received ?? 0;
           receivedByQuotationItemId[item.quotation_item_id] =
             (receivedByQuotationItemId[item.quotation_item_id] || 0) + qty;
         }
       });
 
-      // Calculate per-material progress using quotation_item_id
       const progress: MaterialDeliveryProgress[] = quotationItems.map((qItem) => {
         const receivedQty = receivedByQuotationItemId[qItem.id] || 0;
         const remainingQty = Math.max(0, qItem.quantity - receivedQty);
@@ -386,12 +411,10 @@ export function QuotationModal({
     }
   }, [open, projectId]);
 
-  // Normalize material name: trim and uppercase
   const normalizeMaterialName = (name: string): string => {
     return name.trim().toUpperCase();
   };
 
-  // Close autocomplete on click outside
   useEffect(() => {
     if (!activeAutocomplete) return;
     const handler = () => setActiveAutocomplete(null);
@@ -446,13 +469,11 @@ export function QuotationModal({
     XLSX.writeFile(wb, "quotation_template.xlsx");
   };
 
-  // Check if a material can be deleted (not used in any order)
   const canDeleteMaterial = (itemId: string): boolean => {
     const usage = materialOrderUsage.get(itemId);
     return !usage?.isUsedInOrders;
   };
 
-  // Get the minimum allowed quantity for a material
   const getMinimumAllowedQty = (itemId: string): number => {
     const usage = materialOrderUsage.get(itemId);
     return usage?.minimumAllowedQty || 0;
@@ -460,7 +481,6 @@ export function QuotationModal({
 
   const removeItem = (id: string) => {
     if (items.length > 1) {
-      // Check if material can be deleted
       if (!canDeleteMaterial(id)) {
         toast({
           title: "Cannot delete",
@@ -475,11 +495,9 @@ export function QuotationModal({
 
   const updateItem = (id: string, field: keyof QuotationItem, value: string | number) => {
     if (field === "material_name" && typeof value === "string") {
-      // Auto-convert to uppercase, normalize spaces
       value = value.toUpperCase();
     }
 
-    // Handle quantity validation
     if (field === "quantity" && typeof value === "number") {
       const minAllowed = getMinimumAllowedQty(id);
       if (value < minAllowed) {
@@ -496,7 +514,6 @@ export function QuotationModal({
     setItems((prev) => {
       const updated = prev.map((item) => (item.id === id ? { ...item, [field]: value, duplicateError: undefined } : item));
       
-      // Check for duplicate material+unit within the quotation
       if (field === "material_name" || field === "unit") {
         return updated.map((item) => {
           const normalizedName = normalizeMaterialName(item.material_name);
@@ -518,24 +535,21 @@ export function QuotationModal({
     });
   };
 
-  // Merge duplicates by name+unit and normalize material names before save
   const consolidateItems = (): QuotationItem[] => {
     const consolidated: Map<string, QuotationItem> = new Map();
     const mergedMaterials: string[] = [];
 
     items.forEach((item) => {
       const normalizedName = normalizeMaterialName(item.material_name);
-      if (!normalizedName) return; // Skip empty names
+      if (!normalizedName) return;
 
       const key = `${normalizedName}||${item.unit.trim().toUpperCase()}`;
 
       if (consolidated.has(key)) {
-        // Merge quantity into existing item
         const existing = consolidated.get(key)!;
         existing.quantity += item.quantity || 0;
         mergedMaterials.push(normalizedName);
       } else {
-        // Add new consolidated item
         consolidated.set(key, {
           ...item,
           material_name: normalizedName,
@@ -543,7 +557,6 @@ export function QuotationModal({
       }
     });
 
-    // Show toast for merged materials
     if (mergedMaterials.length > 0) {
       const uniqueMerged = [...new Set(mergedMaterials)];
       toast({
@@ -555,66 +568,215 @@ export function QuotationModal({
     return Array.from(consolidated.values());
   };
 
-  const handleSave = async () => {
+  // Create a change request instead of directly modifying
+  const createChangeRequest = async (changeType: string, payload: any) => {
     if (!user) return;
 
-    // First consolidate and normalize items (merge duplicates)
-    const consolidatedItems = consolidateItems();
+    const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+    const userName = userProfile?.full_name || "User";
 
-    // Validate - check if we have at least one valid item
-    if (consolidatedItems.length === 0) {
-      toast({
-        title: "Validation Error",
-        description: "At least one material item with a valid name is required",
-        variant: "destructive",
-      });
+    const { error } = await supabase.from("quotation_change_requests").insert({
+      project_id: projectId,
+      quotation_id: quotation?.id || null,
+      change_type: changeType,
+      payload,
+      requested_by: user.id,
+    });
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
 
-    // Validate each consolidated item
+    // Log activity
+    await logActivity({
+      action: "change_request_created",
+      tableName: "project_quotations",
+      recordId: quotation?.id || projectId,
+      oldValues: null,
+      newValues: { change_type: changeType, requested_by: userName },
+      userId: user.id,
+    });
+
+    // Notify project members + admins
+    await notifyProjectMembers({
+      projectId,
+      title: "Quotation Change Request",
+      message: `${userName} submitted a ${changeType} request for the quotation of ${projectName}. Awaiting admin approval.`,
+      type: "project",
+      referenceType: "quotation_change_request",
+      referenceId: projectId,
+      excludeUserId: user.id,
+    });
+
+    toast({
+      title: "Change Request Submitted",
+      description: "Your change request has been submitted for admin approval.",
+    });
+
+    setIsEditMode(false);
+    fetchQuotation();
+  };
+
+  // Handle approve/reject change request (admin only)
+  const handleReviewChangeRequest = async (requestId: string, action: 'approved' | 'rejected', remarks?: string) => {
+    if (!user || !isAdminUser) return;
+
+    const request = pendingRequests.find(r => r.id === requestId);
+    if (!request) return;
+
+    const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+    const userName = userProfile?.full_name || "Admin";
+
+    if (action === 'approved') {
+      // Apply the change
+      const payload = request.payload as any;
+      
+      if (request.change_type === 'create') {
+        const { data: newQuotation, error: createError } = await supabase
+          .from("project_quotations")
+          .insert({
+            project_id: projectId,
+            created_by: request.requested_by,
+            notes: payload.notes || null,
+            category: payload.category || 'initial',
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          toast({ title: "Error", description: createError.message, variant: "destructive" });
+          return;
+        }
+
+        if (payload.items && payload.items.length > 0) {
+          await supabase.from("quotation_items").insert(
+            payload.items.map((item: any) => ({
+              quotation_id: newQuotation.id,
+              material_name: item.material_name,
+              unit: item.unit,
+              quantity: item.quantity,
+            }))
+          );
+        }
+      } else if (request.change_type === 'update' && request.quotation_id) {
+        await supabase
+          .from("project_quotations")
+          .update({ notes: payload.notes, updated_at: new Date().toISOString() })
+          .eq("id", request.quotation_id);
+
+        if (payload.items) {
+          // Delete old items and insert new ones
+          await supabase.from("quotation_items").delete().eq("quotation_id", request.quotation_id);
+          await supabase.from("quotation_items").insert(
+            payload.items.map((item: any) => ({
+              quotation_id: request.quotation_id,
+              material_name: item.material_name,
+              unit: item.unit,
+              quantity: item.quantity,
+            }))
+          );
+        }
+      } else if (request.change_type === 'delete' && request.quotation_id) {
+        await supabase.from("quotation_items").delete().eq("quotation_id", request.quotation_id);
+        await supabase.from("project_quotations").delete().eq("id", request.quotation_id);
+      }
+    }
+
+    // Update the request status
+    await supabase.from("quotation_change_requests").update({
+      status: action,
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+      review_remarks: remarks || null,
+    }).eq("id", requestId);
+
+    await logActivity({
+      action: `change_request_${action}`,
+      tableName: "project_quotations",
+      recordId: request.quotation_id || projectId,
+      oldValues: { status: 'pending' },
+      newValues: { status: action, reviewed_by: userName },
+      userId: user.id,
+    });
+
+    await notifyProjectMembers({
+      projectId,
+      title: `Quotation Change ${action === 'approved' ? 'Approved' : 'Rejected'}`,
+      message: `${userName} ${action} the quotation ${request.change_type} request for ${projectName}`,
+      type: "project",
+      referenceType: "quotation_change_request",
+      referenceId: requestId,
+      excludeUserId: user.id,
+    });
+
+    toast({ title: "Success", description: `Change request ${action}.` });
+    fetchQuotation();
+    onQuotationChange?.();
+  };
+
+  const handleSave = async () => {
+    if (!user) return;
+
+    const consolidatedItems = consolidateItems();
+
+    if (consolidatedItems.length === 0) {
+      toast({ title: "Validation Error", description: "At least one material item with a valid name is required", variant: "destructive" });
+      return;
+    }
+
     const hasInvalidItem = consolidatedItems.some(
       (item) => !item.material_name.trim() || item.quantity < 1 || !item.unit.trim(),
     );
     if (hasInvalidItem) {
-      toast({
-        title: "Validation Error",
-        description: "All materials must have a name, unit, and quantity of at least 1",
-        variant: "destructive",
-      });
+      toast({ title: "Validation Error", description: "All materials must have a name, unit, and quantity of at least 1", variant: "destructive" });
       return;
     }
 
-    // Validate minimum quantities for existing items
     for (const item of consolidatedItems) {
       const minAllowed = getMinimumAllowedQty(item.id);
       if (item.quantity < minAllowed) {
         const usage = materialOrderUsage.get(item.id);
         toast({
           title: "Quantity Error",
-          description: `${item.material_name}: Cannot set qty below ${minAllowed} (Ordered: ${usage?.orderedQty || 0}, Received: ${usage?.receivedClosedQty || 0})`,
+          description: `${item.material_name}: Cannot set qty below ${minAllowed}`,
           variant: "destructive",
         });
         return;
       }
     }
 
-    // Update items state with consolidated version
     setItems(consolidatedItems);
 
+    // Non-admin users: create change request instead
+    if (!isAdminUser) {
+      const payload = {
+        items: consolidatedItems.map(i => ({
+          material_name: normalizeMaterialName(i.material_name),
+          unit: i.unit.trim(),
+          quantity: i.quantity,
+        })),
+        notes,
+        category: editCategory,
+      };
+
+      if (quotation) {
+        await createChangeRequest('update', payload);
+      } else {
+        await createChangeRequest('create', payload);
+      }
+      return;
+    }
+
+    // Admin: direct save
     setSaving(true);
     try {
-      // Get user profile for activity log
       const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-
       const userName = userProfile?.full_name || "User";
-
-      // Get user role
       const { data: userRole } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
-
       const roleName = userRole?.role || "member";
 
       if (quotation) {
-        // Update existing quotation
         const { error: updateError } = await supabase
           .from("project_quotations")
           .update({ notes, updated_at: new Date().toISOString() })
@@ -622,8 +784,6 @@ export function QuotationModal({
 
         if (updateError) throw updateError;
 
-        // For update: we need to handle items carefully to preserve quotation_item_id references
-        // Get existing items to compare
         const { data: existingItems } = await supabase
           .from("quotation_items")
           .select("id, material_name")
@@ -634,17 +794,14 @@ export function QuotationModal({
           existingItemMap.set(ei.material_name, ei.id);
         });
 
-        // Process consolidated items - update existing, insert new
         for (const item of consolidatedItems) {
           const normalizedName = normalizeMaterialName(item.material_name);
           
-          // Check if this item exists (by ID or by normalized name)
           const existingId = item.id && existingItems?.find((ei) => ei.id === item.id)
             ? item.id
             : existingItemMap.get(normalizedName);
 
           if (existingId) {
-            // Update existing item
             await supabase
               .from("quotation_items")
               .update({
@@ -655,7 +812,6 @@ export function QuotationModal({
               })
               .eq("id", existingId);
           } else {
-            // Insert new item
             await supabase.from("quotation_items").insert({
               quotation_id: quotation.id,
               material_name: normalizedName,
@@ -665,7 +821,6 @@ export function QuotationModal({
           }
         }
 
-        // Delete items that are no longer in the list (only if not used in orders)
         const consolidatedIds = consolidatedItems.map((ci) => ci.id);
         const consolidatedNames = consolidatedItems.map((ci) => normalizeMaterialName(ci.material_name));
         
@@ -674,7 +829,6 @@ export function QuotationModal({
             consolidatedNames.includes(existingItem.material_name);
           
           if (!isInConsolidated) {
-            // Check if we can delete this item
             const usage = materialOrderUsage.get(existingItem.id);
             if (!usage?.isUsedInOrders) {
               await supabase.from("quotation_items").delete().eq("id", existingItem.id);
@@ -682,21 +836,15 @@ export function QuotationModal({
           }
         }
 
-        // Log activity
         await logActivity({
           action: "update",
           tableName: "project_quotations",
           recordId: quotation.id,
           oldValues: null,
-          newValues: {
-            items_count: consolidatedItems.length,
-            updated_by: userName,
-            role: roleName,
-          },
+          newValues: { items_count: consolidatedItems.length, updated_by: userName, role: roleName },
           userId: user.id,
         });
 
-        // Notify project members
         await notifyProjectMembers({
           projectId,
           title: "Quotation Updated",
@@ -709,20 +857,19 @@ export function QuotationModal({
 
         toast({ title: "Success", description: "Quotation updated successfully" });
       } else {
-        // Create new quotation
         const { data: newQuotation, error: createError } = await supabase
           .from("project_quotations")
           .insert({
             project_id: projectId,
             created_by: user.id,
             notes,
+            category: editCategory,
           })
           .select()
           .single();
 
         if (createError) throw createError;
 
-        // Insert items
         const { error: itemsError } = await supabase.from("quotation_items").insert(
           consolidatedItems.map((item) => ({
             quotation_id: newQuotation.id,
@@ -734,25 +881,19 @@ export function QuotationModal({
 
         if (itemsError) throw itemsError;
 
-        // Log activity
         await logActivity({
           action: "create",
           tableName: "project_quotations",
           recordId: newQuotation.id,
           oldValues: null,
-          newValues: {
-            items_count: consolidatedItems.length,
-            created_by: userName,
-            role: roleName,
-          },
+          newValues: { items_count: consolidatedItems.length, created_by: userName, role: roleName, category: editCategory },
           userId: user.id,
         });
 
-        // Notify project members
         await notifyProjectMembers({
           projectId,
           title: "Quotation Created",
-          message: `${userName} (${roleName}) created a quotation for ${projectName} on ${formatManilaTime(new Date())}`,
+          message: `${userName} (${roleName}) created a ${editCategory} quotation for ${projectName} on ${formatManilaTime(new Date())}`,
           type: "project",
           referenceType: "project_quotations",
           referenceId: newQuotation.id,
@@ -766,11 +907,7 @@ export function QuotationModal({
       fetchQuotation();
       onQuotationChange?.();
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save quotation",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to save quotation", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -792,22 +929,23 @@ export function QuotationModal({
   const handleDeleteQuotation = async () => {
     if (!user || !quotation) return;
 
+    // Non-admin: create change request
+    if (!isAdminUser) {
+      await createChangeRequest('delete', { quotation_id: quotation.id });
+      setShowDeleteConfirm(false);
+      return;
+    }
+
     setDeleting(true);
     try {
-      // Get user profile for activity log
       const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-
       const userName = userProfile?.full_name || "User";
-
-      // Get user role
       const { data: userRole } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
-
       const roleName = userRole?.role || "member";
 
       const quotationId = quotation.id;
       const itemsCount = items.length;
 
-      // Delete quotation items first (child records)
       const { error: deleteItemsError } = await supabase
         .from("quotation_items")
         .delete()
@@ -815,24 +953,19 @@ export function QuotationModal({
 
       if (deleteItemsError) throw deleteItemsError;
 
-      // Delete the quotation
       const { error: deleteQuotationError } = await supabase.from("project_quotations").delete().eq("id", quotationId);
 
       if (deleteQuotationError) throw deleteQuotationError;
 
-      // Log activity
       await logActivity({
         action: "delete",
         tableName: "project_quotations",
         recordId: quotationId,
-        oldValues: {
-          items_count: itemsCount,
-        },
+        oldValues: { items_count: itemsCount },
         newValues: null,
         userId: user.id,
       });
 
-      // Notify project members
       await notifyProjectMembers({
         projectId,
         title: "Quotation Deleted",
@@ -843,31 +976,31 @@ export function QuotationModal({
         excludeUserId: user.id,
       });
 
-      toast({
-        title: "Quotation Deleted",
-        description: "The quotation has been permanently deleted",
-      });
+      toast({ title: "Quotation Deleted", description: "The quotation has been permanently deleted" });
 
-      // Close modal and refresh parent
       setShowDeleteConfirm(false);
       onOpenChange(false);
       onQuotationChange?.();
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete quotation",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message || "Failed to delete quotation", variant: "destructive" });
     } finally {
       setDeleting(false);
     }
+  };
+
+  // Start adding an additional quotation
+  const handleAddAdditionalQuote = () => {
+    setEditCategory('additional');
+    setQuotation(null); // Temporarily clear so we go into create mode
+    setItems([{ id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
+    setNotes("");
+    setIsEditMode(true);
   };
 
   const getTotalProgress = () => {
     if (!materialProgress) return 0;
     const totalQuoted = materialProgress.reduce((sum, item) => sum + item.quotedQty, 0);
     const totalDelivered = materialProgress.reduce((sum, item) => {
-      // Cap delivered at quoted amount for percentage calculation
       return sum + Math.min(item.deliveredQty, item.quotedQty);
     }, 0);
     return totalQuoted > 0 ? Math.min(100, (totalDelivered / totalQuoted) * 100) : 0;
@@ -881,7 +1014,7 @@ export function QuotationModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            {!quotation ? "Add Quotation" : isEditMode ? "Update Quotation" : "View Quotation"} - {projectName}
+            {!quotation && !isEditMode ? "Add Quotation" : isEditMode ? (editCategory === 'additional' ? "Add Additional Quote" : "Update Quotation") : "View Quotation"} - {projectName}
           </DialogTitle>
         </DialogHeader>
 
@@ -891,8 +1024,48 @@ export function QuotationModal({
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Pending Change Requests (Admin view) */}
+            {isAdminUser && pendingRequests.length > 0 && (
+              <div className="space-y-3 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 font-medium">
+                  <ShieldAlert className="h-5 w-5" />
+                  Pending Change Requests ({pendingRequests.length})
+                </div>
+                {pendingRequests.map(req => (
+                  <div key={req.id} className="p-3 bg-background rounded border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Badge variant="outline" className="capitalize">{req.change_type}</Badge>
+                        <span className="text-sm ml-2">by {req.requester_name}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">{formatManilaTime(req.created_at)}</span>
+                    </div>
+                    {req.payload?.items && (
+                      <p className="text-xs text-muted-foreground">{(req.payload as any).items.length} material(s)</p>
+                    )}
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => handleReviewChangeRequest(req.id, 'approved')}>
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleReviewChangeRequest(req.id, 'rejected')}>
+                        <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Non-admin info */}
+            {!isAdminUser && canEdit && quotation && !isEditMode && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
+                <ShieldCheck className="h-4 w-4 flex-shrink-0" />
+                Changes will require Admin/Super Admin approval before taking effect.
+              </div>
+            )}
+
             {/* Metadata */}
-            {quotation && (
+            {quotation && !isEditMode && (
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">
                 <div className="flex items-center gap-1">
                   <Clock className="h-4 w-4" />
@@ -900,6 +1073,8 @@ export function QuotationModal({
                 </div>
                 <span className="hidden sm:inline">•</span>
                 <span>By: {creatorName}</span>
+                <span className="hidden sm:inline">•</span>
+                <Badge variant="outline" className="capitalize w-fit">{quotation.category || 'initial'}</Badge>
                 {quotation.updated_at !== quotation.created_at && (
                   <>
                     <span className="hidden sm:inline">•</span>
@@ -945,7 +1120,7 @@ export function QuotationModal({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">
-                  Initial Quotation {isEditMode && <span className="text-destructive">*</span>}
+                  {editCategory === 'additional' ? 'Additional Quote' : 'Initial Quotation'} {isEditMode && <span className="text-destructive">*</span>}
                 </Label>
               </div>
 
@@ -1082,7 +1257,6 @@ export function QuotationModal({
                           </TooltipProvider>
                         )}
                       </div>
-                      {/* Show minimum quantity hint for materials used in orders */}
                       {isEditMode && isUsedInOrders && minAllowedQty > 0 && (
                         <p className="text-xs text-muted-foreground pl-2">
                           Min qty: {minAllowedQty} (Ordered: {usage?.orderedQty || 0}, Received: {usage?.receivedClosedQty || 0})
@@ -1118,6 +1292,22 @@ export function QuotationModal({
               )}
             </div>
 
+            {/* Additional Quotations (View Mode) */}
+            {isViewMode && additionalQuotations.length > 0 && (
+              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                <Label className="text-sm font-medium">Additional Quotes ({additionalQuotations.length})</Label>
+                {additionalQuotations.map(aq => (
+                  <div key={aq.id} className="p-3 border rounded bg-card space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Badge variant="outline">Additional Quote</Badge>
+                      <span className="text-xs text-muted-foreground">{formatManilaTime(aq.created_at)}</span>
+                    </div>
+                    {aq.notes && <p className="text-sm text-muted-foreground">{aq.notes}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Notes */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Notes</Label>
@@ -1143,6 +1333,8 @@ export function QuotationModal({
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Saving...
                       </>
+                    ) : !isAdminUser ? (
+                      "Submit for Approval"
                     ) : quotation ? (
                       "Save Changes"
                     ) : (
@@ -1152,7 +1344,7 @@ export function QuotationModal({
                 </>
               ) : (
                 <>
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 flex-wrap">
                     {quotation && canDelete && (
                       <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)} tabIndex={1}>
                         <Trash2 className="h-4 w-4 mr-1" />
@@ -1163,6 +1355,12 @@ export function QuotationModal({
                       <Button onClick={handleEnterEditMode}>
                         <Pencil className="h-4 w-4 mr-1" />
                         Update Quotation
+                      </Button>
+                    )}
+                    {quotation && canEdit && (
+                      <Button variant="outline" onClick={handleAddAdditionalQuote}>
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Additional Quote
                       </Button>
                     )}
                   </div>
@@ -1186,9 +1384,14 @@ export function QuotationModal({
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               <p>You are about to permanently delete the existing quotation for this project.</p>
-              <p className="font-medium text-destructive">
-                This action cannot be undone and will affect project progress tracking.
-              </p>
+              {!isAdminUser && (
+                <p className="font-medium text-amber-600">This will submit a deletion request for admin approval.</p>
+              )}
+              {isAdminUser && (
+                <p className="font-medium text-destructive">
+                  This action cannot be undone and will affect project progress tracking.
+                </p>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1201,10 +1404,10 @@ export function QuotationModal({
               {deleting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
+                  {isAdminUser ? "Deleting..." : "Submitting..."}
                 </>
               ) : (
-                "OK"
+                isAdminUser ? "OK" : "Submit Request"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
