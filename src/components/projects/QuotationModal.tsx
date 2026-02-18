@@ -179,7 +179,7 @@ export function QuotationModal({
         .eq("user_id", user.id)
         .maybeSingle();
 
-      setCanDelete(projectRole?.role === "project_manager");
+      setCanDelete(projectRole?.role === "project_manager" || projectRole?.role === "site_lead");
     };
 
     if (open) {
