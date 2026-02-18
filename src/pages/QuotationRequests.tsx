@@ -314,22 +314,72 @@ export default function QuotationRequests() {
             );
           }
         } else if (reviewingRequest.change_type === "update" && quotationId) {
+          // Create an "additional" quotation to preserve Initial vs Updates/Added separation
+          const { data: additionalQuotation, error: addError } = await supabase
+            .from("project_quotations")
+            .insert({
+              project_id: reviewingRequest.project_id,
+              created_by: reviewingRequest.requested_by,
+              notes: payload.notes || null,
+              category: "additional",
+            })
+            .select()
+            .single();
+
+          if (addError) throw addError;
+
+          if (payload.items?.length > 0) {
+            // Fetch existing initial items to determine which are Added vs Updated
+            const { data: initialItems } = await supabase
+              .from("quotation_items")
+              .select("material_name, unit, quantity")
+              .eq("quotation_id", quotationId);
+
+            const initialMap = new Map(
+              (initialItems || []).map((i) => [
+                `${i.material_name.toUpperCase()}||${i.unit.toLowerCase()}`,
+                i.quantity,
+              ])
+            );
+
+            // Only insert items that are new or have changed quantities (delta)
+            const additionalItems = payload.items
+              .map((item: any) => {
+                const key = `${item.material_name.toUpperCase()}||${item.unit.toLowerCase()}`;
+                const initialQty = initialMap.get(key);
+                if (initialQty !== undefined) {
+                  // Existing material - store only the delta if qty changed
+                  const delta = item.quantity - initialQty;
+                  if (delta > 0) {
+                    return {
+                      quotation_id: additionalQuotation.id,
+                      material_name: item.material_name,
+                      unit: item.unit,
+                      quantity: delta,
+                    };
+                  }
+                  return null; // No change
+                }
+                // New material
+                return {
+                  quotation_id: additionalQuotation.id,
+                  material_name: item.material_name,
+                  unit: item.unit,
+                  quantity: item.quantity,
+                };
+              })
+              .filter(Boolean);
+
+            if (additionalItems.length > 0) {
+              await supabase.from("quotation_items").insert(additionalItems);
+            }
+          }
+
+          // Update the initial quotation's updated_at
           await supabase
             .from("project_quotations")
-            .update({ notes: payload.notes, updated_at: new Date().toISOString() })
+            .update({ updated_at: new Date().toISOString() })
             .eq("id", quotationId);
-
-          if (payload.items) {
-            await supabase.from("quotation_items").delete().eq("quotation_id", quotationId);
-            await supabase.from("quotation_items").insert(
-              payload.items.map((item: any) => ({
-                quotation_id: quotationId,
-                material_name: item.material_name,
-                unit: item.unit,
-                quantity: item.quantity,
-              }))
-            );
-          }
         } else if (reviewingRequest.change_type === "delete" && quotationId) {
           await supabase.from("quotation_items").delete().eq("quotation_id", quotationId);
           await supabase.from("project_quotations").delete().eq("id", quotationId);
@@ -398,7 +448,9 @@ export default function QuotationRequests() {
   const getChangeSummary = (payload: any, changeType: string) => {
     if (changeType === "delete") return "Delete entire quotation";
     const items = payload?.items || [];
-    return `${items.length} material(s)`;
+    const added = items.length;
+    if (changeType === "create") return `Create with ${added} material(s)`;
+    return `Update: ${added} material(s) proposed`;
   };
 
   return (

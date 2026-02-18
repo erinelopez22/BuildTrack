@@ -116,6 +116,7 @@ export function QuotationModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [quotation, setQuotation] = useState<Quotation | null>(null);
   const [additionalQuotations, setAdditionalQuotations] = useState<Quotation[]>([]);
+  const [additionalQuotationItems, setAdditionalQuotationItems] = useState<Map<string, QuotationItem[]>>(new Map());
   const [items, setItems] = useState<QuotationItem[]>([]);
   const [notes, setNotes] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
@@ -163,7 +164,7 @@ export function QuotationModal({
 
       const { data: userRoles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
       const hasAdminRole = userRoles?.some(
-        (r) => r.role === "admin" || r.role === "super_admin" || r.role === "project_engineer",
+        (r) => r.role === "admin" || r.role === "super_admin",
       );
       setIsAdminUser(!!hasAdminRole);
 
@@ -225,11 +226,24 @@ export function QuotationModal({
         if (itemsError) throw itemsError;
         setItems(itemsData || []);
 
+        // Fetch items for additional quotations
+        const additionalItemsMap = new Map<string, QuotationItem[]>();
+        for (const aq of additionalQuotes) {
+          const { data: aqItems } = await supabase
+            .from("quotation_items")
+            .select("*")
+            .eq("quotation_id", aq.id)
+            .order("created_at", { ascending: true });
+          additionalItemsMap.set(aq.id, aqItems || []);
+        }
+        setAdditionalQuotationItems(additionalItemsMap);
+
         await fetchDeliveredMaterials(initialQuotation.id, itemsData || []);
         await fetchMaterialOrderUsage(itemsData || []);
       } else {
         setQuotation(null);
         setAdditionalQuotations([]);
+        setAdditionalQuotationItems(new Map());
         setItems([{ id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
         setNotes("");
         setIsEditMode(true);
@@ -690,27 +704,76 @@ export function QuotationModal({
           );
         }
       } else if (request.change_type === "update" && request.quotation_id) {
-        await supabase
-          .from("project_quotations")
-          .update({ notes: payload.notes, updated_at: new Date().toISOString() })
-          .eq("id", request.quotation_id);
+          // Create an "additional" quotation to preserve Initial vs Updates/Added separation
+          const { data: additionalQuotation, error: addError } = await supabase
+            .from("project_quotations")
+            .insert({
+              project_id: projectId,
+              created_by: request.requested_by,
+              notes: payload.notes || null,
+              category: "additional",
+            })
+            .select()
+            .single();
 
-        if (payload.items) {
-          // Delete old items and insert new ones
+          if (addError) {
+            toast({ title: "Error", description: addError.message, variant: "destructive" });
+            return;
+          }
+
+          if (payload.items) {
+            // Fetch existing initial items to determine deltas
+            const { data: initialItems } = await supabase
+              .from("quotation_items")
+              .select("material_name, unit, quantity")
+              .eq("quotation_id", request.quotation_id);
+
+            const initialMap = new Map(
+              (initialItems || []).map((i: any) => [
+                `${i.material_name.toUpperCase()}||${i.unit.toLowerCase()}`,
+                i.quantity,
+              ])
+            );
+
+            const additionalItems = payload.items
+              .map((item: any) => {
+                const key = `${item.material_name.toUpperCase()}||${item.unit.toLowerCase()}`;
+                const initialQty = initialMap.get(key);
+                if (initialQty !== undefined) {
+                  const delta = item.quantity - initialQty;
+                  if (delta > 0) {
+                    return {
+                      quotation_id: additionalQuotation.id,
+                      material_name: item.material_name,
+                      unit: item.unit,
+                      quantity: delta,
+                    };
+                  }
+                  return null;
+                }
+                return {
+                  quotation_id: additionalQuotation.id,
+                  material_name: item.material_name,
+                  unit: item.unit,
+                  quantity: item.quantity,
+                };
+              })
+              .filter(Boolean);
+
+            if (additionalItems.length > 0) {
+              await supabase.from("quotation_items").insert(additionalItems);
+            }
+          }
+
+          // Update initial quotation's updated_at
+          await supabase
+            .from("project_quotations")
+            .update({ updated_at: new Date().toISOString() })
+            .eq("id", request.quotation_id);
+        } else if (request.change_type === "delete" && request.quotation_id) {
           await supabase.from("quotation_items").delete().eq("quotation_id", request.quotation_id);
-          await supabase.from("quotation_items").insert(
-            payload.items.map((item: any) => ({
-              quotation_id: request.quotation_id,
-              material_name: item.material_name,
-              unit: item.unit,
-              quantity: item.quantity,
-            })),
-          );
+          await supabase.from("project_quotations").delete().eq("id", request.quotation_id);
         }
-      } else if (request.change_type === "delete" && request.quotation_id) {
-        await supabase.from("quotation_items").delete().eq("quotation_id", request.quotation_id);
-        await supabase.from("project_quotations").delete().eq("id", request.quotation_id);
-      }
     }
 
     // Update the request status
@@ -1358,22 +1421,87 @@ export function QuotationModal({
               <div className="space-y-3 p-4 border rounded-lg bg-accent/5 border-accent/20">
                 <Label className="text-sm font-medium flex items-center gap-2">
                   <Package className="h-4 w-4 text-accent-foreground" />
-                  Additional / Updated Materials
+                  Updates / Added Materials
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Materials added or modified after the initial quotation, approved through change requests.
+                  Materials added or modified after the initial quotation.
                 </p>
-                {additionalQuotations.map((aq) => (
-                  <div key={aq.id} className="p-3 border rounded bg-card space-y-1">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="bg-accent/10">
-                        Additional
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">{formatManilaTime(aq.created_at)}</span>
+                {additionalQuotations.map((aq) => {
+                  const aqItems = additionalQuotationItems.get(aq.id) || [];
+                  if (aqItems.length === 0) return null;
+                  return (
+                    <div key={aq.id} className="border rounded-lg overflow-hidden">
+                      <div className="bg-muted/30 px-3 py-2 text-xs text-muted-foreground flex justify-between">
+                        <span>Added: {formatManilaTime(aq.created_at)}</span>
+                        {aq.notes && <span className="italic">{aq.notes}</span>}
+                      </div>
+                      <table className="w-full text-sm">
+                        <tbody>
+                          {aqItems.map((item) => {
+                            const existsInInitial = items.some(
+                              (vi) =>
+                                vi.material_name.toUpperCase() === item.material_name.toUpperCase() &&
+                                vi.unit.toLowerCase() === item.unit.toLowerCase(),
+                            );
+                            return (
+                              <tr key={item.id} className="border-t">
+                                <td className="p-3 uppercase">
+                                  <div className="flex items-center gap-2">
+                                    {item.material_name}
+                                    <Badge variant="outline" className="text-[10px]">
+                                      {existsInInitial ? "Updated" : "Added"}
+                                    </Badge>
+                                  </div>
+                                </td>
+                                <td className="p-3">{item.unit}</td>
+                                <td className="p-3 text-right font-medium">
+                                  {existsInInitial ? `+${item.quantity}` : item.quantity}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                    {aq.notes && <p className="text-sm text-muted-foreground">{aq.notes}</p>}
-                  </div>
-                ))}
+                  );
+                })}
+
+                {/* System totals */}
+                {(() => {
+                  const totals = new Map<string, { name: string; unit: string; qty: number }>();
+                  items.forEach((i) => {
+                    const key = `${i.material_name.toUpperCase()}||${i.unit.toLowerCase()}`;
+                    totals.set(key, { name: i.material_name, unit: i.unit, qty: i.quantity });
+                  });
+                  additionalQuotations.forEach((aq) => {
+                    const aqItems = additionalQuotationItems.get(aq.id) || [];
+                    aqItems.forEach((i) => {
+                      const key = `${i.material_name.toUpperCase()}||${i.unit.toLowerCase()}`;
+                      const existing = totals.get(key);
+                      if (existing) {
+                        existing.qty += i.quantity;
+                      } else {
+                        totals.set(key, { name: i.material_name, unit: i.unit, qty: i.quantity });
+                      }
+                    });
+                  });
+
+                  return (
+                    <div className="mt-3 p-3 bg-primary/5 rounded border">
+                      <Label className="text-xs font-medium text-primary">System Totals (Combined)</Label>
+                      <div className="mt-2 space-y-1">
+                        {Array.from(totals.values()).map((t, i) => (
+                          <div key={i} className="flex justify-between text-sm">
+                            <span className="uppercase">
+                              {t.name} ({t.unit})
+                            </span>
+                            <span className="font-semibold">{t.qty}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
