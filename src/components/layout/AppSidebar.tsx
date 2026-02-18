@@ -13,6 +13,7 @@ import {
   HardHat,
   Wrench,
   RotateCcw,
+  FileCheck,
 } from "lucide-react";
 import {
   Sidebar,
@@ -50,6 +51,7 @@ const mainNavItems = [
   { title: "Projects", url: "/projects", icon: FolderKanban },
   { title: "Order & Tracking", url: "/inventory", icon: Package },
   { title: "View Orders", url: "/orders", icon: ClipboardList },
+  { title: "Quotation Request", url: "/quotation-requests", icon: FileCheck },
   { title: "SKU Catalog", url: "/skus", icon: Boxes },
   { title: "Equiments/Tools", url: "/company-assets", icon: Wrench },
 ];
