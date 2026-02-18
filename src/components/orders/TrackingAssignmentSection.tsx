@@ -645,6 +645,118 @@ export function TrackingAssignmentSection({
     toast({ title: "Uploaded", description: "Receiver's evidence uploaded successfully." });
   };
 
+  // Remove receiver evidence
+  const handleRemoveReceiverEvidence = async (assignmentId: string, evidenceId: string, fileName: string) => {
+    if (!user) return;
+
+    // Check permission: uploader, super admin, admin, or logistics admin
+    const canRemove = isSuperAdmin() || isAdmin() || canProcessLogistics();
+    const ev = (receiverEvidence[assignmentId] || []).find((e) => e.id === evidenceId);
+    if (!canRemove && ev?.uploaded_by !== user.id) {
+      toast({ title: "Permission Denied", description: "Only the uploader, Admin, or Tracking Admin can remove evidence.", variant: "destructive" });
+      return;
+    }
+
+    // Delete from DB
+    const { error } = await supabase.from("receiver_evidence").delete().eq("id", evidenceId);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    // Try deleting from storage (best effort)
+    try {
+      const urlParts = ev?.file_url?.split("/tracking-evidence/");
+      if (urlParts && urlParts[1]) {
+        await supabase.storage.from("tracking-evidence").remove([decodeURIComponent(urlParts[1])]);
+      }
+    } catch {}
+
+    // Update local state
+    setReceiverEvidence((prev) => ({
+      ...prev,
+      [assignmentId]: (prev[assignmentId] || []).filter((e) => e.id !== evidenceId),
+    }));
+
+    await logActivity({
+      action: "receiver_evidence_removed",
+      tableName: "orders",
+      recordId: orderId,
+      oldValues: { file_name: fileName, assignment_id: assignmentId },
+      newValues: null,
+      userId: user.id,
+    });
+
+    await notifyProjectMembers({
+      projectId,
+      title: "Receiver Evidence Removed",
+      message: `Receiver evidence "${fileName}" has been removed`,
+      type: "order",
+      referenceType: "order",
+      referenceId: orderId,
+      excludeUserId: user.id,
+    });
+
+    toast({ title: "Removed", description: "Receiver evidence removed." });
+  };
+
+  // Remove preparing evidence (saved evidence with id)
+  const handleRemovePreparingEvidence = async (assignmentId: string, evidenceId: string, driverUserId: string, fileName: string) => {
+    if (!user) return;
+
+    const canRemove = isSuperAdmin() || isAdmin() || canProcessLogistics();
+    if (!canRemove) {
+      toast({ title: "Permission Denied", description: "Only Admin or Tracking Admin can remove evidence.", variant: "destructive" });
+      return;
+    }
+
+    // Delete from DB
+    const { error } = await supabase.from("order_tracking_evidence").delete().eq("id", evidenceId);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    // Try deleting from storage (best effort)
+    const ev = assignments.find((a) => a.driver_user_id === driverUserId)?.evidence.find((e) => e.id === evidenceId);
+    try {
+      const urlParts = ev?.file_url?.split("/tracking-evidence/");
+      if (urlParts && urlParts[1]) {
+        await supabase.storage.from("tracking-evidence").remove([decodeURIComponent(urlParts[1])]);
+      }
+    } catch {}
+
+    // Update local state
+    setAssignments((prev) =>
+      prev.map((a) =>
+        a.driver_user_id === driverUserId
+          ? { ...a, evidence: a.evidence.filter((e) => e.id !== evidenceId) }
+          : a
+      )
+    );
+
+    await logActivity({
+      action: "preparing_evidence_removed",
+      tableName: "orders",
+      recordId: orderId,
+      oldValues: { file_name: fileName, assignment_id: assignmentId },
+      newValues: null,
+      userId: user.id,
+    });
+
+    await notifyProjectMembers({
+      projectId,
+      title: "Preparing Evidence Removed",
+      message: `Preparing evidence "${fileName}" has been removed`,
+      type: "order",
+      referenceType: "order",
+      referenceId: orderId,
+      excludeUserId: user.id,
+    });
+
+    toast({ title: "Removed", description: "Preparing evidence removed." });
+  };
+
   const handleTrackArrived = async (assignmentId: string, driverName: string) => {
     if (!user || !assignmentId) return;
 
@@ -1140,7 +1252,7 @@ export function TrackingAssignmentSection({
                 {driverReceiverEv.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {driverReceiverEv.map((ev, index) => (
-                      <div key={ev.id} className="relative group">
+                      <div key={ev.id} className="relative">
                         <img
                           src={ev.file_url}
                           alt={ev.file_name}
@@ -1154,6 +1266,13 @@ export function TrackingAssignmentSection({
                             }));
                           }}
                         />
+                        <button
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
+                          onClick={() => handleRemoveReceiverEvidence(assignment.id!, ev.id, ev.file_name)}
+                          title="Remove evidence"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1330,7 +1449,7 @@ export function TrackingAssignmentSection({
             {assignment.evidence.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {assignment.evidence.map((evidence, index) => (
-                  <div key={index} className="relative group">
+                  <div key={evidence.id || index} className="relative">
                     <img
                       src={evidence.file_url}
                       alt={evidence.file_name}
@@ -1349,10 +1468,17 @@ export function TrackingAssignmentSection({
                         <Loader2 className="h-4 w-4 animate-spin text-white" />
                       </div>
                     )}
-                    {isPreparing && canEdit && (
+                    {isPreparing && canEdit && !evidence.isUploading && (
                       <button
-                        className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => handleRemoveEvidence(assignment.driver_user_id, index)}
+                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
+                        onClick={() => {
+                          if (evidence.id && assignment.id) {
+                            handleRemovePreparingEvidence(assignment.id, evidence.id, assignment.driver_user_id, evidence.file_name);
+                          } else {
+                            handleRemoveEvidence(assignment.driver_user_id, index);
+                          }
+                        }}
+                        title="Remove evidence"
                       >
                         <X className="h-3 w-3" />
                       </button>
@@ -1365,13 +1491,15 @@ export function TrackingAssignmentSection({
             )}
           </div>
 
-          {/* Receiver's Evidence (read-only display for all statuses) */}
-          {assignment.id && (receiverEvidence[assignment.id] || []).length > 0 && (
+          {/* Receiver's Evidence (display for all statuses, with remove for authorized) */}
+          {assignment.id && (receiverEvidence[assignment.id] || []).length > 0 && !isInTransit && (
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">Receiver's Evidence ({(receiverEvidence[assignment.id] || []).length})</p>
               <div className="flex flex-wrap gap-2">
-                {(receiverEvidence[assignment.id] || []).map((ev, index) => (
-                  <div key={ev.id} className="relative group">
+                {(receiverEvidence[assignment.id] || []).map((ev, index) => {
+                  const canRemoveEvidence = isSuperAdmin() || isAdmin() || canProcessLogistics() || ev.uploaded_by === user?.id;
+                  return (
+                  <div key={ev.id} className="relative">
                     <img
                       src={ev.file_url}
                       alt={ev.file_name}
@@ -1385,8 +1513,18 @@ export function TrackingAssignmentSection({
                         }));
                       }}
                     />
+                    {canRemoveEvidence && (
+                      <button
+                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
+                        onClick={() => handleRemoveReceiverEvidence(assignment.id!, ev.id, ev.file_name)}
+                        title="Remove evidence"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

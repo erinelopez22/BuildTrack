@@ -78,10 +78,8 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   // Dialogs for actions requiring reason
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [showOnHoldDialog, setShowOnHoldDialog] = useState(false);
-  const [showDeliveryDialog, setShowDeliveryDialog] = useState(false);
+  const [showDeliveryConfirm, setShowDeliveryConfirm] = useState(false);
   const [reason, setReason] = useState("");
-  const [deliveryRemarks, setDeliveryRemarks] = useState("");
-  const [deliveryEvidence, setDeliveryEvidence] = useState<File[]>([]);
 
   // Tracking validation state
   const [trackingValid, setTrackingValid] = useState(false);
@@ -402,7 +400,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
         if (hasFullAccess || canReceiveOrders()) {
           actions.push({
             label: "Delivered",
-            action: () => setShowDeliveryDialog(true),
+            action: () => setShowDeliveryConfirm(true),
             icon: <CheckCircle2 className="h-4 w-4 mr-2" />,
             variant: "default",
             disabled: !allDriversArrived,
@@ -683,6 +681,12 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                             summary = `Driver ${newVals?.driver_name || ""} placed on hold`;
                           } else if (log.action === "driver_resumed") {
                             summary = `Driver ${newVals?.driver_name || ""} resumed`;
+                          } else if (log.action === "receiver_evidence_uploaded") {
+                            summary = "Receiver evidence uploaded";
+                          } else if (log.action === "receiver_evidence_removed") {
+                            summary = `Receiver evidence removed: ${oldVals?.file_name || ""}`;
+                          } else if (log.action === "preparing_evidence_removed") {
+                            summary = `Preparing evidence removed: ${oldVals?.file_name || ""}`;
                           }
                           return (
                             <div key={log.id} className="px-3 py-2 text-xs">
@@ -818,91 +822,29 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delivery Confirmation Dialog - Evidence + Remarks Required */}
-      <AlertDialog open={showDeliveryDialog} onOpenChange={(open) => { if (!open) { setDeliveryRemarks(""); setDeliveryEvidence([]); } setShowDeliveryDialog(open); }}>
+      {/* Simple Delivery Confirmation Dialog */}
+      <AlertDialog open={showDeliveryConfirm} onOpenChange={setShowDeliveryConfirm}>
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-primary">
-              <CheckCircle2 className="h-5 w-5" />
-              Confirm Delivery
+            <AlertDialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-primary" />
+              Mark as Delivered?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Upload evidence and provide remarks to mark order {order?.order_number} as delivered.
+              Do you want this order to be marked as Delivered?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="py-4 space-y-4">
-            <div>
-              <Label>Evidence Upload (Photo/PDF) *</Label>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                multiple
-                className="mt-2 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                onChange={(e) => {
-                  if (e.target.files) {
-                    setDeliveryEvidence(Array.from(e.target.files));
-                  }
-                }}
-              />
-              {deliveryEvidence.length > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">{deliveryEvidence.length} file(s) selected</p>
-              )}
-            </div>
-            <div>
-              <Label htmlFor="delivery-remarks">Delivery Remarks *</Label>
-              <Textarea
-                id="delivery-remarks"
-                placeholder="Enter delivery remarks..."
-                value={deliveryRemarks}
-                onChange={(e) => setDeliveryRemarks(e.target.value)}
-                className="mt-2"
-                rows={3}
-              />
-            </div>
-          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setDeliveryRemarks(""); setDeliveryEvidence([]); }}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={async () => {
-                if (!deliveryRemarks.trim() || deliveryEvidence.length === 0 || !user || !order) return;
-                setActionLoading(true);
-
-                // Upload evidence files to storage
-                for (const file of deliveryEvidence) {
-                  const fileExt = file.name.split(".").pop();
-                  const fileName = `${order.id}/delivery/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
-                  await supabase.storage.from("tracking-evidence").upload(fileName, file);
-                }
-
-                // Update tracking assignments with delivery remarks
-                const { data: assignments } = await supabase
-                  .from("order_tracking_assignments")
-                  .select("id")
-                  .eq("order_id", order.id);
-
-                if (assignments) {
-                  for (const a of assignments) {
-                    await supabase.from("order_tracking_assignments").update({
-                      delivery_remarks: deliveryRemarks.trim(),
-                      delivered_at: new Date().toISOString(),
-                    }).eq("id", a.id);
-                  }
-                }
-
-                // Append remarks to order notes
-                const updatedNotes = order.notes
-                  ? `${order.notes}\n\n[DELIVERED ${formatManilaTime(new Date())}]: ${deliveryRemarks.trim()}`
-                  : `[DELIVERED ${formatManilaTime(new Date())}]: ${deliveryRemarks.trim()}`;
-
-                await handleStatusChange("delivered", { notes: updatedNotes });
-                setShowDeliveryDialog(false);
-                setDeliveryRemarks("");
-                setDeliveryEvidence([]);
+                await handleStatusChange("delivered");
+                setShowDeliveryConfirm(false);
               }}
-              disabled={!deliveryRemarks.trim() || deliveryEvidence.length === 0 || actionLoading}
+              disabled={actionLoading}
             >
               {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Mark as Delivered
+              Yes, Mark as Delivered
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
