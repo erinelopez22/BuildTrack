@@ -180,7 +180,7 @@ export function QuotationModal({
         .eq("user_id", user.id)
         .maybeSingle();
 
-      setCanDelete(projectRole?.role === "project_manager" || projectRole?.role === "site_lead");
+      setCanDelete(projectRole?.role === "project_manager" || projectRole?.role === "site_lead" || projectRole?.role === "project_engineer");
     };
 
     if (open) {
