@@ -1,6 +1,21 @@
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
-import { Plus, Trash2, Loader2, Clock, Package, Pencil, CheckCircle2, AlertCircle, AlertTriangle, Lock, Upload, Download, ShieldCheck, ShieldAlert } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  Loader2,
+  Clock,
+  Package,
+  Pencil,
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
+  Lock,
+  Upload,
+  Download,
+  ShieldCheck,
+  ShieldAlert,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -18,12 +33,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -114,7 +124,7 @@ export function QuotationModal({
   const [isAdminUser, setIsAdminUser] = useState(false);
 
   // Category for new quotation
-  const [editCategory, setEditCategory] = useState<'initial' | 'additional'>('initial');
+  const [editCategory, setEditCategory] = useState<"initial" | "additional">("initial");
   // Currently viewing quotation (for additional quotes)
   const [viewingQuotationId, setViewingQuotationId] = useState<string | null>(null);
 
@@ -126,7 +136,7 @@ export function QuotationModal({
 
   const [skuCatalogue, setSkuCatalogue] = useState<{ id: string; name: string; unit: string; sku_code: string }[]>([]);
   const [activeAutocomplete, setActiveAutocomplete] = useState<string | null>(null);
-  const [autocompleteFilter, setAutocompleteFilter] = useState('');
+  const [autocompleteFilter, setAutocompleteFilter] = useState("");
 
   useEffect(() => {
     const fetchSKUs = async () => {
@@ -136,7 +146,7 @@ export function QuotationModal({
         .eq("is_active", true)
         .order("name");
       if (data) {
-        setSkuCatalogue(data.map(s => ({ id: s.id, name: s.name, unit: s.unit_of_measure, sku_code: s.sku_code })));
+        setSkuCatalogue(data.map((s) => ({ id: s.id, name: s.name, unit: s.unit_of_measure, sku_code: s.sku_code })));
       }
     };
     if (open) fetchSKUs();
@@ -152,7 +162,9 @@ export function QuotationModal({
       }
 
       const { data: userRoles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
-      const hasAdminRole = userRoles?.some((r) => r.role === "admin" || r.role === "super_admin");
+      const hasAdminRole = userRoles?.some(
+        (r) => r.role === "admin" || r.role === "super_admin" || r.role === "project_engineer",
+      );
       setIsAdminUser(!!hasAdminRole);
 
       if (hasAdminRole) {
@@ -187,8 +199,8 @@ export function QuotationModal({
 
       if (quotationError) throw quotationError;
 
-      const initialQuotation = allQuotations?.find(q => q.category === 'initial') || allQuotations?.[0] || null;
-      const additionalQuotes = allQuotations?.filter(q => q.category === 'additional') || [];
+      const initialQuotation = allQuotations?.find((q) => q.category === "initial") || allQuotations?.[0] || null;
+      const additionalQuotes = allQuotations?.filter((q) => q.category === "additional") || [];
 
       if (initialQuotation) {
         setQuotation(initialQuotation as Quotation);
@@ -221,7 +233,7 @@ export function QuotationModal({
         setItems([{ id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
         setNotes("");
         setIsEditMode(true);
-        setEditCategory('initial');
+        setEditCategory("initial");
         setMaterialProgress([]);
         setMaterialOrderUsage(new Map());
       }
@@ -249,14 +261,16 @@ export function QuotationModal({
 
     if (requests && requests.length > 0) {
       // Fetch requester names
-      const userIds = [...new Set(requests.map(r => r.requested_by))];
+      const userIds = [...new Set(requests.map((r) => r.requested_by))];
       const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", userIds);
-      const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p.full_name]));
 
-      setPendingRequests(requests.map(r => ({
-        ...r,
-        requester_name: profileMap.get(r.requested_by) || "Unknown",
-      })));
+      setPendingRequests(
+        requests.map((r) => ({
+          ...r,
+          requester_name: profileMap.get(r.requested_by) || "Unknown",
+        })),
+      );
     } else {
       setPendingRequests([]);
     }
@@ -295,19 +309,20 @@ export function QuotationModal({
       const receivedClosedOrderIds = orders
         .filter((o) => o.status === "delivered" || o.status === "closed")
         .map((o) => o.id);
-      const activeOrderIds = orders
-        .filter((o) => o.status !== "delivered" && o.status !== "closed")
-        .map((o) => o.id);
+      const activeOrderIds = orders.filter((o) => o.status !== "delivered" && o.status !== "closed").map((o) => o.id);
 
       const { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
         .select("quotation_item_id, quantity_ordered, quantity_received, order_id")
-        .in("order_id", orders.map((o) => o.id));
+        .in(
+          "order_id",
+          orders.map((o) => o.id),
+        );
 
       if (itemsError) throw itemsError;
 
       const usageMap = new Map<string, MaterialOrderUsage>();
-      
+
       quotationItems.forEach((qItem) => {
         let orderedQty = 0;
         let receivedClosedQty = 0;
@@ -316,7 +331,7 @@ export function QuotationModal({
         orderItems?.forEach((oi) => {
           if (oi.quotation_item_id === qItem.id) {
             isUsedInOrders = true;
-            
+
             if (receivedClosedOrderIds.includes(oi.order_id)) {
               receivedClosedQty += oi.quantity_received ?? 0;
             } else if (activeOrderIds.includes(oi.order_id)) {
@@ -369,7 +384,10 @@ export function QuotationModal({
       const { data: orderItems, error: itemsError } = await supabase
         .from("order_items")
         .select("order_id, quotation_item_id, quantity_received")
-        .in("order_id", orders.map((o) => o.id));
+        .in(
+          "order_id",
+          orders.map((o) => o.id),
+        );
 
       if (itemsError) throw itemsError;
 
@@ -435,18 +453,25 @@ export function QuotationModal({
       const workbook = XLSX.read(data);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(sheet);
-      
+
       const newItems: QuotationItem[] = rows
         .filter((row) => row["Material Name"] || row["material_name"] || row["MATERIAL NAME"])
         .map((row) => ({
           id: crypto.randomUUID(),
-          material_name: (row["Material Name"] || row["material_name"] || row["MATERIAL NAME"] || "").toString().trim().toUpperCase(),
+          material_name: (row["Material Name"] || row["material_name"] || row["MATERIAL NAME"] || "")
+            .toString()
+            .trim()
+            .toUpperCase(),
           unit: (row["Unit"] || row["unit"] || row["UNIT"] || "pcs").toString().trim().toLowerCase(),
           quantity: parseInt(row["Qty"] || row["qty"] || row["QTY"] || row["Quantity"] || "0") || 0,
         }));
 
       if (newItems.length === 0) {
-        toast({ title: "No Data", description: "No valid rows found. Ensure headers: Material Name, Unit, Qty", variant: "destructive" });
+        toast({
+          title: "No Data",
+          description: "No valid rows found. Ensure headers: Material Name, Unit, Qty",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -463,7 +488,10 @@ export function QuotationModal({
 
   const handleDownloadTemplate = async () => {
     const XLSX = await import("xlsx");
-    const ws = XLSX.utils.aoa_to_sheet([["Material Name", "Unit", "Qty"], ["SAMPLE MATERIAL", "pcs", 10]]);
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Material Name", "Unit", "Qty"],
+      ["SAMPLE MATERIAL", "pcs", 10],
+    ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Template");
     XLSX.writeFile(wb, "quotation_template.xlsx");
@@ -512,8 +540,10 @@ export function QuotationModal({
     }
 
     setItems((prev) => {
-      const updated = prev.map((item) => (item.id === id ? { ...item, [field]: value, duplicateError: undefined } : item));
-      
+      const updated = prev.map((item) =>
+        item.id === id ? { ...item, [field]: value, duplicateError: undefined } : item,
+      );
+
       if (field === "material_name" || field === "unit") {
         return updated.map((item) => {
           const normalizedName = normalizeMaterialName(item.material_name);
@@ -523,7 +553,7 @@ export function QuotationModal({
             (other) =>
               other.id !== item.id &&
               normalizeMaterialName(other.material_name) === normalizedName &&
-              other.unit.trim().toUpperCase() === normalizedUnit
+              other.unit.trim().toUpperCase() === normalizedUnit,
           );
           return {
             ...item,
@@ -619,27 +649,27 @@ export function QuotationModal({
   };
 
   // Handle approve/reject change request (admin only)
-  const handleReviewChangeRequest = async (requestId: string, action: 'approved' | 'rejected', remarks?: string) => {
+  const handleReviewChangeRequest = async (requestId: string, action: "approved" | "rejected", remarks?: string) => {
     if (!user || !isAdminUser) return;
 
-    const request = pendingRequests.find(r => r.id === requestId);
+    const request = pendingRequests.find((r) => r.id === requestId);
     if (!request) return;
 
     const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
     const userName = userProfile?.full_name || "Admin";
 
-    if (action === 'approved') {
+    if (action === "approved") {
       // Apply the change
       const payload = request.payload as any;
-      
-      if (request.change_type === 'create') {
+
+      if (request.change_type === "create") {
         const { data: newQuotation, error: createError } = await supabase
           .from("project_quotations")
           .insert({
             project_id: projectId,
             created_by: request.requested_by,
             notes: payload.notes || null,
-            category: payload.category || 'initial',
+            category: payload.category || "initial",
           })
           .select()
           .single();
@@ -656,10 +686,10 @@ export function QuotationModal({
               material_name: item.material_name,
               unit: item.unit,
               quantity: item.quantity,
-            }))
+            })),
           );
         }
-      } else if (request.change_type === 'update' && request.quotation_id) {
+      } else if (request.change_type === "update" && request.quotation_id) {
         await supabase
           .from("project_quotations")
           .update({ notes: payload.notes, updated_at: new Date().toISOString() })
@@ -674,35 +704,38 @@ export function QuotationModal({
               material_name: item.material_name,
               unit: item.unit,
               quantity: item.quantity,
-            }))
+            })),
           );
         }
-      } else if (request.change_type === 'delete' && request.quotation_id) {
+      } else if (request.change_type === "delete" && request.quotation_id) {
         await supabase.from("quotation_items").delete().eq("quotation_id", request.quotation_id);
         await supabase.from("project_quotations").delete().eq("id", request.quotation_id);
       }
     }
 
     // Update the request status
-    await supabase.from("quotation_change_requests").update({
-      status: action,
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-      review_remarks: remarks || null,
-    }).eq("id", requestId);
+    await supabase
+      .from("quotation_change_requests")
+      .update({
+        status: action,
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        review_remarks: remarks || null,
+      })
+      .eq("id", requestId);
 
     await logActivity({
       action: `change_request_${action}`,
       tableName: "project_quotations",
       recordId: request.quotation_id || projectId,
-      oldValues: { status: 'pending' },
+      oldValues: { status: "pending" },
       newValues: { status: action, reviewed_by: userName },
       userId: user.id,
     });
 
     await notifyProjectMembers({
       projectId,
-      title: `Quotation Change ${action === 'approved' ? 'Approved' : 'Rejected'}`,
+      title: `Quotation Change ${action === "approved" ? "Approved" : "Rejected"}`,
       message: `${userName} ${action} the quotation ${request.change_type} request for ${projectName}`,
       type: "project",
       referenceType: "quotation_change_request",
@@ -721,7 +754,11 @@ export function QuotationModal({
     const consolidatedItems = consolidateItems();
 
     if (consolidatedItems.length === 0) {
-      toast({ title: "Validation Error", description: "At least one material item with a valid name is required", variant: "destructive" });
+      toast({
+        title: "Validation Error",
+        description: "At least one material item with a valid name is required",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -729,7 +766,11 @@ export function QuotationModal({
       (item) => !item.material_name.trim() || item.quantity < 1 || !item.unit.trim(),
     );
     if (hasInvalidItem) {
-      toast({ title: "Validation Error", description: "All materials must have a name, unit, and quantity of at least 1", variant: "destructive" });
+      toast({
+        title: "Validation Error",
+        description: "All materials must have a name, unit, and quantity of at least 1",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -751,7 +792,7 @@ export function QuotationModal({
     // Non-admin users: create change request instead
     if (!isAdminUser) {
       const payload = {
-        items: consolidatedItems.map(i => ({
+        items: consolidatedItems.map((i) => ({
           material_name: normalizeMaterialName(i.material_name),
           unit: i.unit.trim(),
           quantity: i.quantity,
@@ -761,9 +802,9 @@ export function QuotationModal({
       };
 
       if (quotation) {
-        await createChangeRequest('update', payload);
+        await createChangeRequest("update", payload);
       } else {
-        await createChangeRequest('create', payload);
+        await createChangeRequest("create", payload);
       }
       return;
     }
@@ -796,10 +837,9 @@ export function QuotationModal({
 
         for (const item of consolidatedItems) {
           const normalizedName = normalizeMaterialName(item.material_name);
-          
-          const existingId = item.id && existingItems?.find((ei) => ei.id === item.id)
-            ? item.id
-            : existingItemMap.get(normalizedName);
+
+          const existingId =
+            item.id && existingItems?.find((ei) => ei.id === item.id) ? item.id : existingItemMap.get(normalizedName);
 
           if (existingId) {
             await supabase
@@ -823,11 +863,11 @@ export function QuotationModal({
 
         const consolidatedIds = consolidatedItems.map((ci) => ci.id);
         const consolidatedNames = consolidatedItems.map((ci) => normalizeMaterialName(ci.material_name));
-        
+
         for (const existingItem of existingItems || []) {
-          const isInConsolidated = consolidatedIds.includes(existingItem.id) || 
-            consolidatedNames.includes(existingItem.material_name);
-          
+          const isInConsolidated =
+            consolidatedIds.includes(existingItem.id) || consolidatedNames.includes(existingItem.material_name);
+
           if (!isInConsolidated) {
             const usage = materialOrderUsage.get(existingItem.id);
             if (!usage?.isUsedInOrders) {
@@ -886,7 +926,12 @@ export function QuotationModal({
           tableName: "project_quotations",
           recordId: newQuotation.id,
           oldValues: null,
-          newValues: { items_count: consolidatedItems.length, created_by: userName, role: roleName, category: editCategory },
+          newValues: {
+            items_count: consolidatedItems.length,
+            created_by: userName,
+            role: roleName,
+            category: editCategory,
+          },
           userId: user.id,
         });
 
@@ -931,7 +976,7 @@ export function QuotationModal({
 
     // Non-admin: create change request
     if (!isAdminUser) {
-      await createChangeRequest('delete', { quotation_id: quotation.id });
+      await createChangeRequest("delete", { quotation_id: quotation.id });
       setShowDeleteConfirm(false);
       return;
     }
@@ -990,7 +1035,7 @@ export function QuotationModal({
 
   // Start adding an additional quotation
   const handleAddAdditionalQuote = () => {
-    setEditCategory('additional');
+    setEditCategory("additional");
     setQuotation(null); // Temporarily clear so we go into create mode
     setItems([{ id: crypto.randomUUID(), material_name: "", unit: "pcs", quantity: 0 }]);
     setNotes("");
@@ -1014,7 +1059,8 @@ export function QuotationModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            {!quotation && !isEditMode ? "Add Quotation" : isEditMode ? "Update Quotation" : "View Quotation"} - {projectName}
+            {!quotation && !isEditMode ? "Add Quotation" : isEditMode ? "Update Quotation" : "View Quotation"} -{" "}
+            {projectName}
           </DialogTitle>
         </DialogHeader>
 
@@ -1031,11 +1077,13 @@ export function QuotationModal({
                   <ShieldAlert className="h-5 w-5" />
                   Pending Change Requests ({pendingRequests.length})
                 </div>
-                {pendingRequests.map(req => (
+                {pendingRequests.map((req) => (
                   <div key={req.id} className="p-3 bg-background rounded border space-y-2">
                     <div className="flex items-center justify-between">
                       <div>
-                        <Badge variant="outline" className="capitalize">{req.change_type}</Badge>
+                        <Badge variant="outline" className="capitalize">
+                          {req.change_type}
+                        </Badge>
                         <span className="text-sm ml-2">by {req.requester_name}</span>
                       </div>
                       <span className="text-xs text-muted-foreground">{formatManilaTime(req.created_at)}</span>
@@ -1044,10 +1092,14 @@ export function QuotationModal({
                       <p className="text-xs text-muted-foreground">{(req.payload as any).items.length} material(s)</p>
                     )}
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => handleReviewChangeRequest(req.id, 'approved')}>
+                      <Button size="sm" onClick={() => handleReviewChangeRequest(req.id, "approved")}>
                         <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Approve
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleReviewChangeRequest(req.id, 'rejected')}>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleReviewChangeRequest(req.id, "rejected")}
+                      >
                         <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Reject
                       </Button>
                     </div>
@@ -1074,7 +1126,9 @@ export function QuotationModal({
                 <span className="hidden sm:inline">•</span>
                 <span>By: {creatorName}</span>
                 <span className="hidden sm:inline">•</span>
-                <Badge variant="outline" className="capitalize w-fit">{quotation.category || 'initial'}</Badge>
+                <Badge variant="outline" className="capitalize w-fit">
+                  {quotation.category || "initial"}
+                </Badge>
                 {quotation.updated_at !== quotation.created_at && (
                   <>
                     <span className="hidden sm:inline">•</span>
@@ -1164,38 +1218,39 @@ export function QuotationModal({
                                 style={{ textTransform: "uppercase" }}
                                 autoComplete="off"
                               />
-                              {activeAutocomplete === item.id && (() => {
-                                const filter = autocompleteFilter.trim().toUpperCase();
-                                const filtered = skuCatalogue.filter(
-                                  (sku) =>
-                                    !filter ||
-                                    sku.name.toUpperCase().includes(filter) ||
-                                    sku.sku_code.toUpperCase().includes(filter)
-                                );
-                                if (filtered.length === 0) return null;
-                                return (
-                                  <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
-                                    {filtered.map((sku) => (
-                                      <button
-                                        key={sku.id}
-                                        type="button"
-                                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex flex-col"
-                                        onMouseDown={(e) => {
-                                          e.preventDefault();
-                                          updateItem(item.id, "material_name", sku.name);
-                                          updateItem(item.id, "unit", sku.unit);
-                                          setActiveAutocomplete(null);
-                                        }}
-                                      >
-                                        <span className="font-medium">{sku.name}</span>
-                                        <span className="text-xs text-muted-foreground">
-                                          {sku.sku_code} • {sku.unit}
-                                        </span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                );
-                              })()}
+                              {activeAutocomplete === item.id &&
+                                (() => {
+                                  const filter = autocompleteFilter.trim().toUpperCase();
+                                  const filtered = skuCatalogue.filter(
+                                    (sku) =>
+                                      !filter ||
+                                      sku.name.toUpperCase().includes(filter) ||
+                                      sku.sku_code.toUpperCase().includes(filter),
+                                  );
+                                  if (filtered.length === 0) return null;
+                                  return (
+                                    <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
+                                      {filtered.map((sku) => (
+                                        <button
+                                          key={sku.id}
+                                          type="button"
+                                          className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex flex-col"
+                                          onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            updateItem(item.id, "material_name", sku.name);
+                                            updateItem(item.id, "unit", sku.unit);
+                                            setActiveAutocomplete(null);
+                                          }}
+                                        >
+                                          <span className="font-medium">{sku.name}</span>
+                                          <span className="text-xs text-muted-foreground">
+                                            {sku.sku_code} • {sku.unit}
+                                          </span>
+                                        </button>
+                                      ))}
+                                    </div>
+                                  );
+                                })()}
                               {item.duplicateError && (
                                 <p className="text-xs text-destructive mt-0.5">{item.duplicateError}</p>
                               )}
@@ -1259,7 +1314,8 @@ export function QuotationModal({
                       </div>
                       {isEditMode && isUsedInOrders && minAllowedQty > 0 && (
                         <p className="text-xs text-muted-foreground pl-2">
-                          Min qty: {minAllowedQty} (Ordered: {usage?.orderedQty || 0}, Received: {usage?.receivedClosedQty || 0})
+                          Min qty: {minAllowedQty} (Ordered: {usage?.orderedQty || 0}, Received:{" "}
+                          {usage?.receivedClosedQty || 0})
                         </p>
                       )}
                     </div>
@@ -1273,7 +1329,12 @@ export function QuotationModal({
                     <Plus className="h-4 w-4 mr-1" />
                     Add Material
                   </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById('excel-upload')?.click()}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => document.getElementById("excel-upload")?.click()}
+                  >
                     <Upload className="h-4 w-4 mr-1" />
                     Upload Excel
                   </Button>
@@ -1302,10 +1363,12 @@ export function QuotationModal({
                 <p className="text-xs text-muted-foreground">
                   Materials added or modified after the initial quotation, approved through change requests.
                 </p>
-                {additionalQuotations.map(aq => (
+                {additionalQuotations.map((aq) => (
                   <div key={aq.id} className="p-3 border rounded bg-card space-y-1">
                     <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="bg-accent/10">Additional</Badge>
+                      <Badge variant="outline" className="bg-accent/10">
+                        Additional
+                      </Badge>
                       <span className="text-xs text-muted-foreground">{formatManilaTime(aq.created_at)}</span>
                     </div>
                     {aq.notes && <p className="text-sm text-muted-foreground">{aq.notes}</p>}
@@ -1406,8 +1469,10 @@ export function QuotationModal({
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {isAdminUser ? "Deleting..." : "Submitting..."}
                 </>
+              ) : isAdminUser ? (
+                "OK"
               ) : (
-                isAdminUser ? "OK" : "Submit Request"
+                "Submit Request"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
