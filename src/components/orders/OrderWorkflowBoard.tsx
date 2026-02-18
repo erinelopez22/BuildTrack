@@ -9,7 +9,7 @@ import { CompletedOrdersModal } from "./CompletedOrdersModal";
 import { OnHoldReasonDialog } from "./OnHoldReasonDialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ArrowLeft, Loader2, XCircle, Archive, Truck } from "lucide-react";
+import { Plus, ArrowLeft, Loader2, Archive } from "lucide-react";
 import { logActivity } from "@/lib/activityLogger";
 import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 import type { Order, Project, OrderStatus } from "@/types/database";
@@ -19,14 +19,20 @@ interface OrderWorkflowBoardProps {
   onBack: () => void;
 }
 
-// Simplified workflow lanes matching the 6-status model
+// 7-lane workflow: Order Request → Approved → Ordered → Preparing → On Transit → Delivered
 const MAIN_WORKFLOW_LANES: { key: string; dbStatuses: OrderStatus[]; label: string; color: string }[] = [
   { key: "order_request", dbStatuses: ["draft", "for_approval"], label: "Order Request", color: "bg-warning/10 border-warning/30" },
   { key: "approved", dbStatuses: ["approved"], label: "Approved", color: "bg-[hsl(210,90%,50%)]/10 border-[hsl(210,90%,50%)]/30" },
-  { key: "ordered", dbStatuses: ["submitted", "preparing", "ordered"], label: "Ordered", color: "bg-[hsl(220,75%,45%)]/10 border-[hsl(220,75%,45%)]/30" },
+  { key: "ordered", dbStatuses: ["submitted", "ordered"], label: "Ordered", color: "bg-[hsl(220,75%,45%)]/10 border-[hsl(220,75%,45%)]/30" },
+  { key: "preparing", dbStatuses: ["preparing"], label: "Preparing", color: "bg-violet-500/10 border-violet-500/30" },
   { key: "on_transit", dbStatuses: ["in_transit"], label: "On Transit", color: "bg-amber-400/10 border-amber-400/30" },
   { key: "delivered", dbStatuses: ["delivered", "partially_received", "fully_received", "closed"], label: "Delivered", color: "bg-success/10 border-success/30" },
+];
+
+// Exception lanes shown below main flow
+const EXCEPTION_LANES: { key: string; dbStatuses: OrderStatus[]; label: string; color: string }[] = [
   { key: "rejected", dbStatuses: ["rejected"], label: "Rejected", color: "bg-destructive/10 border-destructive/30" },
+  { key: "on_hold", dbStatuses: ["on_hold"], label: "On Hold", color: "bg-amber-500/10 border-amber-500/30" },
 ];
 
 export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps) {
@@ -49,7 +55,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       .from("orders")
       .select("*")
       .eq("project_id", project.id)
-      .neq("status", "closed") // Exclude completed/hidden orders from workflow view
+      .neq("status", "closed")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -63,7 +69,6 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   useEffect(() => {
     fetchOrders();
 
-    // Set up realtime subscription
     const channel = supabase
       .channel("orders-changes")
       .on(
@@ -115,7 +120,6 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     }
 
     if (orderData) {
-      // Insert order items with quotation_item_id reference
       const orderItems = [];
 
       for (const material of data.materials) {
@@ -201,7 +205,6 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   const handleStatusChange = async (order: Order, newStatus: OrderStatus) => {
     if (!user) return;
 
-    // Check permissions based on role and transition
     let hasPermission = false;
 
     if (isSuperAdmin() || isAdmin()) {
@@ -221,8 +224,9 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       hasPermission = canReceiveOrders();
     } else if (order.status === "delivered" && newStatus === "closed") {
       hasPermission = canApproveOrders() || isAdmin() || isSuperAdmin();
-    } else if (order.status === "on_hold" && newStatus === "in_transit") {
-      hasPermission = isSuperAdmin() || isAdmin();
+    } else if (order.status === "on_hold") {
+      // Resume: restore previous status
+      hasPermission = isSuperAdmin() || isAdmin() || canProcessLogistics();
     }
 
     if (!hasPermission) {
@@ -239,6 +243,16 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     if (newStatus === "approved" && order.status === "for_approval") {
       updateData.approved_by = user.id;
       updateData.approved_at = new Date().toISOString();
+    }
+
+    // When putting on hold, store previous status
+    if (newStatus === "on_hold") {
+      updateData.previous_status = order.status;
+    }
+
+    // When resuming from on_hold, clear previous_status
+    if (order.status === "on_hold") {
+      updateData.previous_status = null;
     }
 
     const { error } = await supabase.from("orders").update(updateData).eq("id", order.id);
@@ -347,6 +361,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       .update({
         status: "on_hold" as OrderStatus,
         notes: updatedNotes,
+        previous_status: orderToHold.status,
       })
       .eq("id", orderToHold.id);
 
@@ -362,6 +377,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
           status: "on_hold",
           order_number: orderToHold.order_number,
           on_hold_reason: reason,
+          previous_status: orderToHold.status,
         },
         userId: user.id,
       });
@@ -442,6 +458,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
           <span className="font-medium">Order Request</span><span>→</span>
           <span className="font-medium">Approved</span><span>→</span>
           <span className="font-medium">Ordered</span><span>→</span>
+          <span className="font-medium">Preparing</span><span>→</span>
           <span className="font-medium">On Transit</span><span>→</span>
           <span className="font-medium">Delivered</span>
         </div>
@@ -472,7 +489,41 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                         order={order}
                         onClick={() => setSelectedOrderId(order.id)}
                         onQuickAction={(action) => handleQuickAction(order, action)}
-                        showHoverActions={true}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Exception Lanes: Rejected & On Hold */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium text-muted-foreground px-1">Exceptions</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {EXCEPTION_LANES.map((lane) => {
+            const laneOrders = getOrdersForLane(lane.dbStatuses);
+            return (
+              <div key={lane.key} className={`rounded-xl border-2 ${lane.color} p-3 min-h-[120px] flex flex-col`}>
+                <div className="flex items-center justify-between mb-3 flex-shrink-0">
+                  <h3 className="font-semibold text-foreground text-xs sm:text-sm truncate">{lane.label}</h3>
+                  <span className="text-xs text-muted-foreground bg-background/80 px-2 py-0.5 rounded-full flex-shrink-0 ml-1">
+                    {laneOrders.length}
+                  </span>
+                </div>
+
+                <div className="space-y-4 flex-1 overflow-y-auto">
+                  {laneOrders.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">No orders</p>
+                  ) : (
+                    laneOrders.map((order) => (
+                      <OrderCard
+                        key={order.id}
+                        order={order}
+                        onClick={() => setSelectedOrderId(order.id)}
+                        onQuickAction={(action) => handleQuickAction(order, action)}
                       />
                     ))
                   )}

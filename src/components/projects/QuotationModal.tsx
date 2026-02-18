@@ -1014,7 +1014,7 @@ export function QuotationModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            {!quotation && !isEditMode ? "Add Quotation" : isEditMode ? (editCategory === 'additional' ? "Add Additional Quote" : "Update Quotation") : "View Quotation"} - {projectName}
+            {!quotation && !isEditMode ? "Add Quotation" : isEditMode ? "Update Quotation" : "View Quotation"} - {projectName}
           </DialogTitle>
         </DialogHeader>
 
@@ -1116,11 +1116,11 @@ export function QuotationModal({
               </div>
             )}
 
-            {/* Initial Quotation List */}
+            {/* Initial Materials Section */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">
-                  {editCategory === 'additional' ? 'Additional Quote' : 'Initial Quotation'} {isEditMode && <span className="text-destructive">*</span>}
+                  Initial Materials {isEditMode && <span className="text-destructive">*</span>}
                 </Label>
               </div>
 
@@ -1292,14 +1292,20 @@ export function QuotationModal({
               )}
             </div>
 
-            {/* Additional Quotations (View Mode) */}
+            {/* Additional / Updated Materials Section (from approved change requests) */}
             {isViewMode && additionalQuotations.length > 0 && (
-              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
-                <Label className="text-sm font-medium">Additional Quotes ({additionalQuotations.length})</Label>
+              <div className="space-y-3 p-4 border rounded-lg bg-accent/5 border-accent/20">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Package className="h-4 w-4 text-accent-foreground" />
+                  Additional / Updated Materials
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Materials added or modified after the initial quotation, approved through change requests.
+                </p>
                 {additionalQuotations.map(aq => (
                   <div key={aq.id} className="p-3 border rounded bg-card space-y-1">
                     <div className="flex items-center justify-between">
-                      <Badge variant="outline">Additional Quote</Badge>
+                      <Badge variant="outline" className="bg-accent/10">Additional</Badge>
                       <span className="text-xs text-muted-foreground">{formatManilaTime(aq.created_at)}</span>
                     </div>
                     {aq.notes && <p className="text-sm text-muted-foreground">{aq.notes}</p>}
@@ -1355,12 +1361,6 @@ export function QuotationModal({
                       <Button onClick={handleEnterEditMode}>
                         <Pencil className="h-4 w-4 mr-1" />
                         Update Quotation
-                      </Button>
-                    )}
-                    {quotation && canEdit && (
-                      <Button variant="outline" onClick={handleAddAdditionalQuote}>
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Additional Quote
                       </Button>
                     )}
                   </div>

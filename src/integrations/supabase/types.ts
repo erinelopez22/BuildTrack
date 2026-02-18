@@ -516,6 +516,7 @@ export type Database = {
           notes: string | null
           order_number: string
           order_type: string | null
+          previous_status: string | null
           project_id: string
           rejected_at: string | null
           rejected_by: string | null
@@ -536,6 +537,7 @@ export type Database = {
           notes?: string | null
           order_number: string
           order_type?: string | null
+          previous_status?: string | null
           project_id: string
           rejected_at?: string | null
           rejected_by?: string | null
@@ -556,6 +558,7 @@ export type Database = {
           notes?: string | null
           order_number?: string
           order_type?: string | null
+          previous_status?: string | null
           project_id?: string
           rejected_at?: string | null
           rejected_by?: string | null
