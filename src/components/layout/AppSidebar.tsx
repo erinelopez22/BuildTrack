@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   FolderKanban,
@@ -13,7 +13,7 @@ import {
   HardHat,
   Wrench,
   RotateCcw,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -26,7 +26,7 @@ import {
   SidebarHeader,
   SidebarFooter,
   useSidebar,
-} from '@/components/ui/sidebar';
+} from "@/components/ui/sidebar";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -35,62 +35,62 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogCancel,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { useAuth } from '@/contexts/AuthContext';
-import { useNotifications } from '@/hooks/useNotifications';
-import { useQueryClient } from '@tanstack/react-query';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNotifications } from "@/hooks/useNotifications";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 const mainNavItems = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-  { title: 'Projects', url: '/projects', icon: FolderKanban },
-  { title: 'Order & Tracking', url: '/inventory', icon: Package },
-  { title: 'View Orders', url: '/orders', icon: ClipboardList },
-  { title: 'SKU Catalog', url: '/skus', icon: Boxes },
-  { title: 'Company Materials/Tool', url: '/company-assets', icon: Wrench },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
+  { title: "Projects", url: "/projects", icon: FolderKanban },
+  { title: "Order & Tracking", url: "/inventory", icon: Package },
+  { title: "View Orders", url: "/orders", icon: ClipboardList },
+  { title: "SKU Catalog", url: "/skus", icon: Boxes },
+  { title: "Equiments/Tools", url: "/company-assets", icon: Wrench },
 ];
 
 const adminNavItems = [
-  { title: 'Users & Roles', url: '/users', icon: Users },
-  { title: 'Settings', url: '/settings', icon: Settings },
+  { title: "Users & Roles", url: "/users", icon: Users },
+  { title: "Settings", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
-  const collapsed = state === 'collapsed';
+  const collapsed = state === "collapsed";
   const location = useLocation();
   const { signOut, isAdmin, isSuperAdmin, profile } = useAuth();
   const { unreadCount } = useNotifications();
   const [showResetDialog, setShowResetDialog] = useState(false);
-  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetConfirmText, setResetConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const handleResetData = async () => {
-    if (resetConfirmText !== 'RESET') return;
+    if (resetConfirmText !== "RESET") return;
     setResetting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('reset-data', {
-        method: 'POST',
+      const { data, error } = await supabase.functions.invoke("reset-data", {
+        method: "POST",
       });
       if (error) throw error;
       toast({
-        title: 'Data reset complete',
-        description: 'All application data has been cleared.',
+        title: "Data reset complete",
+        description: "All application data has been cleared.",
       });
       queryClient.invalidateQueries();
       setShowResetDialog(false);
-      setResetConfirmText('');
+      setResetConfirmText("");
     } catch (err: any) {
       toast({
-        title: 'Reset failed',
-        description: err.message || 'An error occurred during reset.',
-        variant: 'destructive',
+        title: "Reset failed",
+        description: err.message || "An error occurred during reset.",
+        variant: "destructive",
       });
     } finally {
       setResetting(false);
@@ -117,25 +117,19 @@ export function AppSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/60">
-            {!collapsed && 'Main Menu'}
-          </SidebarGroupLabel>
+          <SidebarGroupLabel className="text-sidebar-foreground/60">{!collapsed && "Main Menu"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {mainNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive(item.url)}
-                    tooltip={item.title}
-                  >
+                  <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                     <NavLink
                       to={item.url}
                       className={cn(
-                        'flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
+                        "flex items-center gap-3 rounded-md px-3 py-2 transition-colors",
                         isActive(item.url)
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                          : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent/50",
                       )}
                     >
                       <item.icon className="h-5 w-5" />
@@ -151,24 +145,20 @@ export function AppSidebar() {
         {isAdmin() && (
           <SidebarGroup>
             <SidebarGroupLabel className="text-sidebar-foreground/60">
-              {!collapsed && 'Administration'}
+              {!collapsed && "Administration"}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {adminNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive(item.url)}
-                      tooltip={item.title}
-                    >
+                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                       <NavLink
                         to={item.url}
                         className={cn(
-                          'flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
+                          "flex items-center gap-3 rounded-md px-3 py-2 transition-colors",
                           isActive(item.url)
-                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                            : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent/50",
                         )}
                       >
                         <item.icon className="h-5 w-5" />
@@ -190,17 +180,17 @@ export function AppSidebar() {
                   <NavLink
                     to="/notifications"
                     className={cn(
-                      'flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
-                      isActive('/notifications')
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                        : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+                      "flex items-center gap-3 rounded-md px-3 py-2 transition-colors",
+                      isActive("/notifications")
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground hover:bg-sidebar-accent/50",
                     )}
                   >
                     <div className="relative">
                       <Bell className="h-5 w-5" />
                       {unreadCount > 0 && (
                         <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
-                          {unreadCount > 9 ? '9+' : unreadCount}
+                          {unreadCount > 9 ? "9+" : unreadCount}
                         </span>
                       )}
                     </div>
@@ -217,17 +207,15 @@ export function AppSidebar() {
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sidebar-accent">
             <span className="text-sm font-medium text-sidebar-accent-foreground">
-              {profile?.full_name?.charAt(0) || profile?.email?.charAt(0) || 'U'}
+              {profile?.full_name?.charAt(0) || profile?.email?.charAt(0) || "U"}
             </span>
           </div>
           {!collapsed && (
             <div className="flex flex-1 flex-col overflow-hidden">
               <span className="truncate text-sm font-medium text-sidebar-foreground">
-                {profile?.full_name || 'User'}
+                {profile?.full_name || "User"}
               </span>
-              <span className="truncate text-xs text-sidebar-foreground/60">
-                {profile?.email}
-              </span>
+              <span className="truncate text-xs text-sidebar-foreground/60">{profile?.email}</span>
             </div>
           )}
           <div className="flex items-center gap-1">
@@ -259,8 +247,8 @@ export function AppSidebar() {
           <AlertDialogHeader>
             <AlertDialogTitle>Reset all data?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete ALL data except users and roles. This cannot be undone.
-              Type <strong>RESET</strong> to confirm.
+              This will delete ALL data except users and roles. This cannot be undone. Type <strong>RESET</strong> to
+              confirm.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Input
@@ -270,15 +258,19 @@ export function AppSidebar() {
             className="mt-2"
           />
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setResetConfirmText(''); }}>
+            <AlertDialogCancel
+              onClick={() => {
+                setResetConfirmText("");
+              }}
+            >
               Cancel
             </AlertDialogCancel>
             <Button
               variant="destructive"
-              disabled={resetConfirmText !== 'RESET' || resetting}
+              disabled={resetConfirmText !== "RESET" || resetting}
               onClick={handleResetData}
             >
-              {resetting ? 'Resetting...' : 'Confirm Reset'}
+              {resetting ? "Resetting..." : "Confirm Reset"}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
