@@ -171,10 +171,16 @@ export default function CompanyAssets() {
     setSaving(true);
 
     if (editingAsset) {
+      // Client-side guard for borrowed qty
+      const borrowed = getBorrowedQty(editingAsset);
+      if (form.total_quantity < borrowed) {
+        toast({ title: 'Error', description: `Total quantity cannot be lower than currently borrowed quantity (${borrowed}).`, variant: 'destructive' });
+        setSaving(false);
+        return;
+      }
       const { error } = await supabase.from('company_assets').update({
         asset_name: form.asset_name.trim(),
         asset_type: form.asset_type,
-        asset_code: form.asset_code.trim() || null,
         unit: form.unit.trim() || null,
         total_quantity: form.total_quantity,
         condition: form.condition,
@@ -192,7 +198,6 @@ export default function CompanyAssets() {
       const { error } = await supabase.from('company_assets').insert({
         asset_name: form.asset_name.trim(),
         asset_type: form.asset_type,
-        asset_code: form.asset_code.trim() || null,
         unit: form.unit.trim() || null,
         total_quantity: form.total_quantity,
         condition: form.condition,
@@ -213,6 +218,13 @@ export default function CompanyAssets() {
 
   const handleDelete = async () => {
     if (!deleteAsset) return;
+    // Client-side guard
+    const borrowed = getBorrowedQty(deleteAsset);
+    if (borrowed > 0) {
+      toast({ title: 'Error', description: `Cannot delete this asset because there are still borrowed items (${borrowed}). Please return all borrowed items before deleting.`, variant: 'destructive' });
+      setDeleteAsset(null);
+      return;
+    }
     const { error } = await supabase.from('company_assets').delete().eq('id', deleteAsset.id);
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
@@ -428,7 +440,11 @@ export default function CompanyAssets() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Asset Code</Label>
-                <Input value={form.asset_code} onChange={(e) => setForm({ ...form, asset_code: e.target.value })} placeholder="Optional" />
+                {editingAsset ? (
+                  <Input value={form.asset_code} readOnly disabled className="bg-muted font-mono" />
+                ) : (
+                  <Input value="Auto-generated" readOnly disabled className="bg-muted text-muted-foreground italic" />
+                )}
               </div>
               <div>
                 <Label>Unit</Label>
@@ -438,6 +454,20 @@ export default function CompanyAssets() {
             <div>
               <Label>Total Quantity</Label>
               <Input type="number" min={0} value={form.total_quantity} onChange={(e) => setForm({ ...form, total_quantity: parseInt(e.target.value) || 0 })} />
+              {editingAsset && (() => {
+                const borrowed = getBorrowedQty(editingAsset);
+                const available = getAvailableQty(editingAsset);
+                const newTotal = form.total_quantity;
+                const isBelowBorrowed = newTotal < borrowed;
+                return (
+                  <div className="mt-1 space-y-0.5">
+                    <p className="text-xs text-muted-foreground">Currently Borrowed: <span className="font-medium text-foreground">{borrowed}</span> · Available: <span className="font-medium text-foreground">{available}</span></p>
+                    {isBelowBorrowed && (
+                      <p className="text-xs text-destructive">Not allowed: Total quantity cannot be lower than currently borrowed quantity ({borrowed}). Return borrowed items first or set the quantity to at least {borrowed}.</p>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div>
               <Label>Notes</Label>
@@ -446,7 +476,7 @@ export default function CompanyAssets() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving || (editingAsset ? form.total_quantity < getBorrowedQty(editingAsset) : false)}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editingAsset ? 'Update' : 'Create'}
             </Button>
@@ -460,12 +490,18 @@ export default function CompanyAssets() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Asset</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{deleteAsset?.asset_name}"? This action cannot be undone.
+              {deleteAsset && getBorrowedQty(deleteAsset) > 0
+                ? `Cannot delete this asset because there are still borrowed items (${getBorrowedQty(deleteAsset!)}). Please return all borrowed items before deleting.`
+                : `Are you sure you want to delete "${deleteAsset?.asset_name}"? This action cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteAsset ? getBorrowedQty(deleteAsset) > 0 : false}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

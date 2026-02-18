@@ -449,7 +449,7 @@ export function TrackingAssignmentSection({
 
     const newEvidence: EvidenceFile[] = [];
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) {
+      if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
         toast({ title: "Invalid File", description: "Only image files are allowed.", variant: "destructive" });
         continue;
       }
@@ -475,8 +475,75 @@ export function TrackingAssignmentSection({
 
   // === PER-DRIVER ACTIONS (On Transit page) ===
 
+  // Upload evidence file immediately (for On Transit stage)
+  const handleInTransitEvidenceUpload = async (assignmentId: string, driverUserId: string, files: FileList | null) => {
+    if (!files || !user || !assignmentId) return;
+
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith("image/")) {
+        toast({ title: "Invalid File", description: "Only image files are allowed.", variant: "destructive" });
+        continue;
+      }
+
+      const fileExt = file.name.split(".").pop();
+      const fileName = `${orderId}/${assignmentId}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("tracking-evidence")
+        .upload(fileName, file);
+
+      if (uploadError) {
+        toast({ title: "Upload Error", description: uploadError.message, variant: "destructive" });
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("tracking-evidence")
+        .getPublicUrl(fileName);
+
+      const { error: evidenceError } = await supabase
+        .from("order_tracking_evidence")
+        .insert({
+          order_tracking_assignment_id: assignmentId,
+          file_url: urlData.publicUrl,
+          file_name: file.name,
+          uploaded_by: user.id,
+        });
+
+      if (evidenceError) {
+        toast({ title: "Error", description: evidenceError.message, variant: "destructive" });
+        continue;
+      }
+
+      // Update local state
+      setAssignments((prev) =>
+        prev.map((a) =>
+          a.driver_user_id === driverUserId
+            ? {
+                ...a,
+                evidence: [
+                  ...a.evidence,
+                  { file_url: urlData.publicUrl, file_name: file.name, uploaded_by: user.id, uploaded_at: new Date().toISOString() },
+                ],
+              }
+            : a
+        )
+      );
+    }
+
+    toast({ title: "Uploaded", description: "Evidence photo uploaded successfully." });
+  };
+
   const handleTrackArrived = async (assignmentId: string, driverName: string) => {
     if (!user || !assignmentId) return;
+
+    // Check evidence exists
+    const assignment = assignments.find((a) => a.id === assignmentId);
+    if (!assignment || assignment.evidence.length === 0) {
+      toast({ title: "Evidence Required", description: "Evidence photo is required before tracking arrived.", variant: "destructive" });
+      return;
+    }
+
     setActionLoading(assignmentId);
 
     const arrivedAt = new Date().toISOString();
@@ -925,31 +992,65 @@ export function TrackingAssignmentSection({
 
           {/* Per-driver action buttons (On Transit page only) */}
           {isInTransit && canDoDriverActions && assignment.id && assignment.tracking_status === "on_transit" && (
-            <div className="flex items-center gap-2 pt-1">
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 text-success border-success/30 hover:bg-success/10"
-                onClick={() => handleTrackArrived(assignment.id!, assignment.driver.full_name || assignment.driver.email)}
-                disabled={actionLoading === assignment.id}
-              >
-                {actionLoading === assignment.id ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <MapPin className="h-3.5 w-3.5" />
-                )}
-                Track Arrived
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
-                onClick={() => setHoldDialogDriverId(assignment.id!)}
-                disabled={actionLoading === assignment.id}
-              >
-                <PauseCircle className="h-3.5 w-3.5" />
-                Hold
-              </Button>
+            <div className="space-y-3 pt-1">
+              {/* Evidence requirement notice */}
+              {assignment.evidence.length === 0 && (
+                <div className="flex items-center gap-2 text-xs bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2 text-amber-600">
+                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                  Evidence photo is required before tracking arrived.
+                </div>
+              )}
+              {/* On Transit Evidence Upload */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Arrival Evidence</p>
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      ref={(el) => { fileInputRefs.current[`transit_${assignment.driver_user_id}`] = el; }}
+                      onChange={(e) => handleInTransitEvidenceUpload(assignment.id!, assignment.driver_user_id, e.target.files)}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => fileInputRefs.current[`transit_${assignment.driver_user_id}`]?.click()}
+                    >
+                      <Upload className="h-3 w-3 mr-1" /> Upload Evidence
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              {/* Action buttons */}
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-success border-success/30 hover:bg-success/10"
+                  onClick={() => handleTrackArrived(assignment.id!, assignment.driver.full_name || assignment.driver.email)}
+                  disabled={actionLoading === assignment.id || assignment.evidence.length === 0}
+                >
+                  {actionLoading === assignment.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <MapPin className="h-3.5 w-3.5" />
+                  )}
+                  Track Arrived
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
+                  onClick={() => setHoldDialogDriverId(assignment.id!)}
+                  disabled={actionLoading === assignment.id}
+                >
+                  <PauseCircle className="h-3.5 w-3.5" />
+                  Hold
+                </Button>
+              </div>
             </div>
           )}
 
@@ -1066,7 +1167,7 @@ export function TrackingAssignmentSection({
           {/* Evidence */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">Evidence Photos</p>
+              <p className="text-xs text-muted-foreground">Evidence Photos ({assignment.evidence.length})</p>
               {isPreparing && canEdit && (
                 <>
                   <input
