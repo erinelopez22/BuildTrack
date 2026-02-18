@@ -155,6 +155,7 @@ export function TrackingAssignmentSection({
   const canDoDriverActions = isSuperAdmin() || isAdmin() || canProcessLogistics() || canReceiveOrders();
   const isPreparing = status === "preparing";
   const isInTransit = status === "in_transit";
+  const isDelivered = status === "delivered";
 
   useEffect(() => {
     fetchData();
@@ -649,6 +650,12 @@ export function TrackingAssignmentSection({
   const handleRemoveReceiverEvidence = async (assignmentId: string, evidenceId: string, fileName: string) => {
     if (!user) return;
 
+    // Block deletion for delivered orders
+    if (status === "delivered") {
+      toast({ title: "Locked", description: "Evidence cannot be removed from delivered orders.", variant: "destructive" });
+      return;
+    }
+
     // Check permission: uploader, super admin, admin, or logistics admin
     const canRemove = isSuperAdmin() || isAdmin() || canProcessLogistics();
     const ev = (receiverEvidence[assignmentId] || []).find((e) => e.id === evidenceId);
@@ -703,6 +710,12 @@ export function TrackingAssignmentSection({
   // Remove preparing evidence (saved evidence with id)
   const handleRemovePreparingEvidence = async (assignmentId: string, evidenceId: string, driverUserId: string, fileName: string) => {
     if (!user) return;
+
+    // Block deletion for delivered orders
+    if (status === "delivered") {
+      toast({ title: "Locked", description: "Evidence cannot be removed from delivered orders.", variant: "destructive" });
+      return;
+    }
 
     const canRemove = isSuperAdmin() || isAdmin() || canProcessLogistics();
     if (!canRemove) {
@@ -1266,6 +1279,7 @@ export function TrackingAssignmentSection({
                             }));
                           }}
                         />
+                        {!isDelivered && (
                         <button
                           className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
                           onClick={() => handleRemoveReceiverEvidence(assignment.id!, ev.id, ev.file_name)}
@@ -1273,6 +1287,7 @@ export function TrackingAssignmentSection({
                         >
                           <X className="h-3 w-3" />
                         </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1468,7 +1483,7 @@ export function TrackingAssignmentSection({
                         <Loader2 className="h-4 w-4 animate-spin text-white" />
                       </div>
                     )}
-                    {isPreparing && canEdit && !evidence.isUploading && (
+                    {isPreparing && canEdit && !evidence.isUploading && !isDelivered && (
                       <button
                         className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
                         onClick={() => {
@@ -1513,7 +1528,7 @@ export function TrackingAssignmentSection({
                         }));
                       }}
                     />
-                    {canRemoveEvidence && (
+                    {canRemoveEvidence && !isDelivered && (
                       <button
                         className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
                         onClick={() => handleRemoveReceiverEvidence(assignment.id!, ev.id, ev.file_name)}
