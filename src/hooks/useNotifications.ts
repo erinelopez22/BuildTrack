@@ -32,7 +32,7 @@ export function useNotifications() {
     // Subscribe to real-time notifications
     if (user) {
       const channel = supabase
-        .channel('notifications')
+        .channel(`notifications-${user.id}`)
         .on(
           'postgres_changes',
           {
@@ -45,6 +45,26 @@ export function useNotifications() {
             const newNotification = payload.new as Notification;
             setNotifications(prev => [newNotification, ...prev]);
             setUnreadCount(prev => prev + 1);
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const updated = payload.new as Notification;
+            setNotifications(prev =>
+              prev.map(n => (n.id === updated.id ? updated : n))
+            );
+            // Recalculate unread count
+            setNotifications(prev => {
+              setUnreadCount(prev.filter(n => !n.is_read).length);
+              return prev;
+            });
           }
         )
         .subscribe();

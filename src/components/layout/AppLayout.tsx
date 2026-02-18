@@ -2,10 +2,12 @@ import { Outlet, Navigate } from 'react-router-dom';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { useAuth } from '@/contexts/AuthContext';
+import { useInactivityTimeout } from '@/hooks/useInactivityTimeout';
 import { Loader2 } from 'lucide-react';
 
 export function AppLayout() {
   const { user, loading } = useAuth();
+  useInactivityTimeout();
 
   if (loading) {
     return (
