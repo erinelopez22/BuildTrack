@@ -124,7 +124,7 @@ export default function ProjectDetail() {
     fetchProjectData();
   }, [id, navigate, toast, user]);
 
-  const canEditQuotation = isAdmin() || userProjectRole === "project_manager" || userProjectRole === "site_lead";
+  const canEditQuotation = isAdmin() || userProjectRole === "project_manager" || userProjectRole === "site_lead" || userProjectRole === "project_engineer";
 
   const handleQuotationChange = () => {
     setProgressKey((prev) => prev + 1);
