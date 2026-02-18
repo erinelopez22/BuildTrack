@@ -4,7 +4,7 @@ import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatManilaTime } from '@/lib/notificationService';
-import { Check, XCircle, ArrowRight, Truck, Package, PauseCircle, CheckCircle2 } from 'lucide-react';
+import { Check, XCircle, ArrowRight, Truck, CheckCircle2 } from 'lucide-react';
 import type { Order, OrderStatus } from '@/types/database';
 
 interface OrderCardProps {
@@ -14,11 +14,23 @@ interface OrderCardProps {
   showHoverActions?: boolean;
 }
 
+// Check if an order request is overdue (>5 days in Order Request status)
+function isOverdue(order: Order): boolean {
+  if (order.status !== 'for_approval' && order.status !== 'draft') return false;
+  if (!order.created_at) return false;
+
+  const now = new Date();
+  const created = new Date(order.created_at);
+  const diffMs = now.getTime() - created.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return diffDays > 5;
+}
+
 export function OrderCard({ order, onClick, onQuickAction, showHoverActions = true }: OrderCardProps) {
   const { isSuperAdmin, isAdmin, canApproveOrders, canProcessLogistics, canReceiveOrders } = useAuth();
   const [isHovered, setIsHovered] = useState(false);
 
-  // Determine which quick actions to show based on status and permissions
+  // Simplified quick actions based on the 6-status model
   const getQuickActions = () => {
     if (!showHoverActions || !onQuickAction) return [];
 
@@ -27,6 +39,7 @@ export function OrderCard({ order, onClick, onQuickAction, showHoverActions = tr
 
     switch (order.status) {
       case 'for_approval':
+      case 'draft':
         if (hasFullAccess || canApproveOrders()) {
           actions.push(
             { label: 'Approve', action: 'approved', icon: <Check className="h-3 w-3" />, variant: 'approve' },
@@ -36,36 +49,24 @@ export function OrderCard({ order, onClick, onQuickAction, showHoverActions = tr
         break;
       case 'approved':
         if (hasFullAccess || canApproveOrders()) {
-          actions.push({ label: 'Submit', action: 'submitted', icon: <ArrowRight className="h-3 w-3" />, variant: 'next' });
+          actions.push({ label: 'Order', action: 'submitted', icon: <ArrowRight className="h-3 w-3" />, variant: 'next' });
         }
         break;
       case 'submitted':
-        if (hasFullAccess || canProcessLogistics()) {
-          actions.push({ label: 'Prepare', action: 'preparing', icon: <Package className="h-3 w-3" />, variant: 'next' });
-        }
-        break;
       case 'preparing':
+      case 'ordered':
         if (hasFullAccess || canProcessLogistics()) {
           actions.push({ label: 'Transit', action: 'in_transit', icon: <Truck className="h-3 w-3" />, variant: 'next' });
         }
         break;
       case 'in_transit':
-        if (hasFullAccess || canReceiveOrders()) {
-          actions.push(
-            { label: 'Delivered', action: 'delivered', icon: <CheckCircle2 className="h-3 w-3" />, variant: 'approve' },
-            { label: 'On-Hold', action: 'on_hold', icon: <PauseCircle className="h-3 w-3" />, variant: 'hold' }
-          );
-        }
+        // Delivered action handled via detail modal (requires evidence + remarks)
         break;
       case 'delivered':
-        if (hasFullAccess || canApproveOrders()) {
-          actions.push({ label: 'Complete', action: 'closed', icon: <CheckCircle2 className="h-3 w-3" />, variant: 'approve' });
-        }
-        break;
-      case 'on_hold':
-        if (hasFullAccess) {
-          actions.push({ label: 'Resume', action: 'in_transit', icon: <Truck className="h-3 w-3" />, variant: 'next' });
-        }
+      case 'partially_received':
+      case 'fully_received':
+      case 'closed':
+        // Terminal state in simplified view
         break;
       default:
         break;
@@ -75,6 +76,7 @@ export function OrderCard({ order, onClick, onQuickAction, showHoverActions = tr
   };
 
   const quickActions = getQuickActions();
+  const overdue = isOverdue(order);
 
   const getButtonClass = (variant: 'approve' | 'reject' | 'next' | 'hold') => {
     switch (variant) {
@@ -102,12 +104,19 @@ export function OrderCard({ order, onClick, onQuickAction, showHoverActions = tr
       >
         <CardContent className="p-3">
           <div className="space-y-1.5">
-            {/* Order ID - Most Prominent */}
+            {/* Order ID + Status */}
             <div className="flex items-start justify-between gap-2">
               <span className="font-mono text-sm font-bold text-foreground">
                 {order.order_number}
               </span>
-              <StatusBadge status={order.status} className="text-[10px] px-1.5 py-0.5" />
+              <div className="flex items-center gap-1">
+                {overdue && (
+                  <span className="inline-flex items-center rounded-full bg-destructive/15 px-1.5 py-0.5 text-[9px] font-bold text-destructive">
+                    Overdue 5+ days
+                  </span>
+                )}
+                <StatusBadge status={order.status} className="text-[10px] px-1.5 py-0.5" />
+              </div>
             </div>
 
             {/* Created Date (Manila time) */}
@@ -115,9 +124,9 @@ export function OrderCard({ order, onClick, onQuickAction, showHoverActions = tr
               {order.created_at ? formatManilaTime(order.created_at) : 'No date'}
             </p>
 
-            {/* Supplier */}
+            {/* Company Name */}
             <p className="text-xs text-muted-foreground truncate">
-              {order.supplier_name?.trim() || 'Warehouse'}
+              {order.supplier_name?.trim() || 'Jagon'}
             </p>
           </div>
         </CardContent>

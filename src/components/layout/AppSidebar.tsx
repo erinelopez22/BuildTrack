@@ -10,6 +10,7 @@ import {
   Bell,
   LogOut,
   HardHat,
+  Wrench,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -35,6 +36,7 @@ const mainNavItems = [
   { title: 'Order & Tracking', url: '/inventory', icon: Package },
   { title: 'View Orders', url: '/orders', icon: ClipboardList },
   { title: 'SKU Catalog', url: '/skus', icon: Boxes },
+  { title: 'Company Materials/Tool', url: '/company-assets', icon: Wrench },
 ];
 
 const adminNavItems = [

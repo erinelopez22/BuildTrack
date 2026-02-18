@@ -41,6 +41,67 @@ export type TransactionType =
   | 'adjustment'
   | 'receiving';
 
+export type AssetType = 'Material' | 'Tool' | 'Equipment';
+export type AssetCondition = 'Available' | 'Maintenance' | 'Retired';
+export type BorrowStatus = 'Borrowed' | 'Partially Returned' | 'Returned';
+
+// Maps DB order statuses to simplified UI display statuses
+export const ORDER_STATUS_UI_MAP: Record<OrderStatus, string> = {
+  draft: 'Order Request',
+  for_approval: 'Order Request',
+  approved: 'Approved',
+  submitted: 'Ordered',
+  preparing: 'Ordered',
+  ordered: 'Ordered',
+  in_transit: 'On Transit',
+  delivered: 'Delivered',
+  partially_received: 'Delivered',
+  fully_received: 'Delivered',
+  closed: 'Delivered',
+  cancelled: 'Cancelled',
+  rejected: 'Rejected',
+  on_hold: 'On-Hold',
+};
+
+// The simplified statuses shown in UI
+export const SIMPLIFIED_ORDER_STATUSES = [
+  'Order Request',
+  'Approved', 
+  'Ordered',
+  'On Transit',
+  'Delivered',
+  'Rejected',
+] as const;
+
+// Map from simplified UI status to DB statuses
+export const UI_TO_DB_STATUS_MAP: Record<string, OrderStatus[]> = {
+  'Order Request': ['draft', 'for_approval'],
+  'Approved': ['approved'],
+  'Ordered': ['submitted', 'preparing', 'ordered'],
+  'On Transit': ['in_transit'],
+  'Delivered': ['delivered', 'partially_received', 'fully_received', 'closed'],
+  'Rejected': ['rejected'],
+};
+
+// Role display names (UI label mapping)
+export const ROLE_DISPLAY_NAMES: Record<AppRole, string> = {
+  super_admin: 'Super Admin',
+  admin: 'Admin',
+  office_admin: 'Office Admin',
+  warehouse_admin: 'Trucking Admin',
+  project_manager: 'Project Manager',
+  procurement: 'Procurement',
+  storekeeper: 'Storekeeper',
+  site_lead: 'Site Lead',
+  viewer: 'Viewer',
+  approver: 'Approver',
+  approval_admin: 'Approval Admin',
+  logistics_admin: 'Logistics Admin',
+  project_engineer: 'Project Engineer',
+  receiver: 'Receiver',
+  tracking_driver: 'Tracking Driver',
+};
+
 export interface Profile {
   id: string;
   email: string;
@@ -251,6 +312,7 @@ export interface ProjectQuotation {
   project_id: string;
   created_by: string;
   notes: string | null;
+  category: 'initial' | 'additional';
   created_at: string;
   updated_at: string;
 }
@@ -263,6 +325,54 @@ export interface QuotationItem {
   quantity: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface QuotationChangeRequest {
+  id: string;
+  project_id: string;
+  quotation_id: string | null;
+  change_type: 'create' | 'update' | 'delete';
+  status: 'pending' | 'approved' | 'rejected';
+  requested_by: string;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  review_remarks: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyAsset {
+  id: string;
+  asset_name: string;
+  asset_type: AssetType;
+  asset_code: string | null;
+  unit: string | null;
+  total_quantity: number;
+  condition: AssetCondition;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface BorrowTransaction {
+  id: string;
+  asset_id: string;
+  project_id: string;
+  borrowed_qty: number;
+  borrowed_by: string;
+  borrowed_at: string;
+  expected_return_date: string | null;
+  returned_qty: number;
+  returned_at: string | null;
+  return_remarks: string | null;
+  status: BorrowStatus;
+  created_at: string;
+  updated_at: string;
+  asset?: CompanyAsset;
+  project?: Project;
+  borrower?: Profile;
 }
 
 export interface AuditLog {

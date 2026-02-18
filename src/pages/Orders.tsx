@@ -262,15 +262,12 @@ export default function Orders() {
   const statusOptions: { value: string; label: string }[] = [
     { value: "all", label: "All Statuses" },
     { value: "active", label: "Active Orders" },
-    { value: "for_approval", label: "Order Requested" },
+    { value: "for_approval", label: "Order Request" },
     { value: "approved", label: "Approved" },
-    { value: "submitted", label: "Submitted" },
-    { value: "preparing", label: "Preparing for Tracking" },
+    { value: "submitted", label: "Ordered" },
     { value: "in_transit", label: "On Transit" },
     { value: "delivered", label: "Delivered" },
-    { value: "closed", label: "Completed" },
     { value: "rejected", label: "Rejected" },
-    { value: "on_hold", label: "On-hold" },
   ];
 
   if (!loading && orders.length === 0) {

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { CalendarIcon, Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -80,9 +79,8 @@ export function CreateOrderModal({
   const [alreadyOrderedQty, setAlreadyOrderedQty] = useState<AlreadyOrderedQty>({});
   const [loadingQuotation, setLoadingQuotation] = useState(true);
   const [hasQuotation, setHasQuotation] = useState(false);
-  const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<Date | undefined>();
   const [notes, setNotes] = useState('');
-  const [supplierName, setSupplierName] = useState('Warehouse');
+  const [supplierName, setSupplierName] = useState('Jagon');
   const [errors, setErrors] = useState<{ materials?: string; notes?: string }>({});
 
   // Calculate remaining allowed quantity for a material
@@ -346,9 +344,9 @@ export function CreateOrderModal({
 
     await onSubmit({
       materials: validatedMaterials,
-      expectedDeliveryDate: expectedDeliveryDate || null,
+      expectedDeliveryDate: null,
       notes: notes.trim(),
-      supplierName: supplierName.trim() || 'Warehouse',
+      supplierName: supplierName.trim() || 'Jagon',
     });
 
     // Reset form on successful submission
@@ -357,9 +355,8 @@ export function CreateOrderModal({
 
   const resetForm = () => {
     setMaterials([{ id: crypto.randomUUID(), materialId: '', materialName: '', unit: '', quantity: 1 }]);
-    setExpectedDeliveryDate(undefined);
     setNotes('');
-    setSupplierName('Warehouse');
+    setSupplierName('Jagon');
     setErrors({});
   };
 
@@ -539,48 +536,15 @@ export function CreateOrderModal({
               )}
             </div>
 
-            {/* Supplier Name */}
+            {/* Company Name */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Supplier Name</Label>
+              <Label className="text-sm font-medium">Company Name</Label>
               <Input
-                placeholder="Warehouse"
+                placeholder="Jagon"
                 value={supplierName}
                 onChange={(e) => setSupplierName(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Defaults to "Warehouse" if left empty</p>
-            </div>
-
-            {/* Expected Delivery Date */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Expected Delivery Date</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      'w-full justify-start text-left font-normal',
-                      !expectedDeliveryDate && 'text-muted-foreground'
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {expectedDeliveryDate ? (
-                      format(expectedDeliveryDate, 'MMM dd, yyyy')
-                    ) : (
-                      <span>Pick a date</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 z-50" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={expectedDeliveryDate}
-                    onSelect={setExpectedDeliveryDate}
-                    initialFocus
-                    className="p-3 pointer-events-auto"
-                    disabled={(date) => date < new Date()}
-                  />
-                </PopoverContent>
-              </Popover>
+              <p className="text-xs text-muted-foreground">Defaults to "Jagon" if left empty</p>
             </div>
 
             {/* Notes (Required) */}
