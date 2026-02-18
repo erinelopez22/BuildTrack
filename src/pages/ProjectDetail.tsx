@@ -1,35 +1,29 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { StatusBadge } from '@/components/common/StatusBadge';
-import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
-import { ProjectTeamTab } from '@/components/projects/ProjectTeamTab';
-import { ProjectActivityTab } from '@/components/projects/ProjectActivityTab';
-import { QuotationModal } from '@/components/projects/QuotationModal';
-import { ProjectProgressModal } from '@/components/projects/ProjectProgressModal';
-import { ActiveOrdersModal } from '@/components/projects/ActiveOrdersModal';
-import { DeliveredMaterialsModal } from '@/components/projects/DeliveredMaterialsModal';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
-import { useProjectProgress } from '@/hooks/useProjectProgress';
-import { logActivity } from '@/lib/activityLogger';
-import { notifyProjectMembers, formatManilaTime } from '@/lib/notificationService';
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { ProjectFormModal } from "@/components/projects/ProjectFormModal";
+import { ProjectTeamTab } from "@/components/projects/ProjectTeamTab";
+import { ProjectActivityTab } from "@/components/projects/ProjectActivityTab";
+import { QuotationModal } from "@/components/projects/QuotationModal";
+import { ProjectProgressModal } from "@/components/projects/ProjectProgressModal";
+import { ActiveOrdersModal } from "@/components/projects/ActiveOrdersModal";
+import { DeliveredMaterialsModal } from "@/components/projects/DeliveredMaterialsModal";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { useProjectProgress } from "@/hooks/useProjectProgress";
+import { logActivity } from "@/lib/activityLogger";
+import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 import {
   ArrowLeft,
   Users,
@@ -45,9 +39,9 @@ import {
   Wrench,
   Loader2,
   RotateCcw,
-} from 'lucide-react';
-import type { Project, ProjectStatus, AppRole } from '@/types/database';
-import { format } from 'date-fns';
+} from "lucide-react";
+import type { Project, ProjectStatus, AppRole } from "@/types/database";
+import { format } from "date-fns";
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -70,20 +64,17 @@ export default function ProjectDetail() {
 
   // Borrow state
   const [companyAssets, setCompanyAssets] = useState<any[]>([]);
-  const [borrowAssetId, setBorrowAssetId] = useState('');
+  const [borrowAssetId, setBorrowAssetId] = useState("");
   const [borrowQty, setBorrowQty] = useState(1);
   const [borrowLoading, setBorrowLoading] = useState(false);
   const [borrowedItems, setBorrowedItems] = useState<any[]>([]);
   const [returnQty, setReturnQty] = useState<Record<string, number>>({});
   const [returnRemarks, setReturnRemarks] = useState<Record<string, string>>({});
 
-  const progress = useProjectProgress(id || '', progressKey);
+  const progress = useProjectProgress(id || "", progressKey);
 
   const fetchAllProjects = async () => {
-    const { data } = await supabase
-      .from('projects')
-      .select('id, name, status')
-      .order('name', { ascending: true });
+    const { data } = await supabase.from("projects").select("id, name, status").order("name", { ascending: true });
     setAllProjects((data || []) as Project[]);
   };
 
@@ -91,33 +82,33 @@ export default function ProjectDetail() {
     if (!id) return;
 
     const { data: projectData, error: projectError } = await supabase
-      .from('projects')
-      .select('*')
-      .eq('id', id)
+      .from("projects")
+      .select("*")
+      .eq("id", id)
       .maybeSingle();
 
     if (projectError || !projectData) {
-      toast({ title: 'Error', description: 'Project not found', variant: 'destructive' });
-      navigate('/projects');
+      toast({ title: "Error", description: "Project not found", variant: "destructive" });
+      navigate("/projects");
       return;
     }
 
     setProject(projectData as Project);
 
     const { data: quotationData } = await supabase
-      .from('project_quotations')
-      .select('id')
-      .eq('project_id', id)
+      .from("project_quotations")
+      .select("id")
+      .eq("project_id", id)
       .maybeSingle();
-    
+
     setHasQuotation(!!quotationData);
 
     if (user) {
       const { data: memberData } = await supabase
-        .from('project_members')
-        .select('role')
-        .eq('project_id', id)
-        .eq('user_id', user.id)
+        .from("project_members")
+        .select("role")
+        .eq("project_id", id)
+        .eq("user_id", user.id)
         .maybeSingle();
 
       if (memberData) {
@@ -133,7 +124,7 @@ export default function ProjectDetail() {
     fetchProjectData();
   }, [id, navigate, toast, user]);
 
-  const canEditQuotation = isAdmin() || userProjectRole === 'project_manager';
+  const canEditQuotation = isAdmin() || userProjectRole === "project_manager";
 
   const handleQuotationChange = () => {
     setProgressKey((prev) => prev + 1);
@@ -143,15 +134,15 @@ export default function ProjectDetail() {
   // === BORROW FUNCTIONS ===
   const fetchBorrowData = async () => {
     if (!id) return;
-    
+
     // Fetch all assets
-    const { data: assets } = await supabase.from('company_assets').select('*').order('asset_name');
-    
+    const { data: assets } = await supabase.from("company_assets").select("*").order("asset_name");
+
     // Fetch ALL active borrows (not just this project) to compute availability
     const { data: allBorrows } = await supabase
-      .from('borrow_transactions')
-      .select('asset_id, borrowed_qty, returned_qty, status')
-      .in('status', ['Borrowed', 'Partially Returned']);
+      .from("borrow_transactions")
+      .select("asset_id, borrowed_qty, returned_qty, status")
+      .in("status", ["Borrowed", "Partially Returned"]);
 
     // Compute available qty per asset
     const borrowedByAsset: Record<string, number> = {};
@@ -159,18 +150,20 @@ export default function ProjectDetail() {
       borrowedByAsset[b.asset_id] = (borrowedByAsset[b.asset_id] || 0) + (b.borrowed_qty - b.returned_qty);
     });
 
-    setCompanyAssets((assets || []).map((a: any) => ({
-      ...a,
-      available_quantity: a.total_quantity - (borrowedByAsset[a.id] || 0),
-    })));
+    setCompanyAssets(
+      (assets || []).map((a: any) => ({
+        ...a,
+        available_quantity: a.total_quantity - (borrowedByAsset[a.id] || 0),
+      })),
+    );
 
     // Fetch this project's active borrows
     const { data: borrows } = await supabase
-      .from('borrow_transactions')
-      .select('*, company_assets(asset_name, unit)')
-      .eq('project_id', id)
-      .in('status', ['Borrowed', 'Partially Returned'])
-      .order('borrowed_at', { ascending: false });
+      .from("borrow_transactions")
+      .select("*, company_assets(asset_name, unit)")
+      .eq("project_id", id)
+      .in("status", ["Borrowed", "Partially Returned"])
+      .order("borrowed_at", { ascending: false });
     setBorrowedItems(borrows || []);
   };
 
@@ -183,10 +176,10 @@ export default function ProjectDetail() {
     setBorrowLoading(true);
     try {
       const asset = companyAssets.find((a: any) => a.id === borrowAssetId);
-      if (!asset) throw new Error('Asset not found');
-      if (borrowQty > asset.available_quantity) throw new Error('Not enough available');
+      if (!asset) throw new Error("Asset not found");
+      if (borrowQty > asset.available_quantity) throw new Error("Not enough available");
 
-      const { error } = await supabase.from('borrow_transactions').insert({
+      const { error } = await supabase.from("borrow_transactions").insert({
         asset_id: borrowAssetId,
         project_id: id,
         borrowed_qty: borrowQty,
@@ -194,12 +187,12 @@ export default function ProjectDetail() {
       });
       if (error) throw error;
 
-      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
-      const userName = profile?.full_name || 'User';
+      const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+      const userName = profile?.full_name || "User";
 
       await logActivity({
-        action: 'asset_borrowed',
-        tableName: 'borrow_transactions',
+        action: "asset_borrowed",
+        tableName: "borrow_transactions",
         recordId: id,
         oldValues: null,
         newValues: { asset_name: asset.asset_name, qty: borrowQty, borrowed_by: userName },
@@ -208,20 +201,20 @@ export default function ProjectDetail() {
 
       await notifyProjectMembers({
         projectId: id,
-        title: 'Asset Borrowed',
-        message: `${userName} borrowed ${borrowQty} ${asset.unit || 'pcs'} of ${asset.asset_name}`,
-        type: 'project',
-        referenceType: 'borrow_transaction',
+        title: "Asset Borrowed",
+        message: `${userName} borrowed ${borrowQty} ${asset.unit || "pcs"} of ${asset.asset_name}`,
+        type: "project",
+        referenceType: "borrow_transaction",
         referenceId: id,
         excludeUserId: user.id,
       });
 
-      toast({ title: 'Success', description: `Borrowed ${borrowQty} ${asset.asset_name}` });
-      setBorrowAssetId('');
+      toast({ title: "Success", description: `Borrowed ${borrowQty} ${asset.asset_name}` });
+      setBorrowAssetId("");
       setBorrowQty(1);
       fetchBorrowData();
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setBorrowLoading(false);
     }
@@ -230,7 +223,7 @@ export default function ProjectDetail() {
   const handleReturn = async (transactionId: string) => {
     if (!user || !id) return;
     const qty = returnQty[transactionId] || 0;
-    const remarks = returnRemarks[transactionId] || '';
+    const remarks = returnRemarks[transactionId] || "";
     if (qty < 1) return;
 
     const transaction = borrowedItems.find((b: any) => b.id === transactionId);
@@ -238,31 +231,34 @@ export default function ProjectDetail() {
 
     const maxReturnable = transaction.borrowed_qty - transaction.returned_qty;
     if (qty > maxReturnable) {
-      toast({ title: 'Error', description: `Max returnable: ${maxReturnable}`, variant: 'destructive' });
+      toast({ title: "Error", description: `Max returnable: ${maxReturnable}`, variant: "destructive" });
       return;
     }
 
     const newReturnedQty = transaction.returned_qty + qty;
-    const newStatus = newReturnedQty >= transaction.borrowed_qty ? 'Returned' : 'Partially Returned';
+    const newStatus = newReturnedQty >= transaction.borrowed_qty ? "Returned" : "Partially Returned";
 
-    const { error } = await supabase.from('borrow_transactions').update({
-      returned_qty: newReturnedQty,
-      returned_at: new Date().toISOString(),
-      return_remarks: remarks || null,
-      status: newStatus,
-    }).eq('id', transactionId);
+    const { error } = await supabase
+      .from("borrow_transactions")
+      .update({
+        returned_qty: newReturnedQty,
+        returned_at: new Date().toISOString(),
+        return_remarks: remarks || null,
+        status: newStatus,
+      })
+      .eq("id", transactionId);
 
     if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
 
-    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
-    const userName = profile?.full_name || 'User';
+    const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+    const userName = profile?.full_name || "User";
 
     await logActivity({
-      action: 'asset_returned',
-      tableName: 'borrow_transactions',
+      action: "asset_returned",
+      tableName: "borrow_transactions",
       recordId: id,
       oldValues: null,
       newValues: { asset_name: transaction.company_assets?.asset_name, qty, returned_by: userName, status: newStatus },
@@ -271,17 +267,17 @@ export default function ProjectDetail() {
 
     await notifyProjectMembers({
       projectId: id,
-      title: 'Asset Returned',
+      title: "Asset Returned",
       message: `${userName} returned ${qty} of ${transaction.company_assets?.asset_name}`,
-      type: 'project',
-      referenceType: 'borrow_transaction',
+      type: "project",
+      referenceType: "borrow_transaction",
       referenceId: transactionId,
       excludeUserId: user.id,
     });
 
-    toast({ title: 'Success', description: `Returned ${qty} items` });
-    setReturnQty(prev => ({ ...prev, [transactionId]: 0 }));
-    setReturnRemarks(prev => ({ ...prev, [transactionId]: '' }));
+    toast({ title: "Success", description: `Returned ${qty} items` });
+    setReturnQty((prev) => ({ ...prev, [transactionId]: 0 }));
+    setReturnRemarks((prev) => ({ ...prev, [transactionId]: "" }));
     fetchBorrowData();
   };
 
@@ -298,7 +294,7 @@ export default function ProjectDetail() {
 
     try {
       const { error } = await supabase
-        .from('projects')
+        .from("projects")
         .update({
           name: data.name,
           description: data.description || null,
@@ -307,15 +303,15 @@ export default function ProjectDetail() {
           end_date: data.end_date,
           status: data.status,
         })
-        .eq('id', project.id);
+        .eq("id", project.id);
 
       if (error) throw error;
-      toast({ title: 'Success', description: 'Project updated successfully' });
+      toast({ title: "Success", description: "Project updated successfully" });
       setIsEditDialogOpen(false);
       fetchProjectData();
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Something went wrong';
-      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+      const errorMessage = error instanceof Error ? error.message : "Something went wrong";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }
@@ -326,18 +322,18 @@ export default function ProjectDetail() {
   };
 
   const getDateRangeDisplay = () => {
-    if (!project) return '—';
+    if (!project) return "—";
     if (project.start_date && project.end_date) {
-      const start = format(new Date(project.start_date), 'MMM dd, yyyy');
-      const end = format(new Date(project.end_date), 'MMM dd, yyyy');
+      const start = format(new Date(project.start_date), "MMM dd, yyyy");
+      const end = format(new Date(project.end_date), "MMM dd, yyyy");
       return `${start} – ${end}`;
     }
-    return 'No dates set';
+    return "No dates set";
   };
 
   const formatDate = (date: string | null | undefined) => {
-    if (!date) return '—';
-    return format(new Date(date), 'MMM dd, yyyy');
+    if (!date) return "—";
+    return format(new Date(date), "MMM dd, yyyy");
   };
 
   if (loading || !project) {
@@ -352,7 +348,7 @@ export default function ProjectDetail() {
     <div className="animate-fade-in space-y-6">
       {/* Header with Project Switcher */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/projects')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate("/projects")}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
 
@@ -390,9 +386,7 @@ export default function ProjectDetail() {
       {/* Project Title and Description */}
       <div className="space-y-2">
         <h1 className="text-2xl font-bold text-foreground">{project.name}</h1>
-        {project.description && (
-          <p className="text-muted-foreground whitespace-pre-wrap">{project.description}</p>
-        )}
+        {project.description && <p className="text-muted-foreground whitespace-pre-wrap">{project.description}</p>}
       </div>
 
       {/* Project Info Cards */}
@@ -404,7 +398,7 @@ export default function ProjectDetail() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs text-muted-foreground">Location</p>
-              <p className="font-medium break-words">{project.location || 'Not set'}</p>
+              <p className="font-medium break-words">{project.location || "Not set"}</p>
             </div>
           </CardContent>
         </Card>
@@ -437,10 +431,7 @@ export default function ProjectDetail() {
       </div>
 
       {/* Progress Section */}
-      <Card 
-        className="cursor-pointer transition-colors hover:bg-muted/50" 
-        onClick={() => setIsProgressModalOpen(true)}
-      >
+      <Card className="cursor-pointer transition-colors hover:bg-muted/50" onClick={() => setIsProgressModalOpen(true)}>
         <CardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -456,9 +447,7 @@ export default function ProjectDetail() {
           </div>
           <Progress value={progress.percentage} className="h-3" />
           {!progress.hasQuotation && (
-            <p className="text-sm text-muted-foreground">
-              No quotation set. Create a quotation to track progress.
-            </p>
+            <p className="text-sm text-muted-foreground">No quotation set. Create a quotation to track progress.</p>
           )}
           <p className="text-xs text-muted-foreground">Click to view detailed progress</p>
         </CardContent>
@@ -468,7 +457,7 @@ export default function ProjectDetail() {
       <div className="flex flex-wrap gap-3">
         <Button variant="outline" onClick={() => setIsQuotationOpen(true)}>
           <ClipboardList className="mr-2 h-4 w-4" />
-          {hasQuotation ? 'View Quotation' : 'Add Quotation'}
+          {hasQuotation ? "View Quotation" : "Add Quotation"}
         </Button>
         <Button variant="outline" onClick={() => setIsActiveOrdersOpen(true)}>
           <Package className="mr-2 h-4 w-4" />
@@ -480,7 +469,7 @@ export default function ProjectDetail() {
         </Button>
         <Button variant="outline" onClick={() => setIsBorrowModalOpen(true)}>
           <Wrench className="mr-2 h-4 w-4" />
-          Borrow Company Materials/Tools
+          Borrow Equipments/Tools
         </Button>
       </div>
 
@@ -547,13 +536,13 @@ export default function ProjectDetail() {
         refreshKey={progressKey}
       />
 
-      {/* Borrow Company Materials/Tools Modal */}
+      {/* Borrow Equipments/Tools Modal */}
       <Dialog open={isBorrowModalOpen} onOpenChange={setIsBorrowModalOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wrench className="h-5 w-5" />
-              Borrow Company Materials/Tools
+              Borrow Equipments/Tools
             </DialogTitle>
           </DialogHeader>
 
@@ -568,11 +557,13 @@ export default function ProjectDetail() {
                       <SelectValue placeholder="Select asset..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {companyAssets.filter((a: any) => a.available_quantity > 0).map((asset: any) => (
-                        <SelectItem key={asset.id} value={asset.id}>
-                          {asset.asset_name} — Avail: {asset.available_quantity} {asset.unit || 'pcs'}
-                        </SelectItem>
-                      ))}
+                      {companyAssets
+                        .filter((a: any) => a.available_quantity > 0)
+                        .map((asset: any) => (
+                          <SelectItem key={asset.id} value={asset.id}>
+                            {asset.asset_name} — Avail: {asset.available_quantity} {asset.unit || "pcs"}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -587,8 +578,16 @@ export default function ProjectDetail() {
                   />
                 </div>
               </div>
-              <Button onClick={handleBorrow} disabled={!borrowAssetId || borrowQty < 1 || borrowLoading} className="w-full">
-                {borrowLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Package className="h-4 w-4 mr-2" />}
+              <Button
+                onClick={handleBorrow}
+                disabled={!borrowAssetId || borrowQty < 1 || borrowLoading}
+                className="w-full"
+              >
+                {borrowLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Package className="h-4 w-4 mr-2" />
+                )}
                 Borrow
               </Button>
             </div>
@@ -611,9 +610,7 @@ export default function ProjectDetail() {
                               Borrowed: {item.borrowed_qty} • Returned: {item.returned_qty} • Remaining: {remaining}
                             </p>
                           </div>
-                          <Badge variant={item.status === 'Borrowed' ? 'default' : 'secondary'}>
-                            {item.status}
-                          </Badge>
+                          <Badge variant={item.status === "Borrowed" ? "default" : "secondary"}>{item.status}</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           Borrowed on {formatManilaTime(item.borrowed_at)}
@@ -626,16 +623,18 @@ export default function ProjectDetail() {
                                 min={1}
                                 max={remaining}
                                 placeholder="Return qty"
-                                value={returnQty[item.id] || ''}
-                                onChange={(e) => setReturnQty(prev => ({ ...prev, [item.id]: parseInt(e.target.value) || 0 }))}
+                                value={returnQty[item.id] || ""}
+                                onChange={(e) =>
+                                  setReturnQty((prev) => ({ ...prev, [item.id]: parseInt(e.target.value) || 0 }))
+                                }
                                 className="h-8"
                               />
                             </div>
                             <div className="flex-1">
                               <Input
                                 placeholder="Remarks (optional)"
-                                value={returnRemarks[item.id] || ''}
-                                onChange={(e) => setReturnRemarks(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                value={returnRemarks[item.id] || ""}
+                                onChange={(e) => setReturnRemarks((prev) => ({ ...prev, [item.id]: e.target.value }))}
                                 className="h-8"
                               />
                             </div>
