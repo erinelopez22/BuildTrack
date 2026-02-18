@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -11,6 +12,7 @@ import {
   LogOut,
   HardHat,
   Wrench,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -25,9 +27,22 @@ import {
   SidebarFooter,
   useSidebar,
 } from '@/components/ui/sidebar';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 
 const mainNavItems = [
@@ -48,8 +63,39 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const location = useLocation();
-  const { signOut, isAdmin, profile } = useAuth();
+  const { signOut, isAdmin, isSuperAdmin, profile } = useAuth();
   const { unreadCount } = useNotifications();
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const handleResetData = async () => {
+    if (resetConfirmText !== 'RESET') return;
+    setResetting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reset-data', {
+        method: 'POST',
+      });
+      if (error) throw error;
+      toast({
+        title: 'Data reset complete',
+        description: 'All application data has been cleared.',
+      });
+      queryClient.invalidateQueries();
+      setShowResetDialog(false);
+      setResetConfirmText('');
+    } catch (err: any) {
+      toast({
+        title: 'Reset failed',
+        description: err.message || 'An error occurred during reset.',
+        variant: 'destructive',
+      });
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
@@ -184,16 +230,59 @@ export function AppSidebar() {
               </span>
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={signOut}
-            className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {isSuperAdmin() && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowResetDialog(true)}
+                className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                title="Reset Data"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={signOut}
+              className="h-8 w-8 text-sidebar-foreground hover:bg-sidebar-accent"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </SidebarFooter>
+
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset all data?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete ALL data except users and roles. This cannot be undone.
+              Type <strong>RESET</strong> to confirm.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            placeholder='Type "RESET" to confirm'
+            value={resetConfirmText}
+            onChange={(e) => setResetConfirmText(e.target.value)}
+            className="mt-2"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setResetConfirmText(''); }}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              variant="destructive"
+              disabled={resetConfirmText !== 'RESET' || resetting}
+              onClick={handleResetData}
+            >
+              {resetting ? 'Resetting...' : 'Confirm Reset'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Sidebar>
   );
 }
