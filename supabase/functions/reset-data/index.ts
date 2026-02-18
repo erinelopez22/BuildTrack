@@ -12,6 +12,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey) {
+      console.error("Missing env vars");
+      return new Response(JSON.stringify({ error: "Server configuration error" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Validate auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -21,15 +33,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    const anonClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } =
-      await anonClient.auth.getClaims(token);
+    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
     if (claimsError || !claimsData?.claims) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
@@ -39,11 +48,8 @@ Deno.serve(async (req) => {
 
     const userId = claimsData.claims.sub as string;
 
-    // Verify super_admin role server-side using service role
-    const serviceClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    // Verify super_admin role server-side
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     const { data: roleCheck } = await serviceClient
       .from("user_roles")
@@ -53,21 +59,13 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (!roleCheck) {
-      return new Response(
-        JSON.stringify({ error: "Forbidden: Super Admin only" }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Forbidden: Super Admin only" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Truncate all app data tables (preserve profiles, user_roles, auth.users)
-    const { error: truncateError } = await serviceClient.rpc("exec_sql", {
-      sql: "",
-    }).catch(() => ({ error: null }));
-
-    // Direct SQL via service role - use individual deletes in correct FK order
+    // Delete all app data in FK-safe order using service role client
     const tablesToClear = [
       "receiver_evidence",
       "order_tracking_evidence",
@@ -83,33 +81,29 @@ Deno.serve(async (req) => {
       "quotation_change_requests",
       "project_quotations",
       "project_members",
-      "projects",
-      "skus",
       "borrow_transactions",
       "company_assets",
+      "projects",
+      "skus",
       "notifications",
       "audit_logs",
       "sms_logs",
       "sms_settings",
-      "Test",
     ];
 
     const errors: string[] = [];
     for (const table of tablesToClear) {
-      const { error } = await serviceClient.from(table).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+      const { error } = await serviceClient.from(table).delete().gte("created_at", "1970-01-01");
       if (error) {
-        // Try with numeric id for Test table
-        if (table === "Test") {
-          const { error: err2 } = await serviceClient.from(table).delete().neq("id", 0);
-          if (err2) errors.push(`${table}: ${err2.message}`);
-        } else {
-          errors.push(`${table}: ${error.message}`);
-        }
+        errors.push(`${table}: ${error.message}`);
+        console.error(`Error clearing ${table}:`, error.message);
       }
     }
 
-    if (errors.length > 0) {
-      console.error("Some tables had errors:", errors);
+    // Handle Test table separately (numeric id)
+    const { error: testErr } = await serviceClient.from("Test").delete().gte("id", 0);
+    if (testErr) {
+      errors.push(`Test: ${testErr.message}`);
     }
 
     return new Response(
@@ -125,12 +119,9 @@ Deno.serve(async (req) => {
     );
   } catch (err) {
     console.error("Reset data error:", err);
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
