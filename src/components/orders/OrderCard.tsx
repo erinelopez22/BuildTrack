@@ -1,17 +1,21 @@
-import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatManilaTime } from '@/lib/notificationService';
-import { Check, XCircle, ArrowRight, Truck, CheckCircle2 } from 'lucide-react';
+import { Check, XCircle, ArrowRight, Truck, MoreVertical, Package, PauseCircle, PlayCircle } from 'lucide-react';
 import type { Order, OrderStatus } from '@/types/database';
 
 interface OrderCardProps {
   order: Order;
   onClick?: () => void;
   onQuickAction?: (action: OrderStatus | 'reject' | 'on_hold') => void;
-  showHoverActions?: boolean;
 }
 
 // Check if an order request is overdue (>5 days in Order Request status)
@@ -26,47 +30,70 @@ function isOverdue(order: Order): boolean {
   return diffDays > 5;
 }
 
-export function OrderCard({ order, onClick, onQuickAction, showHoverActions = true }: OrderCardProps) {
+// Statuses that can be put on hold
+const HOLDABLE_STATUSES: OrderStatus[] = ['draft', 'for_approval', 'approved', 'submitted', 'ordered', 'preparing', 'in_transit'];
+
+export function OrderCard({ order, onClick, onQuickAction }: OrderCardProps) {
   const { isSuperAdmin, isAdmin, canApproveOrders, canProcessLogistics, canReceiveOrders } = useAuth();
-  const [isHovered, setIsHovered] = useState(false);
 
-  // Simplified quick actions based on the 6-status model
-  const getQuickActions = () => {
-    if (!showHoverActions || !onQuickAction) return [];
+  const getMenuActions = () => {
+    if (!onQuickAction) return [];
 
-    const actions: { label: string; action: OrderStatus | 'reject' | 'on_hold'; icon: React.ReactNode; variant: 'approve' | 'reject' | 'next' | 'hold' }[] = [];
+    const actions: { label: string; action: OrderStatus | 'reject' | 'on_hold'; icon: React.ReactNode; variant?: 'destructive' }[] = [];
     const hasFullAccess = isSuperAdmin() || isAdmin();
+    const canHold = hasFullAccess || canProcessLogistics();
 
     switch (order.status) {
       case 'for_approval':
       case 'draft':
         if (hasFullAccess || canApproveOrders()) {
           actions.push(
-            { label: 'Approve', action: 'approved', icon: <Check className="h-3 w-3" />, variant: 'approve' },
-            { label: 'Reject', action: 'reject', icon: <XCircle className="h-3 w-3" />, variant: 'reject' }
+            { label: 'Approve', action: 'approved', icon: <Check className="h-4 w-4" /> },
+            { label: 'Reject', action: 'reject', icon: <XCircle className="h-4 w-4" />, variant: 'destructive' }
           );
+        }
+        if (canHold) {
+          actions.push({ label: 'On Hold', action: 'on_hold', icon: <PauseCircle className="h-4 w-4" /> });
         }
         break;
       case 'approved':
         if (hasFullAccess || canApproveOrders()) {
-          actions.push({ label: 'Order', action: 'submitted', icon: <ArrowRight className="h-3 w-3" />, variant: 'next' });
+          actions.push({ label: 'Submit Order', action: 'submitted', icon: <ArrowRight className="h-4 w-4" /> });
+        }
+        if (canHold) {
+          actions.push({ label: 'On Hold', action: 'on_hold', icon: <PauseCircle className="h-4 w-4" /> });
         }
         break;
       case 'submitted':
-      case 'preparing':
       case 'ordered':
         if (hasFullAccess || canProcessLogistics()) {
-          actions.push({ label: 'Transit', action: 'in_transit', icon: <Truck className="h-3 w-3" />, variant: 'next' });
+          actions.push({ label: 'Prepare for Tracking', action: 'preparing', icon: <Package className="h-4 w-4" /> });
+        }
+        if (canHold) {
+          actions.push({ label: 'On Hold', action: 'on_hold', icon: <PauseCircle className="h-4 w-4" /> });
+        }
+        break;
+      case 'preparing':
+        if (hasFullAccess || canProcessLogistics()) {
+          actions.push({ label: 'On Transit', action: 'in_transit', icon: <Truck className="h-4 w-4" /> });
+        }
+        if (canHold) {
+          actions.push({ label: 'On Hold', action: 'on_hold', icon: <PauseCircle className="h-4 w-4" /> });
         }
         break;
       case 'in_transit':
-        // Delivered action handled via detail modal (requires evidence + remarks)
+        // Delivered handled via detail modal (requires evidence + remarks)
+        if (canHold) {
+          actions.push({ label: 'On Hold', action: 'on_hold', icon: <PauseCircle className="h-4 w-4" /> });
+        }
         break;
-      case 'delivered':
-      case 'partially_received':
-      case 'fully_received':
-      case 'closed':
-        // Terminal state in simplified view
+      case 'on_hold':
+        if (hasFullAccess || canProcessLogistics()) {
+          // Resume: restore previous status
+          const previousStatus = (order as any).previous_status as OrderStatus | null;
+          const resumeStatus = previousStatus || 'for_approval';
+          actions.push({ label: 'Resume', action: resumeStatus as OrderStatus, icon: <PlayCircle className="h-4 w-4" /> });
+        }
         break;
       default:
         break;
@@ -75,36 +102,18 @@ export function OrderCard({ order, onClick, onQuickAction, showHoverActions = tr
     return actions;
   };
 
-  const quickActions = getQuickActions();
+  const menuActions = getMenuActions();
   const overdue = isOverdue(order);
 
-  const getButtonClass = (variant: 'approve' | 'reject' | 'next' | 'hold') => {
-    switch (variant) {
-      case 'approve':
-        return 'bg-success/20 hover:bg-success/30 text-success border-success/30';
-      case 'reject':
-        return 'bg-destructive/20 hover:bg-destructive/30 text-destructive border-destructive/30';
-      case 'hold':
-        return 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 border-amber-500/30';
-      case 'next':
-      default:
-        return 'bg-primary/20 hover:bg-primary/30 text-primary border-primary/30';
-    }
-  };
-
   return (
-    <div
-      className="relative"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div className="relative">
       <Card
         className="group cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/30 bg-card"
         onClick={onClick}
       >
         <CardContent className="p-3">
           <div className="space-y-1.5">
-            {/* Order ID + Status */}
+            {/* Order ID + Status + Menu */}
             <div className="flex items-start justify-between gap-2">
               <span className="font-mono text-sm font-bold text-foreground">
                 {order.order_number}
@@ -116,6 +125,32 @@ export function OrderCard({ order, onClick, onQuickAction, showHoverActions = tr
                   </span>
                 )}
                 <StatusBadge status={order.status} className="text-[10px] px-1.5 py-0.5" />
+                {menuActions.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreVertical className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      {menuActions.map((ma) => (
+                        <DropdownMenuItem
+                          key={ma.action}
+                          onClick={() => onQuickAction?.(ma.action)}
+                          className={ma.variant === 'destructive' ? 'text-destructive focus:text-destructive' : ''}
+                        >
+                          {ma.icon}
+                          <span className="ml-2">{ma.label}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
             </div>
 
@@ -131,27 +166,6 @@ export function OrderCard({ order, onClick, onQuickAction, showHoverActions = tr
           </div>
         </CardContent>
       </Card>
-
-      {/* Hover Quick Actions */}
-      {isHovered && quickActions.length > 0 && (
-        <div className="absolute -bottom-3 left-0 right-0 flex justify-center gap-1 z-10 animate-in fade-in-0 slide-in-from-top-1 duration-150">
-          {quickActions.map((qa) => (
-            <Button
-              key={qa.action}
-              size="sm"
-              variant="outline"
-              className={`text-[10px] h-6 px-2 shadow-sm ${getButtonClass(qa.variant)}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onQuickAction?.(qa.action);
-              }}
-            >
-              {qa.icon}
-              <span className="ml-1">{qa.label}</span>
-            </Button>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

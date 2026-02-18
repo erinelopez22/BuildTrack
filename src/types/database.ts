@@ -51,8 +51,8 @@ export const ORDER_STATUS_UI_MAP: Record<OrderStatus, string> = {
   for_approval: 'Order Request',
   approved: 'Approved',
   submitted: 'Ordered',
-  preparing: 'Ordered',
   ordered: 'Ordered',
+  preparing: 'Preparing',
   in_transit: 'On Transit',
   delivered: 'Delivered',
   partially_received: 'Delivered',
@@ -68,6 +68,7 @@ export const SIMPLIFIED_ORDER_STATUSES = [
   'Order Request',
   'Approved', 
   'Ordered',
+  'Preparing',
   'On Transit',
   'Delivered',
   'Rejected',
@@ -77,7 +78,8 @@ export const SIMPLIFIED_ORDER_STATUSES = [
 export const UI_TO_DB_STATUS_MAP: Record<string, OrderStatus[]> = {
   'Order Request': ['draft', 'for_approval'],
   'Approved': ['approved'],
-  'Ordered': ['submitted', 'preparing', 'ordered'],
+  'Ordered': ['submitted', 'ordered'],
+  'Preparing': ['preparing'],
   'On Transit': ['in_transit'],
   'Delivered': ['delivered', 'partially_received', 'fully_received', 'closed'],
   'Rejected': ['rejected'],
@@ -217,6 +219,7 @@ export interface Order {
   rejected_by: string | null;
   rejected_at: string | null;
   rejection_reason: string | null;
+  previous_status: string | null;
   created_at: string;
   updated_at: string;
   created_by: string;

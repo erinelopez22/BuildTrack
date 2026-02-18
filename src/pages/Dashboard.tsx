@@ -95,7 +95,7 @@ export default function Dashboard() {
         activeMembers: membersCount,
       });
 
-      setRecentOrders((ordersData || []) as Order[]);
+      setRecentOrders((ordersData || []) as unknown as Order[]);
       setOrdersByStatus(
         Object.entries(statusCounts).map(([status, value]) => ({
           name: status.replace(/_/g, " "),

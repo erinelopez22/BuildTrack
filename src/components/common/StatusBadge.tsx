@@ -9,6 +9,7 @@ const simplifiedStatusStyles: Record<string, string> = {
   'Order Request': 'bg-warning/10 text-warning',
   'Approved': 'bg-[hsl(210,90%,50%)]/10 text-[hsl(210,90%,50%)]',
   'Ordered': 'bg-[hsl(220,75%,45%)]/10 text-[hsl(220,75%,45%)]',
+  'Preparing': 'bg-violet-500/10 text-violet-600',
   'On Transit': 'bg-amber-400/10 text-amber-600',
   'Delivered': 'bg-success/10 text-success',
   'Rejected': 'bg-destructive/10 text-destructive',

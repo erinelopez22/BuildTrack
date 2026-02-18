@@ -204,6 +204,16 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       updateData.approved_at = new Date().toISOString();
     }
 
+    // When putting on hold, store previous status (unless already set via additionalData)
+    if (newStatus === "on_hold" && !updateData.previous_status) {
+      updateData.previous_status = order.status;
+    }
+
+    // When resuming from on_hold, clear previous_status
+    if (order.status === "on_hold") {
+      updateData.previous_status = null;
+    }
+
     const { error } = await supabase.from("orders").update(updateData).eq("id", order.id);
 
     if (error) {
@@ -282,11 +292,14 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       ? `${order.notes}\n\n[ON-HOLD ${formatManilaTime(new Date())}]: ${reason.trim()}`
       : `[ON-HOLD ${formatManilaTime(new Date())}]: ${reason.trim()}`;
 
-    await handleStatusChange("on_hold", { notes: updatedNotes });
+    await handleStatusChange("on_hold", { notes: updatedNotes, previous_status: order?.status || null });
 
     setShowOnHoldDialog(false);
     setReason("");
   };
+
+  // Statuses that can be put on hold
+  const holdableStatuses: OrderStatus[] = ['draft', 'for_approval', 'approved', 'submitted', 'ordered', 'preparing', 'in_transit'];
 
   // Determine available actions based on status and permissions
   const getAvailableActions = () => {
@@ -300,6 +313,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       disabled?: boolean;
     }[] = [];
     const hasFullAccess = isSuperAdmin() || isAdmin();
+    const canHold = hasFullAccess || canProcessLogistics();
 
     switch (order.status) {
       case "for_approval":
@@ -319,6 +333,14 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             },
           );
         }
+        if (canHold) {
+          actions.push({
+            label: "On-Hold",
+            action: () => setShowOnHoldDialog(true),
+            icon: <PauseCircle className="h-4 w-4 mr-2" />,
+            variant: "outline",
+          });
+        }
         break;
       case "approved":
         if (hasFullAccess || canApproveOrders()) {
@@ -329,14 +351,31 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             variant: "default",
           });
         }
+        if (canHold) {
+          actions.push({
+            label: "On-Hold",
+            action: () => setShowOnHoldDialog(true),
+            icon: <PauseCircle className="h-4 w-4 mr-2" />,
+            variant: "outline",
+          });
+        }
         break;
       case "submitted":
+      case "ordered":
         if (hasFullAccess || canProcessLogistics()) {
           actions.push({
             label: "Prepare for Tracking",
             action: () => handleStatusChange("preparing"),
             icon: <Package className="h-4 w-4 mr-2" />,
             variant: "default",
+          });
+        }
+        if (canHold) {
+          actions.push({
+            label: "On-Hold",
+            action: () => setShowOnHoldDialog(true),
+            icon: <PauseCircle className="h-4 w-4 mr-2" />,
+            variant: "outline",
           });
         }
         break;
@@ -347,27 +386,35 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             action: () => handleStatusChange("in_transit"),
             icon: <Truck className="h-4 w-4 mr-2" />,
             variant: "default",
-            disabled: !trackingValid, // Require tracking assignments before transit
+            disabled: !trackingValid,
+          });
+        }
+        if (canHold) {
+          actions.push({
+            label: "On-Hold",
+            action: () => setShowOnHoldDialog(true),
+            icon: <PauseCircle className="h-4 w-4 mr-2" />,
+            variant: "outline",
           });
         }
         break;
       case "in_transit":
         if (hasFullAccess || canReceiveOrders()) {
-          actions.push(
-            {
-              label: "Delivered",
-              action: () => setShowDeliveryDialog(true),
-              icon: <CheckCircle2 className="h-4 w-4 mr-2" />,
-              variant: "default",
-              disabled: !allDriversArrived,
-            },
-            {
-              label: "On-Hold",
-              action: () => setShowOnHoldDialog(true),
-              icon: <PauseCircle className="h-4 w-4 mr-2" />,
-              variant: "outline",
-            },
-          );
+          actions.push({
+            label: "Delivered",
+            action: () => setShowDeliveryDialog(true),
+            icon: <CheckCircle2 className="h-4 w-4 mr-2" />,
+            variant: "default",
+            disabled: !allDriversArrived,
+          });
+        }
+        if (canHold) {
+          actions.push({
+            label: "On-Hold",
+            action: () => setShowOnHoldDialog(true),
+            icon: <PauseCircle className="h-4 w-4 mr-2" />,
+            variant: "outline",
+          });
         }
         break;
       case "delivered":
@@ -381,10 +428,13 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
         }
         break;
       case "on_hold":
-        if (hasFullAccess) {
+        if (hasFullAccess || canProcessLogistics()) {
+          const previousStatus = (order as any).previous_status as OrderStatus | null;
+          const resumeStatus = previousStatus || 'for_approval';
+          const resumeLabel = resumeStatus.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
           actions.push({
-            label: "Resume Transit",
-            action: () => handleStatusChange("in_transit"),
+            label: `Resume (→ ${resumeLabel})`,
+            action: () => handleStatusChange(resumeStatus),
             icon: <Truck className="h-4 w-4 mr-2" />,
             variant: "default",
           });
