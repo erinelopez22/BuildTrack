@@ -60,6 +60,7 @@ export default function ProjectDetail() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userProjectRole, setUserProjectRole] = useState<AppRole | null>(null);
   const [hasQuotation, setHasQuotation] = useState(false);
+  const [hasPendingQuotationRequest, setHasPendingQuotationRequest] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
 
   // Borrow state
@@ -102,6 +103,16 @@ export default function ProjectDetail() {
       .maybeSingle();
 
     setHasQuotation(!!quotationData);
+
+    // Check for pending quotation change requests
+    const { data: pendingRequests } = await supabase
+      .from("quotation_change_requests")
+      .select("id")
+      .eq("project_id", id)
+      .eq("status", "pending")
+      .limit(1);
+
+    setHasPendingQuotationRequest((pendingRequests || []).length > 0);
 
     if (user) {
       const { data: memberData } = await supabase
@@ -455,10 +466,25 @@ export default function ProjectDetail() {
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-3">
-        <Button variant="outline" onClick={() => setIsQuotationOpen(true)}>
-          <ClipboardList className="mr-2 h-4 w-4" />
-          {hasQuotation ? "View Quotation" : "Add Quotation"}
-        </Button>
+        {(() => {
+          const isNonAdmin = !isAdmin();
+          const isQuotationPendingForRole = isNonAdmin && hasPendingQuotationRequest;
+          return (
+            <Button
+              variant="outline"
+              onClick={() => setIsQuotationOpen(true)}
+              disabled={isQuotationPendingForRole}
+              title={isQuotationPendingForRole ? "Quotation is for approval" : undefined}
+            >
+              <ClipboardList className="mr-2 h-4 w-4" />
+              {isQuotationPendingForRole
+                ? "Quotation is for approval"
+                : hasQuotation
+                  ? "View Quotation"
+                  : "Add Quotation"}
+            </Button>
+          );
+        })()}
         <Button variant="outline" onClick={() => setIsActiveOrdersOpen(true)}>
           <Package className="mr-2 h-4 w-4" />
           View Active Orders
