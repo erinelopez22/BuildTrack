@@ -14,6 +14,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -23,6 +28,8 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useProjectProgress } from '@/hooks/useProjectProgress';
+import { logActivity } from '@/lib/activityLogger';
+import { notifyProjectMembers, formatManilaTime } from '@/lib/notificationService';
 import {
   ArrowLeft,
   Users,
@@ -35,6 +42,9 @@ import {
   ClipboardList,
   Package,
   TruckIcon,
+  Wrench,
+  Loader2,
+  RotateCcw,
 } from 'lucide-react';
 import type { Project, ProjectStatus, AppRole } from '@/types/database';
 import { format } from 'date-fns';
@@ -52,10 +62,20 @@ export default function ProjectDetail() {
   const [isActiveOrdersOpen, setIsActiveOrdersOpen] = useState(false);
   const [isDeliveredMaterialsOpen, setIsDeliveredMaterialsOpen] = useState(false);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [isBorrowModalOpen, setIsBorrowModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [userProjectRole, setUserProjectRole] = useState<AppRole | null>(null);
   const [hasQuotation, setHasQuotation] = useState(false);
   const [progressKey, setProgressKey] = useState(0);
+
+  // Borrow state
+  const [companyAssets, setCompanyAssets] = useState<any[]>([]);
+  const [borrowAssetId, setBorrowAssetId] = useState('');
+  const [borrowQty, setBorrowQty] = useState(1);
+  const [borrowLoading, setBorrowLoading] = useState(false);
+  const [borrowedItems, setBorrowedItems] = useState<any[]>([]);
+  const [returnQty, setReturnQty] = useState<Record<string, number>>({});
+  const [returnRemarks, setReturnRemarks] = useState<Record<string, string>>({});
 
   const progress = useProjectProgress(id || '', progressKey);
 
@@ -70,7 +90,6 @@ export default function ProjectDetail() {
   const fetchProjectData = async () => {
     if (!id) return;
 
-    // Fetch project
     const { data: projectData, error: projectError } = await supabase
       .from('projects')
       .select('*')
@@ -85,7 +104,6 @@ export default function ProjectDetail() {
 
     setProject(projectData as Project);
 
-    // Check if quotation exists
     const { data: quotationData } = await supabase
       .from('project_quotations')
       .select('id')
@@ -94,7 +112,6 @@ export default function ProjectDetail() {
     
     setHasQuotation(!!quotationData);
 
-    // Fetch user's role in this project
     if (user) {
       const { data: memberData } = await supabase
         .from('project_members')
@@ -116,13 +133,156 @@ export default function ProjectDetail() {
     fetchProjectData();
   }, [id, navigate, toast, user]);
 
-  // Check if user can edit quotation (admin or project_manager role)
   const canEditQuotation = isAdmin() || userProjectRole === 'project_manager';
 
-  // Refresh progress when quotation changes
   const handleQuotationChange = () => {
     setProgressKey((prev) => prev + 1);
     fetchProjectData();
+  };
+
+  // === BORROW FUNCTIONS ===
+  const fetchBorrowData = async () => {
+    if (!id) return;
+    
+    // Fetch all assets
+    const { data: assets } = await supabase.from('company_assets').select('*').order('asset_name');
+    
+    // Fetch ALL active borrows (not just this project) to compute availability
+    const { data: allBorrows } = await supabase
+      .from('borrow_transactions')
+      .select('asset_id, borrowed_qty, returned_qty, status')
+      .in('status', ['Borrowed', 'Partially Returned']);
+
+    // Compute available qty per asset
+    const borrowedByAsset: Record<string, number> = {};
+    (allBorrows || []).forEach((b: any) => {
+      borrowedByAsset[b.asset_id] = (borrowedByAsset[b.asset_id] || 0) + (b.borrowed_qty - b.returned_qty);
+    });
+
+    setCompanyAssets((assets || []).map((a: any) => ({
+      ...a,
+      available_quantity: a.total_quantity - (borrowedByAsset[a.id] || 0),
+    })));
+
+    // Fetch this project's active borrows
+    const { data: borrows } = await supabase
+      .from('borrow_transactions')
+      .select('*, company_assets(asset_name, unit)')
+      .eq('project_id', id)
+      .in('status', ['Borrowed', 'Partially Returned'])
+      .order('borrowed_at', { ascending: false });
+    setBorrowedItems(borrows || []);
+  };
+
+  useEffect(() => {
+    if (isBorrowModalOpen && id) fetchBorrowData();
+  }, [isBorrowModalOpen, id]);
+
+  const handleBorrow = async () => {
+    if (!user || !id || !borrowAssetId || borrowQty < 1) return;
+    setBorrowLoading(true);
+    try {
+      const asset = companyAssets.find((a: any) => a.id === borrowAssetId);
+      if (!asset) throw new Error('Asset not found');
+      if (borrowQty > asset.available_quantity) throw new Error('Not enough available');
+
+      const { error } = await supabase.from('borrow_transactions').insert({
+        asset_id: borrowAssetId,
+        project_id: id,
+        borrowed_qty: borrowQty,
+        borrowed_by: user.id,
+      });
+      if (error) throw error;
+
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+      const userName = profile?.full_name || 'User';
+
+      await logActivity({
+        action: 'asset_borrowed',
+        tableName: 'borrow_transactions',
+        recordId: id,
+        oldValues: null,
+        newValues: { asset_name: asset.asset_name, qty: borrowQty, borrowed_by: userName },
+        userId: user.id,
+      });
+
+      await notifyProjectMembers({
+        projectId: id,
+        title: 'Asset Borrowed',
+        message: `${userName} borrowed ${borrowQty} ${asset.unit || 'pcs'} of ${asset.asset_name}`,
+        type: 'project',
+        referenceType: 'borrow_transaction',
+        referenceId: id,
+        excludeUserId: user.id,
+      });
+
+      toast({ title: 'Success', description: `Borrowed ${borrowQty} ${asset.asset_name}` });
+      setBorrowAssetId('');
+      setBorrowQty(1);
+      fetchBorrowData();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message, variant: 'destructive' });
+    } finally {
+      setBorrowLoading(false);
+    }
+  };
+
+  const handleReturn = async (transactionId: string) => {
+    if (!user || !id) return;
+    const qty = returnQty[transactionId] || 0;
+    const remarks = returnRemarks[transactionId] || '';
+    if (qty < 1) return;
+
+    const transaction = borrowedItems.find((b: any) => b.id === transactionId);
+    if (!transaction) return;
+
+    const maxReturnable = transaction.borrowed_qty - transaction.returned_qty;
+    if (qty > maxReturnable) {
+      toast({ title: 'Error', description: `Max returnable: ${maxReturnable}`, variant: 'destructive' });
+      return;
+    }
+
+    const newReturnedQty = transaction.returned_qty + qty;
+    const newStatus = newReturnedQty >= transaction.borrowed_qty ? 'Returned' : 'Partially Returned';
+
+    const { error } = await supabase.from('borrow_transactions').update({
+      returned_qty: newReturnedQty,
+      returned_at: new Date().toISOString(),
+      return_remarks: remarks || null,
+      status: newStatus,
+    }).eq('id', transactionId);
+
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      return;
+    }
+
+    const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle();
+    const userName = profile?.full_name || 'User';
+
+    await logActivity({
+      action: 'asset_returned',
+      tableName: 'borrow_transactions',
+      recordId: id,
+      oldValues: null,
+      newValues: { asset_name: transaction.company_assets?.asset_name, qty, returned_by: userName, status: newStatus },
+      userId: user.id,
+    });
+
+    await notifyProjectMembers({
+      projectId: id,
+      title: 'Asset Returned',
+      message: `${userName} returned ${qty} of ${transaction.company_assets?.asset_name}`,
+      type: 'project',
+      referenceType: 'borrow_transaction',
+      referenceId: transactionId,
+      excludeUserId: user.id,
+    });
+
+    toast({ title: 'Success', description: `Returned ${qty} items` });
+    setReturnQty(prev => ({ ...prev, [transactionId]: 0 }));
+    setReturnRemarks(prev => ({ ...prev, [transactionId]: '' }));
+    fetchBorrowData();
   };
 
   const handleEditSubmit = async (data: {
@@ -155,11 +315,7 @@ export default function ProjectDetail() {
       fetchProjectData();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Something went wrong';
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
     } finally {
       setIsSubmitting(false);
     }
@@ -200,7 +356,6 @@ export default function ProjectDetail() {
           <ArrowLeft className="h-5 w-5" />
         </Button>
 
-        {/* Project Switcher Dropdown */}
         <div className="flex-1 min-w-0">
           <Select value={project.id} onValueChange={handleProjectSwitch}>
             <SelectTrigger className="w-full max-w-xs bg-background">
@@ -242,7 +397,6 @@ export default function ProjectDetail() {
 
       {/* Project Info Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {/* Location */}
         <Card>
           <CardContent className="flex items-start gap-3 p-4">
             <div className="rounded-lg bg-primary/10 p-2 flex-shrink-0">
@@ -255,7 +409,6 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
 
-        {/* Duration (Date Range) */}
         <Card>
           <CardContent className="flex items-start gap-3 p-4">
             <div className="rounded-lg bg-accent/10 p-2 flex-shrink-0">
@@ -268,7 +421,6 @@ export default function ProjectDetail() {
           </CardContent>
         </Card>
 
-        {/* Status */}
         <Card>
           <CardContent className="flex items-start gap-3 p-4">
             <div className="rounded-lg bg-muted p-2 flex-shrink-0">
@@ -284,7 +436,7 @@ export default function ProjectDetail() {
         </Card>
       </div>
 
-      {/* Progress Section - Clickable to open Project Progress Modal */}
+      {/* Progress Section */}
       <Card 
         className="cursor-pointer transition-colors hover:bg-muted/50" 
         onClick={() => setIsProgressModalOpen(true)}
@@ -292,8 +444,8 @@ export default function ProjectDetail() {
         <CardContent className="p-4 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="rounded-lg bg-success/10 p-2">
-                <ClipboardList className="h-5 w-5 text-success" />
+              <div className="rounded-lg bg-primary/10 p-2">
+                <ClipboardList className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="font-medium">Project Progress</p>
@@ -326,9 +478,13 @@ export default function ProjectDetail() {
           <TruckIcon className="mr-2 h-4 w-4" />
           Delivered Materials
         </Button>
+        <Button variant="outline" onClick={() => setIsBorrowModalOpen(true)}>
+          <Wrench className="mr-2 h-4 w-4" />
+          Borrow Company Materials/Tools
+        </Button>
       </div>
 
-      {/* Tabs - Team and Activity */}
+      {/* Tabs */}
       <Tabs defaultValue="team" className="space-y-4">
         <TabsList>
           <TabsTrigger value="team" className="gap-2">
@@ -390,6 +546,119 @@ export default function ProjectDetail() {
         projectName={project.name}
         refreshKey={progressKey}
       />
+
+      {/* Borrow Company Materials/Tools Modal */}
+      <Dialog open={isBorrowModalOpen} onOpenChange={setIsBorrowModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              Borrow Company Materials/Tools
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6">
+            {/* Borrow Form */}
+            <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+              <Label className="font-medium">Borrow an Asset</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <Select value={borrowAssetId} onValueChange={setBorrowAssetId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select asset..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companyAssets.filter((a: any) => a.available_quantity > 0).map((asset: any) => (
+                        <SelectItem key={asset.id} value={asset.id}>
+                          {asset.asset_name} — Avail: {asset.available_quantity} {asset.unit || 'pcs'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={companyAssets.find((a: any) => a.id === borrowAssetId)?.available_quantity || 1}
+                    value={borrowQty}
+                    onChange={(e) => setBorrowQty(parseInt(e.target.value) || 1)}
+                    placeholder="Qty"
+                  />
+                </div>
+              </div>
+              <Button onClick={handleBorrow} disabled={!borrowAssetId || borrowQty < 1 || borrowLoading} className="w-full">
+                {borrowLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Package className="h-4 w-4 mr-2" />}
+                Borrow
+              </Button>
+            </div>
+
+            {/* Currently Borrowed Items */}
+            <div className="space-y-3">
+              <Label className="font-medium">Currently Borrowed ({borrowedItems.length})</Label>
+              {borrowedItems.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic">No borrowed items for this project.</p>
+              ) : (
+                <div className="space-y-3">
+                  {borrowedItems.map((item: any) => {
+                    const remaining = item.borrowed_qty - item.returned_qty;
+                    return (
+                      <div key={item.id} className="p-3 border rounded-lg bg-card space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium">{item.company_assets?.asset_name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Borrowed: {item.borrowed_qty} • Returned: {item.returned_qty} • Remaining: {remaining}
+                            </p>
+                          </div>
+                          <Badge variant={item.status === 'Borrowed' ? 'default' : 'secondary'}>
+                            {item.status}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Borrowed on {formatManilaTime(item.borrowed_at)}
+                        </p>
+                        {remaining > 0 && (
+                          <div className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <Input
+                                type="number"
+                                min={1}
+                                max={remaining}
+                                placeholder="Return qty"
+                                value={returnQty[item.id] || ''}
+                                onChange={(e) => setReturnQty(prev => ({ ...prev, [item.id]: parseInt(e.target.value) || 0 }))}
+                                className="h-8"
+                              />
+                            </div>
+                            <div className="flex-1">
+                              <Input
+                                placeholder="Remarks (optional)"
+                                value={returnRemarks[item.id] || ''}
+                                onChange={(e) => setReturnRemarks(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                className="h-8"
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleReturn(item.id)}
+                              disabled={!returnQty[item.id] || returnQty[item.id] < 1}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                              Return
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
