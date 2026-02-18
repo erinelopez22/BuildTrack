@@ -275,6 +275,13 @@ export default function QuotationRequests() {
 
   const handleReview = async () => {
     if (!reviewingRequest || !reviewAction || !user) return;
+
+    // Guard: block if already processed
+    if (reviewingRequest.status !== "pending") {
+      toast({ title: "Error", description: "This request has already been processed.", variant: "destructive" });
+      return;
+    }
+
     setReviewing(true);
 
     try {
@@ -290,14 +297,16 @@ export default function QuotationRequests() {
         const quotationId = reviewingRequest.quotation_id;
 
         if (reviewingRequest.change_type === "create") {
+          // For create: upsert to handle unique constraint on project_id
           const { data: newQuotation, error: createError } = await supabase
             .from("project_quotations")
-            .insert({
+            .upsert({
               project_id: reviewingRequest.project_id,
               created_by: reviewingRequest.requested_by,
               notes: payload.notes || null,
               category: payload.category || "initial",
-            })
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "project_id" })
             .select()
             .single();
 
@@ -314,72 +323,54 @@ export default function QuotationRequests() {
             );
           }
         } else if (reviewingRequest.change_type === "update" && quotationId) {
-          // Create an "additional" quotation to preserve Initial vs Updates/Added separation
-          const { data: additionalQuotation, error: addError } = await supabase
+          // UPDATE the existing quotation row - DO NOT insert a new one
+          await supabase
             .from("project_quotations")
-            .insert({
-              project_id: reviewingRequest.project_id,
-              created_by: reviewingRequest.requested_by,
-              notes: payload.notes || null,
-              category: "additional",
-            })
-            .select()
-            .single();
-
-          if (addError) throw addError;
+            .update({ updated_at: new Date().toISOString(), notes: payload.notes || null })
+            .eq("id", quotationId);
 
           if (payload.items?.length > 0) {
-            // Fetch existing initial items to determine which are Added vs Updated
-            const { data: initialItems } = await supabase
+            // Fetch existing items for this quotation to determine deltas
+            const { data: existingItems } = await supabase
               .from("quotation_items")
-              .select("material_name, unit, quantity")
+              .select("id, material_name, unit, quantity")
               .eq("quotation_id", quotationId);
 
-            const initialMap = new Map(
-              (initialItems || []).map((i) => [
+            const existingMap = new Map(
+              (existingItems || []).map((i) => [
                 `${i.material_name.toUpperCase()}||${i.unit.toLowerCase()}`,
-                i.quantity,
+                i,
               ])
             );
 
-            // Only insert items that are new or have changed quantities (delta)
-            const additionalItems = payload.items
-              .map((item: any) => {
-                const key = `${item.material_name.toUpperCase()}||${item.unit.toLowerCase()}`;
-                const initialQty = initialMap.get(key);
-                if (initialQty !== undefined) {
-                  // Existing material - store only the delta if qty changed
-                  const delta = item.quantity - initialQty;
-                  if (delta > 0) {
-                    return {
-                      quotation_id: additionalQuotation.id,
-                      material_name: item.material_name,
-                      unit: item.unit,
-                      quantity: delta,
-                    };
-                  }
-                  return null; // No change
+            // Process each item in the payload
+            for (const item of payload.items) {
+              const key = `${item.material_name.toUpperCase()}||${item.unit.toLowerCase()}`;
+              const existing = existingMap.get(key);
+
+              if (existing) {
+                // Existing material - update quantity if changed
+                if (item.quantity !== existing.quantity) {
+                  await supabase
+                    .from("quotation_items")
+                    .update({
+                      quantity: item.quantity,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("id", existing.id);
                 }
-                // New material
-                return {
-                  quotation_id: additionalQuotation.id,
+                existingMap.delete(key); // Mark as processed
+              } else {
+                // New material - insert into same quotation
+                await supabase.from("quotation_items").insert({
+                  quotation_id: quotationId,
                   material_name: item.material_name,
                   unit: item.unit,
                   quantity: item.quantity,
-                };
-              })
-              .filter(Boolean);
-
-            if (additionalItems.length > 0) {
-              await supabase.from("quotation_items").insert(additionalItems);
+                });
+              }
             }
           }
-
-          // Update the initial quotation's updated_at
-          await supabase
-            .from("project_quotations")
-            .update({ updated_at: new Date().toISOString() })
-            .eq("id", quotationId);
         } else if (reviewingRequest.change_type === "delete" && quotationId) {
           await supabase.from("quotation_items").delete().eq("quotation_id", quotationId);
           await supabase.from("project_quotations").delete().eq("id", quotationId);
