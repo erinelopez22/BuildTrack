@@ -1256,6 +1256,10 @@ export function QuotationModal({
                                   setActiveAutocomplete(item.id);
                                   setAutocompleteFilter(item.material_name);
                                 }}
+                                onBlur={() => {
+                                  // Delay to allow click on suggestion
+                                  setTimeout(() => setActiveAutocomplete(null), 200);
+                                }}
                                 onKeyDown={(e) => {
                                   if (e.key === "Escape") {
                                     setActiveAutocomplete(null);
@@ -1281,10 +1285,11 @@ export function QuotationModal({
                                       sku.name.toUpperCase().includes(filter) ||
                                       sku.sku_code.toUpperCase().includes(filter),
                                   );
-                                  if (filtered.length === 0) return null;
+                                  if (filtered.length === 0 && filter) return null;
+                                  const displayList = filter ? filtered : skuCatalogue.slice(0, 20);
                                   return (
                                     <div className="absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
-                                      {filtered.map((sku) => (
+                                      {displayList.map((sku) => (
                                         <button
                                           key={sku.id}
                                           type="button"

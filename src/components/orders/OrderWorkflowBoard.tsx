@@ -255,6 +255,14 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       updateData.previous_status = null;
     }
 
+    // Milestone timestamps
+    if (newStatus === "in_transit" && !(order as any).on_transit_at) {
+      updateData.on_transit_at = new Date().toISOString();
+    }
+    if (newStatus === "delivered" && !(order as any).delivered_at) {
+      updateData.delivered_at = new Date().toISOString();
+    }
+
     const { error } = await supabase.from("orders").update(updateData).eq("id", order.id);
 
     if (error) {

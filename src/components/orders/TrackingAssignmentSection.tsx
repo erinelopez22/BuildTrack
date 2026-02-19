@@ -149,6 +149,8 @@ export function TrackingAssignmentSection({
   const [resumeRemarks, setResumeRemarks] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [receiverEvidence, setReceiverEvidence] = useState<Record<string, ReceiverEvidenceFile[]>>({});
+  const [trackingRemarksMap, setTrackingRemarksMap] = useState<Record<string, string>>({});
+  const [remarksSaving, setRemarksSaving] = useState<string | null>(null);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   const canEdit = !readOnly && (isSuperAdmin() || isAdmin() || canProcessLogistics());
@@ -296,6 +298,12 @@ export function TrackingAssignmentSection({
       }));
 
       setAssignments(loadedAssignments);
+      // Initialize remarks map
+      const remarksInit: Record<string, string> = {};
+      existingAssignments.forEach((a: any) => {
+        if (a.id && a.tracking_remarks) remarksInit[a.id] = a.tracking_remarks;
+      });
+      setTrackingRemarksMap(remarksInit);
       setHasSaved(true);
       onAssignmentsLoaded?.(true);
 
@@ -933,6 +941,36 @@ export function TrackingAssignmentSection({
     setActionLoading(null);
   };
 
+  // C) Remarks handler
+  const handleSaveRemarks = async (assignmentId: string) => {
+    if (!user || !assignmentId) return;
+    setRemarksSaving(assignmentId);
+    const remarks = trackingRemarksMap[assignmentId] || "";
+    const { error } = await supabase
+      .from("order_tracking_assignments")
+      .update({
+        tracking_remarks: remarks,
+        remarks_updated_at: new Date().toISOString(),
+        remarks_updated_by: user.id,
+      })
+      .eq("id", assignmentId);
+
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      await logActivity({
+        action: "tracking_remarks_updated",
+        tableName: "orders",
+        recordId: orderId,
+        oldValues: null,
+        newValues: { assignment_id: assignmentId, remarks },
+        userId: user.id,
+      });
+      toast({ title: "Saved", description: "Remarks updated." });
+    }
+    setRemarksSaving(null);
+  };
+
   const handleSaveAssignments = async () => {
     if (!user) return;
 
@@ -1223,6 +1261,38 @@ export function TrackingAssignmentSection({
                   </p>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* C) Remarks Section */}
+          {assignment.id && (isPreparing || isInTransit || assignment.tracking_status === "arrived") && (
+            <div className="space-y-2 border-t pt-3">
+              <p className="text-xs font-medium text-muted-foreground">Remarks</p>
+              {(canEdit || canDoDriverActions) && !isDelivered ? (
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Add remarks for this driver assignment..."
+                    value={trackingRemarksMap[assignment.id] || ""}
+                    onChange={(e) => setTrackingRemarksMap((prev) => ({ ...prev, [assignment.id!]: e.target.value }))}
+                    rows={2}
+                    className="text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs"
+                    onClick={() => handleSaveRemarks(assignment.id!)}
+                    disabled={remarksSaving === assignment.id}
+                  >
+                    {remarksSaving === assignment.id ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                    Save Remarks
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">
+                  {trackingRemarksMap[assignment.id] || "No remarks"}
+                </p>
+              )}
             </div>
           )}
 

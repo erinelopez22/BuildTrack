@@ -353,6 +353,69 @@ export type Database = {
         }
         Relationships: []
       }
+      order_evidence: {
+        Row: {
+          compressed_size_bytes: number | null
+          file_name: string
+          file_path: string | null
+          file_url: string
+          height: number | null
+          id: string
+          order_id: string
+          original_size_bytes: number | null
+          project_id: string
+          status_context: string
+          uploaded_at: string
+          uploaded_by: string
+          width: number | null
+        }
+        Insert: {
+          compressed_size_bytes?: number | null
+          file_name: string
+          file_path?: string | null
+          file_url: string
+          height?: number | null
+          id?: string
+          order_id: string
+          original_size_bytes?: number | null
+          project_id: string
+          status_context?: string
+          uploaded_at?: string
+          uploaded_by: string
+          width?: number | null
+        }
+        Update: {
+          compressed_size_bytes?: number | null
+          file_name?: string
+          file_path?: string | null
+          file_url?: string
+          height?: number | null
+          id?: string
+          order_id?: string
+          original_size_bytes?: number | null
+          project_id?: string
+          status_context?: string
+          uploaded_at?: string
+          uploaded_by?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "order_evidence_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "order_evidence_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       order_items: {
         Row: {
           created_at: string | null
@@ -424,8 +487,11 @@ export type Database = {
           id: string
           order_id: string
           plate_number: string
+          remarks_updated_at: string | null
+          remarks_updated_by: string | null
           resume_remarks: string | null
           resumed_at: string | null
+          tracking_remarks: string | null
           tracking_status: string
         }
         Insert: {
@@ -440,8 +506,11 @@ export type Database = {
           id?: string
           order_id: string
           plate_number: string
+          remarks_updated_at?: string | null
+          remarks_updated_by?: string | null
           resume_remarks?: string | null
           resumed_at?: string | null
+          tracking_remarks?: string | null
           tracking_status?: string
         }
         Update: {
@@ -456,8 +525,11 @@ export type Database = {
           id?: string
           order_id?: string
           plate_number?: string
+          remarks_updated_at?: string | null
+          remarks_updated_by?: string | null
           resume_remarks?: string | null
           resumed_at?: string | null
+          tracking_remarks?: string | null
           tracking_status?: string
         }
         Relationships: [
@@ -511,9 +583,11 @@ export type Database = {
           approved_by: string | null
           created_at: string | null
           created_by: string
+          delivered_at: string | null
           expected_delivery_date: string | null
           id: string
           notes: string | null
+          on_transit_at: string | null
           order_number: string
           order_type: string | null
           previous_status: string | null
@@ -532,9 +606,11 @@ export type Database = {
           approved_by?: string | null
           created_at?: string | null
           created_by: string
+          delivered_at?: string | null
           expected_delivery_date?: string | null
           id?: string
           notes?: string | null
+          on_transit_at?: string | null
           order_number: string
           order_type?: string | null
           previous_status?: string | null
@@ -553,9 +629,11 @@ export type Database = {
           approved_by?: string | null
           created_at?: string | null
           created_by?: string
+          delivered_at?: string | null
           expected_delivery_date?: string | null
           id?: string
           notes?: string | null
+          on_transit_at?: string | null
           order_number?: string
           order_type?: string | null
           previous_status?: string | null
