@@ -44,6 +44,7 @@ import {
 import type { Order, Profile, OrderStatus } from "@/types/database";
 import { TrackingAssignmentSection } from "./TrackingAssignmentSection";
 import { EvidenceLightbox, useLightbox } from "./EvidenceLightbox";
+import { Input } from "@/components/ui/input";
 
 interface OrderItem {
   id: string;
@@ -80,6 +81,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   const [showOnHoldDialog, setShowOnHoldDialog] = useState(false);
   const [showDeliveryConfirm, setShowDeliveryConfirm] = useState(false);
   const [reason, setReason] = useState("");
+  const [deliverySupplier, setDeliverySupplier] = useState("Jagon");
 
   // Tracking validation state
   const [trackingValid, setTrackingValid] = useState(false);
@@ -210,6 +212,14 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     // When resuming from on_hold, clear previous_status
     if (order.status === "on_hold") {
       updateData.previous_status = null;
+    }
+
+    // B) Set milestone timestamps (only if not already set)
+    if (newStatus === "in_transit" && !(order as any).on_transit_at) {
+      updateData.on_transit_at = new Date().toISOString();
+    }
+    if (newStatus === "delivered" && !(order as any).delivered_at) {
+      updateData.delivered_at = new Date().toISOString();
     }
 
     const { error } = await supabase.from("orders").update(updateData).eq("id", order.id);
@@ -544,6 +554,26 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                           </div>
                         </div>
                       )}
+
+                      {/* Milestone Timestamps */}
+                      {(order as any).on_transit_at && (
+                        <div className="flex items-start gap-3">
+                          <Truck className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm text-muted-foreground">On Transit</p>
+                            <p className="text-xs font-medium">{formatManilaTime((order as any).on_transit_at)}</p>
+                          </div>
+                        </div>
+                      )}
+                      {(order as any).delivered_at && (
+                        <div className="flex items-start gap-3">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm text-muted-foreground">Delivered</p>
+                            <p className="text-xs font-medium">{formatManilaTime((order as any).delivered_at)}</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Total Amount */}
@@ -822,8 +852,11 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Simple Delivery Confirmation Dialog */}
-      <AlertDialog open={showDeliveryConfirm} onOpenChange={setShowDeliveryConfirm}>
+      {/* Delivery Confirmation Dialog with Supplier */}
+      <AlertDialog open={showDeliveryConfirm} onOpenChange={(open) => {
+        setShowDeliveryConfirm(open);
+        if (open) setDeliverySupplier(order?.supplier_name?.trim() || "Jagon");
+      }}>
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -831,17 +864,27 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
               Mark as Delivered?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Do you want this order to be marked as Delivered?
+              Confirm the supplier for this delivery before proceeding.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="delivery-supplier">Supplier *</Label>
+            <Input
+              id="delivery-supplier"
+              placeholder="Enter supplier name"
+              value={deliverySupplier}
+              onChange={(e) => setDeliverySupplier(e.target.value)}
+              className="mt-1"
+            />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={async () => {
-                await handleStatusChange("delivered");
+                await handleStatusChange("delivered", { supplier_name: deliverySupplier.trim() });
                 setShowDeliveryConfirm(false);
               }}
-              disabled={actionLoading}
+              disabled={actionLoading || !deliverySupplier.trim()}
             >
               {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Yes, Mark as Delivered
