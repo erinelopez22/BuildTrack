@@ -4,6 +4,7 @@ import { VariantProps, cva } from "class-variance-authority";
 import { PanelLeft } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSwipeToOpenSidebar } from "@/hooks/useSwipeToOpenSidebar";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -87,6 +88,13 @@ const SidebarProvider = React.forwardRef<
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [toggleSidebar]);
+
+  // Swipe-to-open on mobile
+  useSwipeToOpenSidebar({
+    isMobile,
+    isOpen: openMobile,
+    onOpen: () => setOpenMobile(true),
+  });
 
   // We add a state so that we can do data-state="expanded" or "collapsed".
   // This makes it easier to style the sidebar with Tailwind classes.
