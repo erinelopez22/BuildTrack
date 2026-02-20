@@ -53,7 +53,7 @@ const mainNavItems = [
   { title: "View Orders", url: "/orders", icon: ClipboardList },
   { title: "Quotation Request", url: "/quotation-requests", icon: FileCheck },
   { title: "SKU Catalog", url: "/skus", icon: Boxes },
-  { title: "Equiments/Tools", url: "/company-assets", icon: Wrench },
+  { title: "Equiments & Tools", url: "/company-assets", icon: Wrench },
 ];
 
 const adminNavItems = [
