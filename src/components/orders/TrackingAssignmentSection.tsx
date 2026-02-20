@@ -1235,7 +1235,7 @@ export function TrackingAssignmentSection({
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
                   <Clock className="h-3 w-3" /> Tracking Timeline
                 </p>
-                {assignment.created_at && (
+                {assignment.created_at && (isInTransit || isDelivered || assignment.tracking_status === "arrived") && (
                   <div className="flex items-center gap-2 text-xs">
                     <Truck className="h-3 w-3 text-blue-600 flex-shrink-0" />
                     <span className="text-muted-foreground">On Transit:</span>
