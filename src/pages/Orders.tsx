@@ -57,7 +57,7 @@ const ACTIVE_STATUSES: OrderStatus[] = [
 
 export default function Orders() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, isSuperAdmin, isAdmin, isOfficeAdmin, isProjectEngineer } = useAuth();
+  const { user, isSuperAdmin, isAdmin } = useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<OrderWithProject[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -71,13 +71,14 @@ export default function Orders() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  // Rejected orders state
+  // Rejected orders state - from rejected_orders table
   const [rejectedOrders, setRejectedOrders] = useState<RejectedOrderRow[]>([]);
   const [rejectedLoading, setRejectedLoading] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const canDeleteRejected = isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer();
+  // Only Super Admin and Admin can delete rejected orders
+  const canDeleteRejected = isSuperAdmin() || isAdmin();
 
   useEffect(() => {
     if (statusFilter === "all") {
@@ -89,7 +90,7 @@ export default function Orders() {
   }, [statusFilter, searchParams, setSearchParams]);
 
   const fetchData = async () => {
-    // Fetch non-rejected orders
+    // Fetch non-rejected orders (rejected are now in rejected_orders table)
     const { data: ordersData } = await supabase
       .from("orders")
       .select("*, project:projects(*)")
@@ -116,7 +117,7 @@ export default function Orders() {
 
     setLoading(false);
 
-    // Fetch rejected orders
+    // Fetch rejected orders from rejected_orders table
     fetchRejectedOrders();
   };
 
@@ -124,9 +125,8 @@ export default function Orders() {
     setRejectedLoading(true);
     try {
       const { data: rejected } = await supabase
-        .from("orders")
-        .select("id, order_number, project_id, created_by, rejected_by, rejected_at, rejection_reason, notes, projects(name)")
-        .eq("status", "rejected")
+        .from("rejected_orders")
+        .select("id, order_number, project_id, created_by, rejected_by, rejected_at, rejection_reason, notes")
         .order("rejected_at", { ascending: false });
 
       if (!rejected || rejected.length === 0) {
@@ -134,6 +134,11 @@ export default function Orders() {
         setRejectedLoading(false);
         return;
       }
+
+      // Get project names
+      const projectIds = [...new Set(rejected.map((r: any) => r.project_id))];
+      const { data: projectsData } = await supabase.from("projects").select("id, name").in("id", projectIds);
+      const projectMap = new Map((projectsData || []).map((p: any) => [p.id, p.name]));
 
       // Get profile names
       const userIds = [
@@ -149,7 +154,7 @@ export default function Orders() {
         rejected.map((r: any) => ({
           id: r.id,
           order_number: r.order_number,
-          project_name: (r.projects as any)?.name || "Unknown",
+          project_name: projectMap.get(r.project_id) || "Unknown",
           requested_by: profileMap.get(r.created_by) || "Unknown",
           rejected_by: r.rejected_by ? profileMap.get(r.rejected_by) || "Unknown" : "Unknown",
           rejected_at: r.rejected_at || r.created_at,
@@ -169,40 +174,16 @@ export default function Orders() {
     setDeleteLoading(true);
 
     try {
-      // Cascading delete: tracking evidence, tracking materials, tracking assignments, order evidence, order items, deliveries, delivery items
-      const { data: assignments } = await supabase
-        .from("order_tracking_assignments")
-        .select("id")
-        .eq("order_id", deletingOrderId);
+      // Use the RPC for atomic cascading delete
+      const { error } = await supabase.rpc("delete_rejected_order", {
+        _order_id: deletingOrderId,
+      });
 
-      const assignmentIds = (assignments || []).map((a: any) => a.id);
-
-      if (assignmentIds.length > 0) {
-        await supabase.from("receiver_evidence").delete().in("order_tracking_assignment_id", assignmentIds);
-        await supabase.from("order_tracking_evidence").delete().in("order_tracking_assignment_id", assignmentIds);
-        await supabase.from("tracking_driver_materials").delete().in("tracking_assignment_id", assignmentIds);
-        await supabase.from("order_tracking_assignments").delete().eq("order_id", deletingOrderId);
-      }
-
-      await supabase.from("order_evidence").delete().eq("order_id", deletingOrderId);
-
-      const { data: deliveries } = await supabase
-        .from("deliveries")
-        .select("id")
-        .eq("order_id", deletingOrderId);
-
-      const deliveryIds = (deliveries || []).map((d: any) => d.id);
-      if (deliveryIds.length > 0) {
-        await supabase.from("delivery_items").delete().in("delivery_id", deliveryIds);
-        await supabase.from("deliveries").delete().eq("order_id", deletingOrderId);
-      }
-
-      await supabase.from("order_items").delete().eq("order_id", deletingOrderId);
-      await supabase.from("orders").delete().eq("id", deletingOrderId);
+      if (error) throw error;
 
       await logActivity({
         action: "delete_rejected_order",
-        tableName: "orders",
+        tableName: "rejected_orders",
         recordId: deletingOrderId,
         oldValues: { status: "rejected" },
         newValues: null,
@@ -387,7 +368,7 @@ export default function Orders() {
         onRowClick={(order) => setSelectedOrderId(order.id)}
       />
 
-      {/* Rejected Orders Table */}
+      {/* Rejected Orders Table - from rejected_orders table */}
       {rejectedOrders.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -409,7 +390,8 @@ export default function Orders() {
               </thead>
               <tbody>
                 {rejectedOrders.map((ro) => (
-                  <tr key={ro.id} className="border-t hover:bg-muted/30 transition-colors">
+                  <tr key={ro.id} className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setSelectedOrderId(ro.id)}>
                     <td className="p-3 font-mono font-medium">{ro.order_number}</td>
                     <td className="p-3">{ro.project_name}</td>
                     <td className="p-3">{ro.requested_by}</td>
@@ -424,7 +406,10 @@ export default function Orders() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                          onClick={() => setDeletingOrderId(ro.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingOrderId(ro.id);
+                          }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

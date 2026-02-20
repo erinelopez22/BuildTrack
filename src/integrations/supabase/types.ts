@@ -1098,6 +1098,86 @@ export type Database = {
           },
         ]
       }
+      rejected_orders: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string | null
+          created_by: string
+          delivered_at: string | null
+          expected_delivery_date: string | null
+          id: string
+          notes: string | null
+          on_transit_at: string | null
+          order_number: string
+          order_type: string | null
+          previous_status: string | null
+          project_id: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          status: Database["public"]["Enums"]["order_status"] | null
+          supplier_contact: string | null
+          supplier_name: string | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          created_by: string
+          delivered_at?: string | null
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          on_transit_at?: string | null
+          order_number: string
+          order_type?: string | null
+          previous_status?: string | null
+          project_id: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["order_status"] | null
+          supplier_contact?: string | null
+          supplier_name?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          created_by?: string
+          delivered_at?: string | null
+          expected_delivery_date?: string | null
+          id?: string
+          notes?: string | null
+          on_transit_at?: string | null
+          order_number?: string
+          order_type?: string | null
+          previous_status?: string | null
+          project_id?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          status?: Database["public"]["Enums"]["order_status"] | null
+          supplier_contact?: string | null
+          supplier_name?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rejected_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       skus: {
         Row: {
           brand: string | null
@@ -1339,6 +1419,7 @@ export type Database = {
         }
         Returns: string
       }
+      delete_rejected_order: { Args: { _order_id: string }; Returns: undefined }
       get_project_role: {
         Args: { _project_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -1360,6 +1441,10 @@ export type Database = {
       is_office_admin: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       is_warehouse_admin: { Args: { _user_id: string }; Returns: boolean }
+      reject_order: {
+        Args: { _order_id: string; _rejection_reason?: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role:
