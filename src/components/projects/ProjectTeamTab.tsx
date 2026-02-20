@@ -109,11 +109,10 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
     if (!selectedUserId || !user) return;
     setIsAdding(true);
 
-    const { error } = await supabase.from('project_members').insert({
-      project_id: projectId,
-      user_id: selectedUserId,
-      role: selectedRole,
-      created_by: user.id,
+    const { error } = await supabase.rpc('add_project_member', {
+      p_project_id: projectId,
+      p_user_id: selectedUserId,
+      p_role: selectedRole,
     });
 
     if (error) {
