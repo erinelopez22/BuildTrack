@@ -76,7 +76,8 @@ interface QuotationItemRow {
 }
 
 export default function QuotationRequests() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isOfficeAdmin } = useAuth();
+  const canApproveQuotations = isAdmin() || isOfficeAdmin();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("existing");
 
@@ -179,8 +180,8 @@ export default function QuotationRequests() {
         .select("*, projects(name)")
         .order("created_at", { ascending: false });
 
-      // Non-admin: only own requests
-      if (!isAdmin() && user) {
+      // Non-admin/non-office-admin: only own requests
+      if (!canApproveQuotations && user) {
         query = query.eq("requested_by", user.id);
       }
 
@@ -552,7 +553,7 @@ export default function QuotationRequests() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <CheckCircle2 className="h-12 w-12 mb-3 opacity-50" />
-                <p>{isAdmin() ? "No pending requests" : "You have no submitted requests"}</p>
+                <p>{canApproveQuotations ? "No pending requests" : "You have no submitted requests"}</p>
               </CardContent>
             </Card>
           ) : (
@@ -595,7 +596,7 @@ export default function QuotationRequests() {
                           <Eye className="h-4 w-4 mr-1" />
                           Details
                         </Button>
-                        {isAdmin() && req.status === "pending" && (
+                        {canApproveQuotations && req.status === "pending" && (
                           <>
                             <Button
                               size="sm"

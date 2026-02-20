@@ -53,7 +53,7 @@ const allNavItems = [
   { title: "Projects", url: "/projects", icon: FolderKanban, roles: "all" },
   { title: "Order & Tracking", url: "/inventory", icon: Package, roles: ["super_admin", "admin", "project_engineer", "checker", "warehouse_admin", "office_admin"] },
   { title: "View Orders", url: "/orders", icon: ClipboardList, roles: ["super_admin", "admin", "project_engineer", "checker", "warehouse_admin", "office_admin"] },
-  { title: "Quotation Request", url: "/quotation-requests", icon: FileCheck, roles: ["super_admin", "admin", "project_engineer", "office_admin"] },
+  { title: "Quotation Request", url: "/quotation-requests", icon: FileCheck, roles: ["super_admin", "admin", "project_engineer", "office_admin", "checker"] },
   { title: "SKU Catalog", url: "/skus", icon: Boxes, roles: ["super_admin", "admin", "project_engineer", "office_admin", "warehouse_admin"] },
   { title: "Equipment & Tools", url: "/company-assets", icon: Wrench, roles: ["super_admin", "admin", "project_engineer", "checker", "warehouse_admin", "office_admin"] },
 ];

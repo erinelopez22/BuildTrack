@@ -34,14 +34,14 @@ function isOverdue(order: Order): boolean {
 const HOLDABLE_STATUSES: OrderStatus[] = ['draft', 'for_approval', 'approved', 'submitted', 'ordered', 'preparing', 'in_transit'];
 
 export function OrderCard({ order, onClick, onQuickAction }: OrderCardProps) {
-  const { isSuperAdmin, isAdmin, canApproveOrders, canProcessLogistics, canReceiveOrders } = useAuth();
+  const { isSuperAdmin, isAdmin, canApproveOrders, canProcessLogistics, canReceiveOrders, isWarehouseAdmin } = useAuth();
 
   const getMenuActions = () => {
     if (!onQuickAction) return [];
 
     const actions: { label: string; action: OrderStatus | 'reject' | 'on_hold'; icon: React.ReactNode; variant?: 'destructive' }[] = [];
     const hasFullAccess = isSuperAdmin() || isAdmin();
-    const canHold = hasFullAccess || canProcessLogistics();
+    const canHold = hasFullAccess || (canProcessLogistics() && !isWarehouseAdmin());
 
     switch (order.status) {
       case 'for_approval':
@@ -88,8 +88,11 @@ export function OrderCard({ order, onClick, onQuickAction }: OrderCardProps) {
         }
         break;
       case 'on_hold':
-        if (hasFullAccess || canProcessLogistics()) {
-          // Resume: restore previous status
+        if (hasFullAccess) {
+          const previousStatus = (order as any).previous_status as OrderStatus | null;
+          const resumeStatus = previousStatus || 'for_approval';
+          actions.push({ label: 'Resume', action: resumeStatus as OrderStatus, icon: <PlayCircle className="h-4 w-4" /> });
+        } else if (canProcessLogistics() && !isWarehouseAdmin()) {
           const previousStatus = (order as any).previous_status as OrderStatus | null;
           const resumeStatus = previousStatus || 'for_approval';
           actions.push({ label: 'Resume', action: resumeStatus as OrderStatus, icon: <PlayCircle className="h-4 w-4" /> });

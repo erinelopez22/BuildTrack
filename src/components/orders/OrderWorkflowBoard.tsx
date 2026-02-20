@@ -36,7 +36,7 @@ const EXCEPTION_LANES: { key: string; dbStatuses: OrderStatus[]; label: string; 
 ];
 
 export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps) {
-  const { user, isSuperAdmin, isAdmin, canCreateOrders, canApproveOrders, canProcessLogistics, canReceiveOrders } =
+  const { user, isSuperAdmin, isAdmin, canCreateOrders, canApproveOrders, canProcessLogistics, canReceiveOrders, isWarehouseAdmin } =
     useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -207,7 +207,10 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
     let hasPermission = false;
 
-    if (isSuperAdmin() || isAdmin()) {
+    // Trucking Admin (warehouse_admin) cannot set on_hold or resume from on_hold
+    if (newStatus === "on_hold" && isWarehouseAdmin() && !isSuperAdmin() && !isAdmin()) {
+      hasPermission = false;
+    } else if (isSuperAdmin() || isAdmin()) {
       hasPermission = true;
     } else if (order.status === "for_approval" && (newStatus === "approved" || newStatus === "rejected")) {
       hasPermission = canApproveOrders();
@@ -225,8 +228,8 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     } else if (order.status === "delivered" && newStatus === "closed") {
       hasPermission = canApproveOrders() || isAdmin() || isSuperAdmin();
     } else if (order.status === "on_hold") {
-      // Resume: restore previous status
-      hasPermission = isSuperAdmin() || isAdmin() || canProcessLogistics();
+      // Resume: restore previous status - block for warehouse_admin (Trucking Admin)
+      hasPermission = isSuperAdmin() || isAdmin() || (canProcessLogistics() && !isWarehouseAdmin());
     }
 
     if (!hasPermission) {
