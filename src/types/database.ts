@@ -13,7 +13,9 @@ export type AppRole =
   | 'logistics_admin'
   | 'project_engineer'
   | 'receiver'
-  | 'tracking_driver';
+  | 'tracking_driver'
+  | 'checker'
+  | 'driver';
 
 export type OrderStatus = 
   | 'draft'
@@ -85,7 +87,7 @@ export const UI_TO_DB_STATUS_MAP: Record<string, OrderStatus[]> = {
   'Rejected': ['rejected'],
 };
 
-// Role display names (UI label mapping)
+// Role display names - only active roles shown prominently
 export const ROLE_DISPLAY_NAMES: Record<AppRole, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',
@@ -101,8 +103,22 @@ export const ROLE_DISPLAY_NAMES: Record<AppRole, string> = {
   logistics_admin: 'Logistics Admin',
   project_engineer: 'Project Engineer',
   receiver: 'Receiver',
-  tracking_driver: 'Tracking Driver',
+  tracking_driver: 'Driver',
+  checker: 'Checker',
+  driver: 'Driver',
 };
+
+// The ONLY active roles in the system
+export const ACTIVE_ROLES: AppRole[] = [
+  'super_admin',
+  'admin',
+  'viewer',
+  'project_engineer',
+  'checker',
+  'driver',
+  'office_admin',
+  'warehouse_admin',
+];
 
 export interface Profile {
   id: string;
@@ -142,6 +158,7 @@ export interface Project {
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  is_hidden?: boolean;
 }
 
 export interface ProjectMember {

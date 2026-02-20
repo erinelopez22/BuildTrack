@@ -1259,6 +1259,7 @@ export type Database = {
       }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       is_approver: { Args: { _user_id: string }; Returns: boolean }
+      is_checker: { Args: { _user_id: string }; Returns: boolean }
       is_office_admin: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       is_warehouse_admin: { Args: { _user_id: string }; Returns: boolean }

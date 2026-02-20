@@ -75,7 +75,11 @@ export default function ProjectDetail() {
   const progress = useProjectProgress(id || "", progressKey);
 
   const fetchAllProjects = async () => {
-    const { data } = await supabase.from("projects").select("id, name, status").order("name", { ascending: true });
+    let query = supabase.from("projects").select("id, name, status, is_hidden").order("name", { ascending: true });
+    if (!isAdmin()) {
+      query = query.eq("is_hidden", false);
+    }
+    const { data } = await query;
     setAllProjects((data || []) as Project[]);
   };
 
@@ -90,6 +94,13 @@ export default function ProjectDetail() {
 
     if (projectError || !projectData) {
       toast({ title: "Error", description: "Project not found", variant: "destructive" });
+      navigate("/projects");
+      return;
+    }
+
+    // Block access to hidden projects for non-admins
+    if (projectData.is_hidden && !isAdmin()) {
+      toast({ title: "Error", description: "Project not available", variant: "destructive" });
       navigate("/projects");
       return;
     }

@@ -45,15 +45,17 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 
-const mainNavItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Projects", url: "/projects", icon: FolderKanban },
-  { title: "Order & Tracking", url: "/inventory", icon: Package },
-  { title: "View Orders", url: "/orders", icon: ClipboardList },
-  { title: "Quotation Request", url: "/quotation-requests", icon: FileCheck },
-  { title: "SKU Catalog", url: "/skus", icon: Boxes },
-  { title: "Equiments & Tools", url: "/company-assets", icon: Wrench },
+// Full nav items - filtered by role
+const allNavItems = [
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: "all" },
+  { title: "Projects", url: "/projects", icon: FolderKanban, roles: "all" },
+  { title: "Order & Tracking", url: "/inventory", icon: Package, roles: ["super_admin", "admin", "project_engineer", "checker", "warehouse_admin", "office_admin"] },
+  { title: "View Orders", url: "/orders", icon: ClipboardList, roles: ["super_admin", "admin", "project_engineer", "checker", "warehouse_admin", "office_admin"] },
+  { title: "Quotation Request", url: "/quotation-requests", icon: FileCheck, roles: ["super_admin", "admin", "project_engineer", "office_admin"] },
+  { title: "SKU Catalog", url: "/skus", icon: Boxes, roles: ["super_admin", "admin", "project_engineer", "office_admin", "warehouse_admin"] },
+  { title: "Equipment & Tools", url: "/company-assets", icon: Wrench, roles: ["super_admin", "admin", "project_engineer", "checker", "warehouse_admin", "office_admin"] },
 ];
 
 const adminNavItems = [
@@ -62,16 +64,17 @@ const adminNavItems = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { signOut, isAdmin, isSuperAdmin, profile } = useAuth();
+  const { signOut, isAdmin, isSuperAdmin, profile, roles } = useAuth();
   const { unreadCount } = useNotifications();
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
   const [resetting, setResetting] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   const handleResetData = async () => {
     if (resetConfirmText !== "RESET") return;
@@ -101,6 +104,22 @@ export function AppSidebar() {
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
+  // Close mobile nav on navigation
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
+  // Filter nav items based on user roles
+  const visibleNavItems = allNavItems.filter((item) => {
+    if (item.roles === "all") return true;
+    if (Array.isArray(item.roles)) {
+      return roles.some((role) => (item.roles as string[]).includes(role));
+    }
+    return true;
+  });
+
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="border-b border-sidebar-border p-4">
@@ -122,11 +141,12 @@ export function AppSidebar() {
           <SidebarGroupLabel className="text-sidebar-foreground/60">{!collapsed && "Main Menu"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
+              {visibleNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                     <NavLink
                       to={item.url}
+                      onClick={handleNavClick}
                       className={cn(
                         "flex items-center gap-3 rounded-md px-3 py-2 transition-colors",
                         isActive(item.url)
@@ -156,6 +176,7 @@ export function AppSidebar() {
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                       <NavLink
                         to={item.url}
+                        onClick={handleNavClick}
                         className={cn(
                           "flex items-center gap-3 rounded-md px-3 py-2 transition-colors",
                           isActive(item.url)
@@ -181,6 +202,7 @@ export function AppSidebar() {
                 <SidebarMenuButton asChild tooltip="Notifications">
                   <NavLink
                     to="/notifications"
+                    onClick={handleNavClick}
                     className={cn(
                       "flex items-center gap-3 rounded-md px-3 py-2 transition-colors",
                       isActive("/notifications")

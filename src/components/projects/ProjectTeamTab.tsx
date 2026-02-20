@@ -31,42 +31,24 @@ import { Plus, Trash2, Loader2, UserPlus } from 'lucide-react';
 import { logActivity } from '@/lib/activityLogger';
 import { notifyProjectMembers } from '@/lib/notificationService';
 import type { ProjectMember, Profile, AppRole } from '@/types/database';
+import { ROLE_DISPLAY_NAMES } from '@/types/database';
 
 interface ProjectTeamTabProps {
   projectId: string;
   projectName: string;
 }
 
-const roleLabels: Record<AppRole, string> = {
-  super_admin: 'Super Admin',
-  admin: 'Admin',
-  office_admin: 'Office Admin',
-  warehouse_admin: 'Warehouse Admin',
-  project_manager: 'Project Manager',
-  procurement: 'Procurement',
-  storekeeper: 'Storekeeper',
-  site_lead: 'Site Lead',
-  viewer: 'Viewer',
-  approver: 'Approver',
-  approval_admin: 'Approval Admin',
-  logistics_admin: 'Logistics Admin',
-  project_engineer: 'Project/Site Engineer',
-  receiver: 'Receiver',
-  tracking_driver: 'Tracking Driver',
-};
-
-const roleOptions: { value: AppRole; label: string }[] = [
-  { value: 'project_engineer', label: 'Project/Site Engineer' },
-  { value: 'project_manager', label: 'Project Manager' },
-  { value: 'storekeeper', label: 'Storekeeper' },
-  { value: 'site_lead', label: 'Site Lead' },
-  { value: 'receiver', label: 'Receiver' },
-  { value: 'tracking_driver', label: 'Tracking Driver' },
+// Only these roles can be assigned in team tab
+const teamRoleOptions: { value: AppRole; label: string }[] = [
+  { value: 'project_engineer', label: 'Project Engineer' },
+  { value: 'checker', label: 'Checker' },
+  { value: 'office_admin', label: 'Office Admin' },
+  { value: 'warehouse_admin', label: 'Trucking Admin' },
   { value: 'viewer', label: 'Viewer' },
 ];
 
 export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, canManageTeam } = useAuth();
   const { toast } = useToast();
   const [members, setMembers] = useState<(ProjectMember & { profile: Profile })[]>([]);
   const [availableUsers, setAvailableUsers] = useState<Profile[]>([]);
@@ -103,16 +85,12 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
   };
 
   const fetchAvailableUsers = async () => {
-    // Get all active profiles
     const { data: profiles } = await supabase
       .from('profiles')
       .select('*')
       .eq('is_active', true);
 
-    // Get current member IDs
     const memberIds = members.map(m => m.user_id);
-    
-    // Filter out users already in the project
     const available = (profiles || []).filter(p => !memberIds.includes(p.id));
     setAvailableUsers(available as unknown as Profile[]);
   };
@@ -141,7 +119,6 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
-      // Log activity
       await logActivity({
         action: 'add',
         tableName: 'project_members',
@@ -150,10 +127,8 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
         userId: user.id,
       });
 
-      // Get the added user's name
       const addedUser = availableUsers.find(u => u.id === selectedUserId);
       
-      // Notify project members
       await notifyProjectMembers({
         projectId,
         title: 'New Team Member',
@@ -186,7 +161,6 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
     if (error) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
-      // Log activity
       await logActivity({
         action: 'remove',
         tableName: 'project_members',
@@ -195,7 +169,6 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
         userId: user.id,
       });
 
-      // Notify project members
       await notifyProjectMembers({
         projectId,
         title: 'Team Member Removed',
@@ -214,7 +187,7 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
     setIsRemoving(false);
   };
 
-  const canManageTeam = isAdmin();
+  const canManage = canManageTeam();
 
   if (loading) {
     return (
@@ -228,7 +201,7 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Team Members</CardTitle>
-        {canManageTeam && (
+        {canManage && (
           <Button onClick={() => setIsAddDialogOpen(true)} size="sm">
             <UserPlus className="mr-2 h-4 w-4" />
             Add Member
@@ -254,11 +227,11 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
                       {member.profile?.full_name || 'Unknown User'}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {roleLabels[member.role] || member.role}
+                      {ROLE_DISPLAY_NAMES[member.role] || member.role}
                     </p>
                   </div>
                 </div>
-                {canManageTeam && (
+                {canManage && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -314,7 +287,7 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {roleOptions.map((option) => (
+                  {teamRoleOptions.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>

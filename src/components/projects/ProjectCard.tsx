@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Calendar, MapPin, MoreVertical, Pencil, Trash2, RotateCcw } from 'lucide-react';
+import { Calendar, MapPin, MoreVertical, Pencil, Trash2, RotateCcw, EyeOff, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import type { Project } from '@/types/database';
@@ -29,9 +30,12 @@ interface ProjectCardProps {
   onEdit?: (project: Project) => void;
   onDelete?: (project: Project) => void;
   onRestore?: (project: Project) => void;
+  onHide?: (project: Project) => void;
+  onUnhide?: (project: Project) => void;
   onClick?: () => void;
   canEdit?: boolean;
   canRestore?: boolean;
+  canHide?: boolean;
 }
 
 interface ProjectProgress {
@@ -44,9 +48,12 @@ export function ProjectCard({
   onEdit, 
   onDelete, 
   onRestore, 
+  onHide,
+  onUnhide,
   onClick, 
   canEdit, 
-  canRestore 
+  canRestore,
+  canHide,
 }: ProjectCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [progress, setProgress] = useState<ProjectProgress>({ percentage: 0, hasQuotation: false });
@@ -54,7 +61,6 @@ export function ProjectCard({
   useEffect(() => {
     const fetchProgress = async () => {
       try {
-        // Check if project has a quotation
         const { data: quotation } = await supabase
           .from('project_quotations')
           .select('id')
@@ -66,7 +72,6 @@ export function ProjectCard({
           return;
         }
 
-        // Fetch quotation items with IDs for accurate matching
         const { data: quotationItems } = await supabase
           .from('quotation_items')
           .select('id, material_name, quantity')
@@ -79,7 +84,6 @@ export function ProjectCard({
 
         const totalQuoted = quotationItems.reduce((sum, item) => sum + item.quantity, 0);
 
-        // Get DELIVERED and CLOSED orders for this project (Received + Completed)
         const { data: orders } = await supabase
           .from('orders')
           .select('id')
@@ -91,25 +95,21 @@ export function ProjectCard({
           return;
         }
 
-        // Get order items with quotation_item_id reference - use ONLY quantity_received
         const { data: orderItems } = await supabase
           .from('order_items')
           .select('quotation_item_id, quantity_received')
           .in('order_id', orders.map(o => o.id))
           .not('quotation_item_id', 'is', null);
 
-        // Build received quantities map by quotation_item_id
         const receivedByQuotationItemId: Record<string, number> = {};
         orderItems?.forEach((item: any) => {
           if (item.quotation_item_id) {
-            // Use ONLY quantity_received (not quantity_ordered)
             const qty = item.quantity_received ?? 0;
             receivedByQuotationItemId[item.quotation_item_id] = 
               (receivedByQuotationItemId[item.quotation_item_id] || 0) + qty;
           }
         });
 
-        // Calculate total received, capped at quoted amounts
         let totalReceived = 0;
         quotationItems.forEach((qItem) => {
           const received = receivedByQuotationItemId[qItem.id] || 0;
@@ -136,6 +136,7 @@ export function ProjectCard({
   };
 
   const isDeleted = project.status === 'deleted';
+  const isHidden = project.is_hidden === true;
 
   const handleCardClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('[data-radix-dropdown-menu-trigger]')) {
@@ -149,24 +150,33 @@ export function ProjectCard({
     setShowDeleteDialog(false);
   };
 
+  const showMenu = canEdit || canRestore || canHide;
+
   return (
     <>
       <Card
         className={`group relative cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary/30 bg-card ${
           isDeleted ? 'opacity-70 border-destructive/30' : ''
-        }`}
+        } ${isHidden ? 'opacity-80 border-dashed border-muted-foreground/40' : ''}`}
         onClick={handleCardClick}
       >
         <CardContent className="p-5">
           {/* Header with title and menu */}
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-lg text-foreground truncate group-hover:text-primary transition-colors">
-                {project.name}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-lg text-foreground truncate group-hover:text-primary transition-colors">
+                  {project.name}
+                </h3>
+                {isHidden && (
+                  <Badge variant="outline" className="text-xs shrink-0">
+                    Hidden
+                  </Badge>
+                )}
+              </div>
             </div>
             
-            {(canEdit || canRestore) && (
+            {showMenu && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -203,6 +213,28 @@ export function ProjectCard({
                       Edit Project
                     </DropdownMenuItem>
                   )}
+                  {canHide && !isDeleted && !isHidden && onHide && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onHide(project);
+                      }}
+                    >
+                      <EyeOff className="h-4 w-4 mr-2" />
+                      Hide Project
+                    </DropdownMenuItem>
+                  )}
+                  {canHide && !isDeleted && isHidden && onUnhide && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUnhide(project);
+                      }}
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Unhide Project
+                    </DropdownMenuItem>
+                  )}
                   {canEdit && !isDeleted && onDelete && (
                     <DropdownMenuItem
                       onClick={(e) => {
@@ -234,7 +266,7 @@ export function ProjectCard({
             <span>{getDateRangeDisplay()}</span>
           </div>
 
-          {/* Status Badge - Larger */}
+          {/* Status Badge */}
           <div className="mb-4">
             <StatusBadge status={project.status} className="text-sm px-3 py-1" />
           </div>

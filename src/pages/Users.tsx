@@ -33,37 +33,11 @@ interface UserWithRoles extends Profile {
   creator_name?: string;
 }
 
-const roleLabels: Record<AppRole, string> = {
-  super_admin: 'Super Admin',
-  admin: 'Admin',
-  office_admin: 'Office Admin',
-  warehouse_admin: 'Warehouse Admin',
-  project_engineer: 'Project/Site Engineer',
-  receiver: 'Receiver',
-  tracking_driver: 'Tracking Driver',
-  project_manager: 'Project Manager',
-  procurement: 'Procurement',
-  storekeeper: 'Storekeeper',
-  site_lead: 'Site Lead',
-  viewer: 'Viewer',
-  approver: 'Approver',
-  approval_admin: 'Approval Admin (Legacy)',
-  logistics_admin: 'Logistics Admin (Legacy)',
-};
+import { ROLE_DISPLAY_NAMES, ACTIVE_ROLES } from '@/types/database';
 
-const roleOptions: AppRole[] = [
-  'super_admin',
-  'admin',
-  'office_admin',
-  'warehouse_admin',
-  'project_engineer',
-  'receiver',
-  'tracking_driver',
-  'project_manager',
-  'storekeeper',
-  'site_lead',
-  'viewer',
-];
+const roleLabels = ROLE_DISPLAY_NAMES;
+
+const roleOptions: AppRole[] = ACTIVE_ROLES;
 
 export default function UsersPage() {
   const { isAdmin, isSuperAdmin, user: authUser } = useAuth();
