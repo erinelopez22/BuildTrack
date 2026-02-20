@@ -1098,6 +1098,64 @@ export type Database = {
           },
         ]
       }
+      rejected_order_items: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes: string | null
+          order_id: string
+          quantity_ordered: number
+          quantity_received: number | null
+          quotation_item_id: string | null
+          sku_id: string
+          unit_price: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          order_id: string
+          quantity_ordered: number
+          quantity_received?: number | null
+          quotation_item_id?: string | null
+          sku_id: string
+          unit_price?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          order_id?: string
+          quantity_ordered?: number
+          quantity_received?: number | null
+          quotation_item_id?: string | null
+          sku_id?: string
+          unit_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rejected_order_items_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "rejected_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rejected_order_items_quotation_item_id_fkey"
+            columns: ["quotation_item_id"]
+            isOneToOne: false
+            referencedRelation: "quotation_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rejected_order_items_sku_id_fkey"
+            columns: ["sku_id"]
+            isOneToOne: false
+            referencedRelation: "skus"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       rejected_orders: {
         Row: {
           approved_at: string | null
