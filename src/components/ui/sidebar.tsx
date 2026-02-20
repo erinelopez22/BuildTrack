@@ -128,6 +128,16 @@ const SidebarProvider = React.forwardRef<
           ref={ref}
           {...props}
         >
+          {isMobile && !openMobile && (
+            <div
+              className="fixed left-0 top-0 z-40 h-full w-1 pointer-events-none"
+              style={{
+                background: 'linear-gradient(to right, hsl(var(--primary) / 0.4), transparent)',
+                boxShadow: '0 0 8px 1px hsl(var(--primary) / 0.2)',
+              }}
+              aria-hidden="true"
+            />
+          )}
           {children}
         </div>
       </TooltipProvider>
