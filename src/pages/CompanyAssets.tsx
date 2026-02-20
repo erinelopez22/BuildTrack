@@ -293,7 +293,10 @@ export default function CompanyAssets() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <PageHeader title="Equipments/Tools" description="Manage company-owned assets that can be borrowed by projects" />
+      <PageHeader
+        title="Equipments & Tools"
+        description="Manage company-owned assets that can be borrowed by projects"
+      />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-sm">

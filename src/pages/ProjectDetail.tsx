@@ -135,7 +135,11 @@ export default function ProjectDetail() {
     fetchProjectData();
   }, [id, navigate, toast, user]);
 
-  const canEditQuotation = isAdmin() || userProjectRole === "project_manager" || userProjectRole === "site_lead" || userProjectRole === "project_engineer";
+  const canEditQuotation =
+    isAdmin() ||
+    userProjectRole === "project_manager" ||
+    userProjectRole === "site_lead" ||
+    userProjectRole === "project_engineer";
 
   const handleQuotationChange = () => {
     setProgressKey((prev) => prev + 1);
@@ -495,7 +499,7 @@ export default function ProjectDetail() {
         </Button>
         <Button variant="outline" onClick={() => setIsBorrowModalOpen(true)}>
           <Wrench className="mr-2 h-4 w-4" />
-          Borrow Equipments/Tools
+          Borrow Equipments / Tools
         </Button>
       </div>
 
