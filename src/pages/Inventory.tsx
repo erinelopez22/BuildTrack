@@ -19,11 +19,9 @@ export default function Inventory() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
   const fetchProjects = async () => {
-    // Fetch all non-deleted projects (deleted projects hidden unless Super Admin)
     let query = supabase.from("projects").select("*").order("name", { ascending: true });
-
-    // Never show deleted projects in inventory view
     query = query.neq("status", "deleted");
+    query = query.eq("is_hidden", false);
 
     const { data, error } = await query;
 

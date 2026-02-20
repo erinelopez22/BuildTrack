@@ -89,12 +89,11 @@ export default function Orders() {
       ])
       .order("created_at", { ascending: false });
 
-    // Filter to only show orders from active projects
-    const activeProjectOrders = (ordersData || []).filter((order: any) => order.project?.status === "active");
+    const activeProjectOrders = (ordersData || []).filter((order: any) => order.project?.status === "active" && !order.project?.is_hidden);
 
     setOrders(activeProjectOrders as OrderWithProject[]);
 
-    const { data: projectsData } = await supabase.from("projects").select("*").eq("status", "active");
+    const { data: projectsData } = await supabase.from("projects").select("*").eq("status", "active").eq("is_hidden", false);
 
     setProjects((projectsData || []) as Project[]);
 

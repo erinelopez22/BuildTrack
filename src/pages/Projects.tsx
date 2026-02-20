@@ -8,6 +8,8 @@ import { ProjectCard } from '@/components/projects/ProjectCard';
 import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -22,7 +24,7 @@ import type { Project, ProjectStatus } from '@/types/database';
 export default function Projects() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAdmin, isSuperAdmin, user } = useAuth();
+  const { isAdmin, isSuperAdmin, user, canCreateProjects } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,8 +33,8 @@ export default function Projects() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
 
-  // Super Admin can see deleted projects, others cannot
   const statusFilterOptions: { value: string; label: string }[] = [
     { value: 'all', label: 'All Statuses' },
     { value: 'active', label: 'Active' },
@@ -42,7 +44,6 @@ export default function Projects() {
     ...(isSuperAdmin() ? [{ value: 'deleted', label: 'Deleted' }] : []),
   ];
 
-  // Update URL when filter changes
   useEffect(() => {
     if (statusFilter === 'all') {
       searchParams.delete('status');
@@ -58,9 +59,14 @@ export default function Projects() {
       .select('*')
       .order('created_at', { ascending: false });
 
-    // Non-super-admins should never see deleted projects
+    // Non-super-admins never see deleted projects
     if (!isSuperAdmin()) {
       query = query.neq('status', 'deleted');
+    }
+
+    // Hide hidden projects unless admin/super_admin with showHidden toggle
+    if (!isAdmin() || !showHidden) {
+      query = query.eq('is_hidden', false);
     }
 
     const { data, error } = await query;
@@ -75,7 +81,7 @@ export default function Projects() {
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+  }, [showHidden]);
 
   const handleSubmit = async (data: {
     name: string;
@@ -89,7 +95,6 @@ export default function Projects() {
 
     try {
       if (editingProject) {
-        // Update existing project
         const { error } = await supabase
           .from('projects')
           .update({
@@ -106,7 +111,7 @@ export default function Projects() {
         toast({ title: 'Success', description: 'Project updated successfully' });
       } else {
         // Create new project
-        const { error } = await supabase.from('projects').insert({
+        const { data: newProject, error } = await supabase.from('projects').insert({
           name: data.name,
           description: data.description || null,
           location: data.location,
@@ -114,9 +119,30 @@ export default function Projects() {
           end_date: data.end_date,
           status: data.status,
           created_by: user?.id,
-        });
+        }).select().single();
 
         if (error) throw error;
+
+        // If Project Engineer created the project, auto-assign them as project_engineer member
+        if (newProject && user) {
+          const { data: userRoles } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', user.id);
+          
+          const isProjectEngineerRole = (userRoles || []).some(r => r.role === 'project_engineer');
+          const isAdminRole = (userRoles || []).some(r => r.role === 'admin' || r.role === 'super_admin');
+
+          if (isProjectEngineerRole && !isAdminRole) {
+            await supabase.from('project_members').insert({
+              project_id: newProject.id,
+              user_id: user.id,
+              role: 'project_engineer',
+              created_by: user.id,
+            });
+          }
+        }
+
         toast({ title: 'Success', description: 'Project created successfully' });
       }
 
@@ -139,7 +165,6 @@ export default function Projects() {
     setIsDialogOpen(true);
   };
 
-  // Soft delete: set status to 'deleted' instead of removing
   const handleDeleteProject = async (project: Project) => {
     try {
       const { error } = await supabase
@@ -159,7 +184,6 @@ export default function Projects() {
     }
   };
 
-  // Restore a deleted project (Super Admin only)
   const handleRestoreProject = async (project: Project) => {
     try {
       const { error } = await supabase
@@ -179,6 +203,36 @@ export default function Projects() {
     }
   };
 
+  const handleHideProject = async (project: Project) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ is_hidden: true })
+        .eq('id', project.id);
+
+      if (error) throw error;
+      toast({ title: 'Success', description: 'Project hidden' });
+      fetchProjects();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
+  const handleUnhideProject = async (project: Project) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ is_hidden: false })
+        .eq('id', project.id);
+
+      if (error) throw error;
+      toast({ title: 'Success', description: 'Project unhidden' });
+      fetchProjects();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    }
+  };
+
   const handleCloseDialog = (open: boolean) => {
     if (!open) {
       setEditingProject(null);
@@ -186,7 +240,6 @@ export default function Projects() {
     setIsDialogOpen(open);
   };
 
-  // Filter by search and status
   const filteredProjects = projects.filter((p) => {
     const matchesSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -216,7 +269,7 @@ export default function Projects() {
           title="No projects yet"
           description="Create your first project to start tracking inventory and orders."
           action={
-            isAdmin()
+            canCreateProjects()
               ? {
                   label: 'Create Project',
                   onClick: () => setIsDialogOpen(true),
@@ -241,7 +294,7 @@ export default function Projects() {
         title="Projects"
         description="Manage your construction projects"
         action={
-          isAdmin() && (
+          canCreateProjects() && (
             <Button onClick={() => setIsDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create Project
@@ -250,7 +303,7 @@ export default function Projects() {
         }
       />
 
-      {/* Search and Filter Controls */}
+      {/* Search, Filter, and Show Hidden Toggle */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -273,6 +326,18 @@ export default function Projects() {
             ))}
           </SelectContent>
         </Select>
+        {isAdmin() && (
+          <div className="flex items-center gap-2">
+            <Switch
+              id="show-hidden"
+              checked={showHidden}
+              onCheckedChange={setShowHidden}
+            />
+            <Label htmlFor="show-hidden" className="text-sm text-muted-foreground whitespace-nowrap">
+              Show Hidden
+            </Label>
+          </div>
+        )}
       </div>
 
       {filteredProjects.length === 0 ? (
@@ -287,9 +352,12 @@ export default function Projects() {
               project={project}
               canEdit={isAdmin()}
               canRestore={isSuperAdmin() && project.status === 'deleted'}
+              canHide={isAdmin()}
               onEdit={handleEditProject}
               onDelete={handleDeleteProject}
               onRestore={handleRestoreProject}
+              onHide={handleHideProject}
+              onUnhide={handleUnhideProject}
               onClick={() => navigate(`/projects/${project.id}`)}
             />
           ))}

@@ -47,7 +47,8 @@ export default function Dashboard() {
       const { count: projectCount } = await supabase
         .from("projects")
         .select("*", { count: "exact", head: true })
-        .eq("status", "active");
+        .eq("status", "active")
+        .eq("is_hidden", false);
 
       // Fetch SKUs count
       const { count: skuCount } = await supabase

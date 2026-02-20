@@ -18,11 +18,15 @@ interface AuthContextType {
   isOfficeAdmin: () => boolean;
   isWarehouseAdmin: () => boolean;
   isProjectEngineer: () => boolean;
+  isChecker: () => boolean;
+  isDriver: () => boolean;
   isReceiver: () => boolean;
   canCreateOrders: () => boolean;
+  canCreateProjects: () => boolean;
   canApproveOrders: () => boolean;
   canProcessLogistics: () => boolean;
   canReceiveOrders: () => boolean;
+  canManageTeam: () => boolean;
   refreshProfile: () => Promise<void>;
 }
 
@@ -102,7 +106,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (loginId: string, password: string) => {
     let email = loginId;
 
-    // If it doesn't look like an email, try to look up the email by username
     if (!loginId.includes('@')) {
       const { data: profileData, error: lookupError } = await supabase
         .from('profiles')
@@ -127,28 +130,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const hasRole = (role: AppRole) => roles.includes(role);
   const isAdmin = () => hasRole('admin') || hasRole('super_admin');
   const isSuperAdmin = () => hasRole('super_admin');
-  const isApprover = () => hasRole('approver') || hasRole('admin') || hasRole('super_admin');
-  const isOfficeAdmin = () => hasRole('office_admin') || hasRole('approval_admin') || hasRole('admin') || hasRole('super_admin');
-  const isWarehouseAdmin = () => hasRole('warehouse_admin') || hasRole('logistics_admin') || hasRole('admin') || hasRole('super_admin');
-  const isProjectEngineer = () => hasRole('project_engineer') || hasRole('project_manager') || hasRole('site_lead');
-  const isReceiver = () => hasRole('receiver') || hasRole('storekeeper');
+  const isApprover = () => hasRole('office_admin') || hasRole('admin') || hasRole('super_admin');
+  const isOfficeAdmin = () => hasRole('office_admin') || hasRole('admin') || hasRole('super_admin');
+  const isWarehouseAdmin = () => hasRole('warehouse_admin') || hasRole('admin') || hasRole('super_admin');
+  const isProjectEngineer = () => hasRole('project_engineer');
+  const isChecker = () => hasRole('checker');
+  const isDriver = () => hasRole('driver') || hasRole('tracking_driver');
+  const isReceiver = () => hasRole('checker') || hasRole('project_engineer');
 
   const canCreateOrders = () => 
-    hasRole('super_admin') || hasRole('admin') || 
-    hasRole('project_engineer') || hasRole('project_manager') || hasRole('site_lead');
+    hasRole('super_admin') || hasRole('admin') || hasRole('project_engineer');
+
+  const canCreateProjects = () =>
+    hasRole('super_admin') || hasRole('admin') || hasRole('project_engineer');
 
   const canApproveOrders = () => 
-    hasRole('super_admin') || hasRole('admin') || 
-    hasRole('office_admin') || hasRole('approval_admin') || hasRole('approver');
+    hasRole('super_admin') || hasRole('admin') || hasRole('office_admin');
 
   const canProcessLogistics = () => 
-    hasRole('super_admin') || hasRole('admin') || 
-    hasRole('warehouse_admin') || hasRole('logistics_admin');
+    hasRole('super_admin') || hasRole('admin') || hasRole('warehouse_admin');
 
   const canReceiveOrders = () => 
     hasRole('super_admin') || hasRole('admin') || 
-    hasRole('project_engineer') || hasRole('project_manager') || 
-    hasRole('site_lead') || hasRole('receiver') || hasRole('storekeeper');
+    hasRole('project_engineer') || hasRole('checker');
+
+  const canManageTeam = () =>
+    hasRole('super_admin') || hasRole('admin') || hasRole('office_admin') || hasRole('project_engineer');
 
   return (
     <AuthContext.Provider
@@ -167,11 +174,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isOfficeAdmin,
         isWarehouseAdmin,
         isProjectEngineer,
+        isChecker,
+        isDriver,
         isReceiver,
         canCreateOrders,
+        canCreateProjects,
         canApproveOrders,
         canProcessLogistics,
         canReceiveOrders,
+        canManageTeam,
         refreshProfile,
       }}
     >
