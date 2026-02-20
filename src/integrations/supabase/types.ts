@@ -1242,6 +1242,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      create_project_with_membership: {
+        Args: {
+          _description?: string
+          _end_date?: string
+          _location?: string
+          _name: string
+          _start_date?: string
+          _status?: Database["public"]["Enums"]["project_status"]
+        }
+        Returns: string
+      }
       get_project_role: {
         Args: { _project_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
