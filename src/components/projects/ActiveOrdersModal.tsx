@@ -1,18 +1,13 @@
-import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
-import { Loader2, Package, ExternalLink } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { StatusBadge } from '@/components/common/StatusBadge';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
-import type { Order, OrderStatus } from '@/types/database';
+import { useState, useEffect } from "react";
+import { format } from "date-fns";
+import { Loader2, Package, ExternalLink } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { StatusBadge } from "@/components/common/StatusBadge";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import type { Order, OrderStatus } from "@/types/database";
 
 interface ActiveOrdersModalProps {
   open: boolean;
@@ -22,23 +17,18 @@ interface ActiveOrdersModalProps {
 }
 
 const ACTIVE_STATUSES: OrderStatus[] = [
-  'for_approval',
-  'approved',
-  'submitted',
-  'preparing',
-  'ordered',
-  'in_transit',
-  'delivered',
-  'partially_received',
-  'on_hold',
+  "for_approval",
+  "approved",
+  "submitted",
+  "preparing",
+  "ordered",
+  "in_transit",
+  "delivered",
+  "partially_received",
+  "on_hold",
 ];
 
-export function ActiveOrdersModal({
-  open,
-  onOpenChange,
-  projectId,
-  projectName,
-}: ActiveOrdersModalProps) {
+export function ActiveOrdersModal({ open, onOpenChange, projectId, projectName }: ActiveOrdersModalProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -48,19 +38,19 @@ export function ActiveOrdersModal({
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('project_id', projectId)
-        .in('status', ACTIVE_STATUSES)
-        .order('created_at', { ascending: false });
+        .from("orders")
+        .select("*")
+        .eq("project_id", projectId)
+        .in("status", ACTIVE_STATUSES)
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       setOrders((data || []) as Order[]);
     } catch (error: any) {
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to load orders',
-        variant: 'destructive',
+        title: "Error",
+        description: error.message || "Failed to load orders",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -110,23 +100,12 @@ export function ActiveOrdersModal({
                     <StatusBadge status={order.status} />
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Created: {format(new Date(order.created_at), 'MMM dd, yyyy h:mm a')}
+                    Created: {format(new Date(order.created_at), "MMM dd, yyyy h:mm a")}
                   </div>
-                  {order.expected_delivery_date && (
-                    <div className="text-sm text-muted-foreground">
-                      Expected Delivery: {format(new Date(order.expected_delivery_date), 'MMM dd, yyyy')}
-                    </div>
-                  )}
-                  {order.notes && (
-                    <p className="text-sm text-muted-foreground line-clamp-1">{order.notes}</p>
-                  )}
+
+                  {order.notes && <p className="text-sm text-muted-foreground line-clamp-1">{order.notes}</p>}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleViewOrder(order.id)}
-                  className="shrink-0"
-                >
+                <Button variant="ghost" size="sm" onClick={() => handleViewOrder(order.id)} className="shrink-0">
                   <ExternalLink className="h-4 w-4 mr-1" />
                   View
                 </Button>

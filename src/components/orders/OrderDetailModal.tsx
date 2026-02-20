@@ -118,16 +118,19 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
     if (data) {
       // Fetch user profiles for logs
-      const userIds = [...new Set(data.map(l => l.user_id).filter(Boolean))];
-      const { data: profiles } = userIds.length > 0
-        ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
-        : { data: [] };
-      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+      const userIds = [...new Set(data.map((l) => l.user_id).filter(Boolean))];
+      const { data: profiles } =
+        userIds.length > 0
+          ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
+          : { data: [] };
+      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
 
-      setActivityLogs(data.map(log => ({
-        ...log,
-        user_profile: log.user_id ? profileMap.get(log.user_id) : null,
-      })));
+      setActivityLogs(
+        data.map((log) => ({
+          ...log,
+          user_profile: log.user_id ? profileMap.get(log.user_id) : null,
+        })),
+      );
     }
   };
 
@@ -307,7 +310,15 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   };
 
   // Statuses that can be put on hold
-  const holdableStatuses: OrderStatus[] = ['draft', 'for_approval', 'approved', 'submitted', 'ordered', 'preparing', 'in_transit'];
+  const holdableStatuses: OrderStatus[] = [
+    "draft",
+    "for_approval",
+    "approved",
+    "submitted",
+    "ordered",
+    "preparing",
+    "in_transit",
+  ];
 
   // Determine available actions based on status and permissions
   const getAvailableActions = () => {
@@ -438,7 +449,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       case "on_hold":
         if (hasFullAccess || canProcessLogistics()) {
           const previousStatus = (order as any).previous_status as OrderStatus | null;
-          const resumeStatus = previousStatus || 'for_approval';
+          const resumeStatus = previousStatus || "for_approval";
           const resumeLabel = resumeStatus.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
           actions.push({
             label: `Resume (→ ${resumeLabel})`,
@@ -534,26 +545,21 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
                       <div className="flex items-start gap-3">
                         <Calendar className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm text-muted-foreground">Expected Delivery</p>
-                          <p className="font-medium">
-                            {order.expected_delivery_date
-                              ? formatManilaTime(order.expected_delivery_date).split(" –")[0]
-                              : "Not set"}
-                          </p>
-                        </div>
                       </div>
 
-                      {order.status !== "for_approval" && order.status !== "rejected" && approver && order.approved_at && (
-                        <div className="flex items-start gap-3">
-                          <Clock className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm text-muted-foreground">Approved By</p>
-                            <p className="font-medium truncate">{approver.full_name || approver.email}</p>
-                            <p className="text-xs text-muted-foreground">{formatManilaTime(order.approved_at)}</p>
+                      {order.status !== "for_approval" &&
+                        order.status !== "rejected" &&
+                        approver &&
+                        order.approved_at && (
+                          <div className="flex items-start gap-3">
+                            <Clock className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm text-muted-foreground">Approved By</p>
+                              <p className="font-medium truncate">{approver.full_name || approver.email}</p>
+                              <p className="text-xs text-muted-foreground">{formatManilaTime(order.approved_at)}</p>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
                       {/* Milestone Timestamps */}
                       {(order as any).on_transit_at && (
@@ -745,7 +751,9 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
               </div>
             </div>
           ) : (
-            <p className="text-center py-8 text-muted-foreground flex-1 flex items-center justify-center">Order not found</p>
+            <p className="text-center py-8 text-muted-foreground flex-1 flex items-center justify-center">
+              Order not found
+            </p>
           )}
 
           {/* Sticky Footer with Actions */}
@@ -853,19 +861,20 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       </AlertDialog>
 
       {/* Delivery Confirmation Dialog with Supplier */}
-      <AlertDialog open={showDeliveryConfirm} onOpenChange={(open) => {
-        setShowDeliveryConfirm(open);
-        if (open) setDeliverySupplier(order?.supplier_name?.trim() || "Jagon");
-      }}>
+      <AlertDialog
+        open={showDeliveryConfirm}
+        onOpenChange={(open) => {
+          setShowDeliveryConfirm(open);
+          if (open) setDeliverySupplier(order?.supplier_name?.trim() || "Jagon");
+        }}
+      >
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-primary" />
               Mark as Delivered?
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Confirm the supplier for this delivery before proceeding.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Confirm the supplier for this delivery before proceeding.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4 space-y-2">
             <Label htmlFor="delivery-supplier">Supplier *</Label>

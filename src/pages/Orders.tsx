@@ -227,21 +227,7 @@ export default function Orders() {
       key: "status",
       header: "Status",
       render: (order) => <StatusBadge status={order.status} />,
-    },
-    {
-      key: "expected_delivery",
-      header: (
-        <button
-          className="flex items-center gap-1 hover:text-primary transition-colors"
-          onClick={() => handleSort("expected_delivery_date")}
-        >
-          Expected Delivery
-          {getSortIcon("expected_delivery_date")}
-        </button>
-      ) as unknown as string,
-      render: (order) =>
-        order.expected_delivery_date ? format(new Date(order.expected_delivery_date), "MMM d, yyyy") : "-",
-    },
+    }
 
     {
       key: "created",
