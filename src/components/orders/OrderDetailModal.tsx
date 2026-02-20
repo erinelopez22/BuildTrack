@@ -543,8 +543,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                         </div>
                       </div>
 
-                      <div className="flex items-start gap-3"></div>
-
                       {order.status !== "for_approval" &&
                         order.status !== "rejected" &&
                         approver &&
