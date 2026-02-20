@@ -1228,6 +1228,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_project_member: {
+        Args: { p_project_id: string; p_role: string; p_user_id: string }
+        Returns: undefined
+      }
       can_approve_orders: { Args: { _user_id: string }; Returns: boolean }
       can_create_orders: { Args: { _user_id: string }; Returns: boolean }
       can_manage_roles: { Args: { _user_id: string }; Returns: boolean }
