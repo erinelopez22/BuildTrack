@@ -55,7 +55,7 @@ const allNavItems = [
   { title: "View Orders", url: "/orders", icon: ClipboardList, roles: ["super_admin", "admin", "project_engineer", "checker", "warehouse_admin", "office_admin"] },
   { title: "Quotation Request", url: "/quotation-requests", icon: FileCheck, roles: ["super_admin", "admin", "project_engineer", "office_admin", "checker"] },
   { title: "SKU Catalog", url: "/skus", icon: Boxes, roles: ["super_admin", "admin", "project_engineer", "office_admin", "warehouse_admin"] },
-  { title: "Equipment & Tools", url: "/company-assets", icon: Wrench, roles: ["super_admin", "admin", "project_engineer", "checker", "warehouse_admin", "office_admin"] },
+  { title: "Equipment & Tools", url: "/company-assets", icon: Wrench, roles: ["super_admin", "admin", "project_engineer", "checker", "office_admin"] },
 ];
 
 const adminNavItems = [

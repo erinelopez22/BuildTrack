@@ -20,6 +20,16 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useProjectProgress } from "@/hooks/useProjectProgress";
 import { logActivity } from "@/lib/activityLogger";
@@ -72,7 +82,17 @@ export default function ProjectDetail() {
   const [returnQty, setReturnQty] = useState<Record<string, number>>({});
   const [returnRemarks, setReturnRemarks] = useState<Record<string, string>>({});
 
+  // Approval confirmation dialog
+  const [showBorrowConfirm, setShowBorrowConfirm] = useState(false);
+  const [showReturnConfirm, setShowReturnConfirm] = useState<string | null>(null);
+
+  // Pending return requests
+  const [pendingReturnRequests, setPendingReturnRequests] = useState<Record<string, boolean>>({});
+
   const progress = useProjectProgress(id || "", progressKey);
+
+  // Check if user can borrow
+  const canBorrow = isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer();
 
   const fetchAllProjects = async () => {
     let query = supabase.from("projects").select("id, name, status, is_hidden").order("name", { ascending: true });
@@ -98,7 +118,6 @@ export default function ProjectDetail() {
       return;
     }
 
-    // Block access to hidden projects for non-admins
     if (projectData.is_hidden && !isAdmin()) {
       toast({ title: "Error", description: "Project not available", variant: "destructive" });
       navigate("/projects");
@@ -115,7 +134,6 @@ export default function ProjectDetail() {
 
     setHasQuotation(!!quotationData);
 
-    // Check for pending quotation change requests
     const { data: pendingRequests } = await supabase
       .from("quotation_change_requests")
       .select("id")
@@ -161,16 +179,13 @@ export default function ProjectDetail() {
   const fetchBorrowData = async () => {
     if (!id) return;
 
-    // Fetch all assets
     const { data: assets } = await supabase.from("company_assets").select("*").order("asset_name");
 
-    // Fetch ALL active borrows (not just this project) to compute availability
     const { data: allBorrows } = await supabase
       .from("borrow_transactions")
       .select("asset_id, borrowed_qty, returned_qty, status")
       .in("status", ["Borrowed", "Partially Returned"]);
 
-    // Compute available qty per asset
     const borrowedByAsset: Record<string, number> = {};
     (allBorrows || []).forEach((b: any) => {
       borrowedByAsset[b.asset_id] = (borrowedByAsset[b.asset_id] || 0) + (b.borrowed_qty - b.returned_qty);
@@ -183,7 +198,6 @@ export default function ProjectDetail() {
       })),
     );
 
-    // Fetch this project's active borrows
     const { data: borrows } = await supabase
       .from("borrow_transactions")
       .select("*, company_assets(asset_name, unit)")
@@ -191,13 +205,27 @@ export default function ProjectDetail() {
       .in("status", ["Borrowed", "Partially Returned"])
       .order("borrowed_at", { ascending: false });
     setBorrowedItems(borrows || []);
+
+    // Fetch pending return requests for this project
+    const { data: pendingReturns } = await supabase
+      .from("equipment_requests")
+      .select("borrow_transaction_id")
+      .eq("project_id", id)
+      .eq("request_type", "return")
+      .eq("status", "for_approval");
+
+    const pendingMap: Record<string, boolean> = {};
+    (pendingReturns || []).forEach((r: any) => {
+      if (r.borrow_transaction_id) pendingMap[r.borrow_transaction_id] = true;
+    });
+    setPendingReturnRequests(pendingMap);
   };
 
   useEffect(() => {
     if (isBorrowModalOpen && id) fetchBorrowData();
   }, [isBorrowModalOpen, id]);
 
-  const handleBorrow = async () => {
+  const handleBorrowRequest = async () => {
     if (!user || !id || !borrowAssetId || borrowQty < 1) return;
     setBorrowLoading(true);
     try {
@@ -205,39 +233,20 @@ export default function ProjectDetail() {
       if (!asset) throw new Error("Asset not found");
       if (borrowQty > asset.available_quantity) throw new Error("Not enough available");
 
-      const { error } = await supabase.from("borrow_transactions").insert({
+      const { error } = await supabase.from("equipment_requests").insert({
         asset_id: borrowAssetId,
         project_id: id,
-        borrowed_qty: borrowQty,
-        borrowed_by: user.id,
+        request_type: "borrow",
+        requested_by: user.id,
+        quantity: borrowQty,
+        status: "for_approval",
       });
       if (error) throw error;
 
-      const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-      const userName = profile?.full_name || "User";
-
-      await logActivity({
-        action: "asset_borrowed",
-        tableName: "borrow_transactions",
-        recordId: id,
-        oldValues: null,
-        newValues: { asset_name: asset.asset_name, qty: borrowQty, borrowed_by: userName },
-        userId: user.id,
-      });
-
-      await notifyProjectMembers({
-        projectId: id,
-        title: "Asset Borrowed",
-        message: `${userName} borrowed ${borrowQty} ${asset.unit || "pcs"} of ${asset.asset_name}`,
-        type: "project",
-        referenceType: "borrow_transaction",
-        referenceId: id,
-        excludeUserId: user.id,
-      });
-
-      toast({ title: "Success", description: `Borrowed ${borrowQty} ${asset.asset_name}` });
+      toast({ title: "Request Submitted", description: "Borrow request submitted for approval." });
       setBorrowAssetId("");
       setBorrowQty(1);
+      setShowBorrowConfirm(false);
       fetchBorrowData();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -246,7 +255,7 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleReturn = async (transactionId: string) => {
+  const handleReturnRequest = async (transactionId: string) => {
     if (!user || !id) return;
     const qty = returnQty[transactionId] || 0;
     const remarks = returnRemarks[transactionId] || "";
@@ -261,50 +270,27 @@ export default function ProjectDetail() {
       return;
     }
 
-    const newReturnedQty = transaction.returned_qty + qty;
-    const newStatus = newReturnedQty >= transaction.borrowed_qty ? "Returned" : "Partially Returned";
+    try {
+      const { error } = await supabase.from("equipment_requests").insert({
+        asset_id: transaction.asset_id,
+        project_id: id,
+        request_type: "return",
+        requested_by: user.id,
+        quantity: qty,
+        borrow_transaction_id: transactionId,
+        notes: remarks || null,
+        status: "for_approval",
+      });
+      if (error) throw error;
 
-    const { error } = await supabase
-      .from("borrow_transactions")
-      .update({
-        returned_qty: newReturnedQty,
-        returned_at: new Date().toISOString(),
-        return_remarks: remarks || null,
-        status: newStatus,
-      })
-      .eq("id", transactionId);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-      return;
+      toast({ title: "Request Submitted", description: "Return request submitted for approval." });
+      setReturnQty((prev) => ({ ...prev, [transactionId]: 0 }));
+      setReturnRemarks((prev) => ({ ...prev, [transactionId]: "" }));
+      setShowReturnConfirm(null);
+      fetchBorrowData();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
-
-    const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-    const userName = profile?.full_name || "User";
-
-    await logActivity({
-      action: "asset_returned",
-      tableName: "borrow_transactions",
-      recordId: id,
-      oldValues: null,
-      newValues: { asset_name: transaction.company_assets?.asset_name, qty, returned_by: userName, status: newStatus },
-      userId: user.id,
-    });
-
-    await notifyProjectMembers({
-      projectId: id,
-      title: "Asset Returned",
-      message: `${userName} returned ${qty} of ${transaction.company_assets?.asset_name}`,
-      type: "project",
-      referenceType: "borrow_transaction",
-      referenceId: transactionId,
-      excludeUserId: user.id,
-    });
-
-    toast({ title: "Success", description: `Returned ${qty} items` });
-    setReturnQty((prev) => ({ ...prev, [transactionId]: 0 }));
-    setReturnRemarks((prev) => ({ ...prev, [transactionId]: "" }));
-    fetchBorrowData();
   };
 
   const handleEditSubmit = async (data: {
@@ -508,10 +494,12 @@ export default function ProjectDetail() {
           <TruckIcon className="mr-2 h-4 w-4" />
           Delivered Materials
         </Button>
-        <Button variant="outline" onClick={() => setIsBorrowModalOpen(true)}>
-          <Wrench className="mr-2 h-4 w-4" />
-          Borrow Equipments / Tools
-        </Button>
+        {canBorrow && (
+          <Button variant="outline" onClick={() => setIsBorrowModalOpen(true)}>
+            <Wrench className="mr-2 h-4 w-4" />
+            Borrow Equipments / Tools
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -588,52 +576,50 @@ export default function ProjectDetail() {
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* Borrow Form - Only for Super Admin, Admin, Office Admin, Project Engineer */}
-            {(isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer()) && (
-              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
-                <Label className="font-medium">Borrow an Asset</Label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <Select value={borrowAssetId} onValueChange={setBorrowAssetId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select asset..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {companyAssets
-                          .filter((a: any) => a.available_quantity > 0)
-                          .map((asset: any) => (
-                            <SelectItem key={asset.id} value={asset.id}>
-                              {asset.asset_name} — Avail: {asset.available_quantity} {asset.unit || "pcs"}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={companyAssets.find((a: any) => a.id === borrowAssetId)?.available_quantity || 1}
-                      value={borrowQty}
-                      onChange={(e) => setBorrowQty(parseInt(e.target.value) || 1)}
-                      placeholder="Qty"
-                    />
-                  </div>
+            {/* Borrow Form */}
+            <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+              <Label className="font-medium">Borrow an Asset</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-2">
+                  <Select value={borrowAssetId} onValueChange={setBorrowAssetId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select asset..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companyAssets
+                        .filter((a: any) => a.available_quantity > 0)
+                        .map((asset: any) => (
+                          <SelectItem key={asset.id} value={asset.id}>
+                            {asset.asset_name} — Avail: {asset.available_quantity} {asset.unit || "pcs"}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Button
-                  onClick={handleBorrow}
-                  disabled={!borrowAssetId || borrowQty < 1 || borrowLoading}
-                  className="w-full"
-                >
-                  {borrowLoading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Package className="h-4 w-4 mr-2" />
-                  )}
-                  Borrow
-                </Button>
+                <div>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={companyAssets.find((a: any) => a.id === borrowAssetId)?.available_quantity || 1}
+                    value={borrowQty}
+                    onChange={(e) => setBorrowQty(parseInt(e.target.value) || 1)}
+                    placeholder="Qty"
+                  />
+                </div>
               </div>
-            )}
+              <Button
+                onClick={() => setShowBorrowConfirm(true)}
+                disabled={!borrowAssetId || borrowQty < 1 || borrowLoading}
+                className="w-full"
+              >
+                {borrowLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Package className="h-4 w-4 mr-2" />
+                )}
+                Borrow
+              </Button>
+            </div>
 
             {/* Currently Borrowed Items */}
             <div className="space-y-3">
@@ -644,6 +630,7 @@ export default function ProjectDetail() {
                 <div className="space-y-3">
                   {borrowedItems.map((item: any) => {
                     const remaining = item.borrowed_qty - item.returned_qty;
+                    const hasPendingReturn = pendingReturnRequests[item.id];
                     return (
                       <div key={item.id} className="p-3 border rounded-lg bg-card space-y-2">
                         <div className="flex items-center justify-between">
@@ -658,7 +645,12 @@ export default function ProjectDetail() {
                         <p className="text-xs text-muted-foreground">
                           Borrowed on {formatManilaTime(item.borrowed_at)}
                         </p>
-                        {remaining > 0 && (
+                        {hasPendingReturn && (
+                          <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded">
+                            Return request pending approval.
+                          </p>
+                        )}
+                        {remaining > 0 && !hasPendingReturn && (
                           <div className="flex gap-2 items-end">
                             <div className="flex-1">
                               <Input
@@ -684,7 +676,7 @@ export default function ProjectDetail() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleReturn(item.id)}
+                              onClick={() => setShowReturnConfirm(item.id)}
                               disabled={!returnQty[item.id] || returnQty[item.id] < 1}
                             >
                               <RotateCcw className="h-3.5 w-3.5 mr-1" />
@@ -701,6 +693,43 @@ export default function ProjectDetail() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Borrow Confirmation Dialog */}
+      <AlertDialog open={showBorrowConfirm} onOpenChange={setShowBorrowConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Submit Borrow Request</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will be subject for approval. Only Admin can approve borrow requests.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBorrowRequest} disabled={borrowLoading}>
+              {borrowLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Return Confirmation Dialog */}
+      <AlertDialog open={!!showReturnConfirm} onOpenChange={(open) => !open && setShowReturnConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Submit Return Request</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will be subject for approval. Only Admin can approve return requests.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => showReturnConfirm && handleReturnRequest(showReturnConfirm)}>
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

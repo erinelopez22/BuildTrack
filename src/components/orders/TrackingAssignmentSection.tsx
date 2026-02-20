@@ -122,7 +122,7 @@ export function TrackingAssignmentSection({
   onAllDriversArrived,
   readOnly = false,
 }: TrackingAssignmentSectionProps) {
-  const { user, isSuperAdmin, isAdmin, canProcessLogistics, canReceiveOrders } = useAuth();
+  const { user, isSuperAdmin, isAdmin, isWarehouseAdmin, canProcessLogistics, canReceiveOrders } = useAuth();
   const { toast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [assignments, setAssignments] = useState<DriverAssignment[]>([]);
@@ -143,11 +143,16 @@ export function TrackingAssignmentSection({
   const [onTransitAt, setOnTransitAt] = useState<string | null>(null);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
-  const canEdit = !readOnly && (isSuperAdmin() || isAdmin() || canProcessLogistics());
-  const canDoDriverActions = isSuperAdmin() || isAdmin() || canProcessLogistics() || canReceiveOrders();
   const isPreparing = status === "preparing";
   const isInTransit = status === "in_transit";
   const isDelivered = status === "delivered";
+
+  const canEdit = !readOnly && (isSuperAdmin() || isAdmin() || canProcessLogistics());
+  // For in_transit: PE + Checker have full access (same as Super Admin). Trucking Admin = view only.
+  const isWHAdminOnly = isWarehouseAdmin() && !isSuperAdmin() && !isAdmin();
+  const canDoDriverActions = isInTransit
+    ? (isSuperAdmin() || isAdmin() || canReceiveOrders()) && !isWHAdminOnly
+    : isSuperAdmin() || isAdmin() || canProcessLogistics() || canReceiveOrders();
 
   useEffect(() => {
     fetchData();

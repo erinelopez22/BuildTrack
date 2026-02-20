@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +25,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
 import { formatManilaTime } from "@/lib/notificationService";
-import { Wrench, Plus, Search, Pencil, Trash2, Loader2, Package, ArrowLeftRight } from "lucide-react";
+import { Wrench, Plus, Search, Pencil, Trash2, Loader2, Package, ArrowLeftRight, Check, X, Eye } from "lucide-react";
 import type { CompanyAsset, AssetType, AssetCondition, BorrowTransaction, Project, Profile } from "@/types/database";
 
 interface BorrowWithDetails extends BorrowTransaction {
@@ -32,8 +33,29 @@ interface BorrowWithDetails extends BorrowTransaction {
   borrower_profile?: Profile;
 }
 
+interface EquipmentRequest {
+  id: string;
+  project_id: string;
+  asset_id: string;
+  request_type: string;
+  requested_by: string;
+  requested_at: string;
+  quantity: number;
+  status: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
+  notes: string | null;
+  borrow_transaction_id: string | null;
+  // Joined
+  requester_profile?: Profile;
+  project?: Project;
+}
+
 export default function CompanyAssets() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isSuperAdmin, isOfficeAdmin, isProjectEngineer, isChecker } = useAuth();
   const { toast } = useToast();
   const [assets, setAssets] = useState<CompanyAsset[]>([]);
   const [borrowTransactions, setBorrowTransactions] = useState<BorrowWithDetails[]>([]);
@@ -43,13 +65,21 @@ export default function CompanyAssets() {
   const [editingAsset, setEditingAsset] = useState<CompanyAsset | null>(null);
   const [deleteAsset, setDeleteAsset] = useState<CompanyAsset | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Asset detail modal (Admin/Super Admin only)
   const [selectedAsset, setSelectedAsset] = useState<CompanyAsset | null>(null);
+  const [assetRequests, setAssetRequests] = useState<EquipmentRequest[]>([]);
+  const [assetRequestsLoading, setAssetRequestsLoading] = useState(false);
 
   // Return modal
   const [returnTransaction, setReturnTransaction] = useState<BorrowWithDetails | null>(null);
   const [returnQty, setReturnQty] = useState(0);
   const [returnRemarks, setReturnRemarks] = useState("");
   const [returning, setReturning] = useState(false);
+
+  // Reject dialog
+  const [rejectRequest, setRejectRequest] = useState<EquipmentRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   // Form state
   const [form, setForm] = useState({
@@ -61,6 +91,10 @@ export default function CompanyAssets() {
     condition: "Available" as AssetCondition,
     notes: "",
   });
+
+  const canManage = isAdmin();
+  const canClickCards = isSuperAdmin() || isAdmin();
+  const canAccessPage = isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer() || isChecker();
 
   const fetchData = async () => {
     setLoading(true);
@@ -75,7 +109,6 @@ export default function CompanyAssets() {
 
     setAssets((assetsRes.data || []) as CompanyAsset[]);
 
-    // Fetch project names and borrower profiles for transactions
     const transactions = (borrowRes.data || []) as BorrowTransaction[];
     if (transactions.length > 0) {
       const projectIds = [...new Set(transactions.map((t) => t.project_id))];
@@ -131,6 +164,149 @@ export default function CompanyAssets() {
     );
   }, [assets, search]);
 
+  // Fetch requests for a specific asset
+  const fetchAssetRequests = async (assetId: string) => {
+    setAssetRequestsLoading(true);
+    const { data } = await supabase
+      .from("equipment_requests")
+      .select("*")
+      .eq("asset_id", assetId)
+      .order("requested_at", { ascending: false });
+
+    if (data && data.length > 0) {
+      const userIds = [...new Set(data.map((r: any) => r.requested_by).filter(Boolean))];
+      const projectIds = [...new Set(data.map((r: any) => r.project_id).filter(Boolean))];
+
+      const [profilesRes, projectsRes] = await Promise.all([
+        userIds.length > 0 ? supabase.from("profiles").select("id, full_name, email").in("id", userIds) : { data: [] },
+        projectIds.length > 0 ? supabase.from("projects").select("id, name").in("id", projectIds) : { data: [] },
+      ]);
+
+      const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]));
+      const projectMap = new Map((projectsRes.data || []).map((p: any) => [p.id, p]));
+
+      setAssetRequests(
+        data.map((r: any) => ({
+          ...r,
+          requester_profile: profileMap.get(r.requested_by),
+          project: projectMap.get(r.project_id),
+        })),
+      );
+    } else {
+      setAssetRequests([]);
+    }
+    setAssetRequestsLoading(false);
+  };
+
+  const handleCardClick = (asset: CompanyAsset) => {
+    if (!canClickCards) return;
+    setSelectedAsset(asset);
+    fetchAssetRequests(asset.id);
+  };
+
+  const handleApproveRequest = async (request: EquipmentRequest) => {
+    if (!user) return;
+
+    try {
+      // Update request status
+      const { error: updateError } = await supabase
+        .from("equipment_requests")
+        .update({
+          status: "approved",
+          approved_by: user.id,
+          approved_at: new Date().toISOString(),
+        })
+        .eq("id", request.id);
+
+      if (updateError) throw updateError;
+
+      // Execute the actual borrow/return
+      if (request.request_type === "borrow") {
+        const { error } = await supabase.from("borrow_transactions").insert({
+          asset_id: request.asset_id,
+          project_id: request.project_id,
+          borrowed_qty: request.quantity,
+          borrowed_by: request.requested_by,
+        });
+        if (error) throw error;
+
+        await logActivity({
+          action: "asset_borrowed",
+          tableName: "borrow_transactions",
+          recordId: request.project_id,
+          oldValues: null,
+          newValues: { asset_id: request.asset_id, qty: request.quantity, approved_by: user.id },
+          userId: user.id,
+        });
+      } else if (request.request_type === "return" && request.borrow_transaction_id) {
+        // Fetch the transaction
+        const { data: tx } = await supabase
+          .from("borrow_transactions")
+          .select("*")
+          .eq("id", request.borrow_transaction_id)
+          .single();
+
+        if (tx) {
+          const newReturnedQty = tx.returned_qty + request.quantity;
+          const newStatus = newReturnedQty >= tx.borrowed_qty ? "Returned" : "Partially Returned";
+
+          const { error } = await supabase
+            .from("borrow_transactions")
+            .update({
+              returned_qty: newReturnedQty,
+              returned_at: new Date().toISOString(),
+              return_remarks: request.notes || null,
+              status: newStatus,
+            })
+            .eq("id", request.borrow_transaction_id);
+
+          if (error) throw error;
+
+          await logActivity({
+            action: "asset_returned",
+            tableName: "borrow_transactions",
+            recordId: request.project_id,
+            oldValues: null,
+            newValues: { asset_id: request.asset_id, qty: request.quantity, status: newStatus, approved_by: user.id },
+            userId: user.id,
+          });
+        }
+      }
+
+      toast({ title: "Approved", description: `${request.request_type} request approved and executed.` });
+      fetchData();
+      if (selectedAsset) fetchAssetRequests(selectedAsset.id);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleRejectRequest = async () => {
+    if (!user || !rejectRequest) return;
+
+    try {
+      const { error } = await supabase
+        .from("equipment_requests")
+        .update({
+          status: "rejected",
+          rejected_by: user.id,
+          rejected_at: new Date().toISOString(),
+          rejection_reason: rejectReason.trim() || null,
+        })
+        .eq("id", rejectRequest.id);
+
+      if (error) throw error;
+
+      toast({ title: "Rejected", description: `${rejectRequest.request_type} request rejected.` });
+      setRejectRequest(null);
+      setRejectReason("");
+      fetchData();
+      if (selectedAsset) fetchAssetRequests(selectedAsset.id);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
   const openCreate = () => {
     setEditingAsset(null);
     setForm({
@@ -167,7 +343,6 @@ export default function CompanyAssets() {
     setSaving(true);
 
     if (editingAsset) {
-      // Client-side guard for borrowed qty
       const borrowed = getBorrowedQty(editingAsset);
       if (form.total_quantity < borrowed) {
         toast({
@@ -221,12 +396,11 @@ export default function CompanyAssets() {
 
   const handleDelete = async () => {
     if (!deleteAsset) return;
-    // Client-side guard
     const borrowed = getBorrowedQty(deleteAsset);
     if (borrowed > 0) {
       toast({
         title: "Error",
-        description: `Cannot delete this asset because there are still borrowed items (${borrowed}). Please return all borrowed items before deleting.`,
+        description: `Cannot delete this asset because there are still borrowed items (${borrowed}).`,
         variant: "destructive",
       });
       setDeleteAsset(null);
@@ -281,7 +455,13 @@ export default function CompanyAssets() {
     setReturning(false);
   };
 
-  const canManage = isAdmin();
+  if (!canAccessPage) {
+    return (
+      <div className="animate-fade-in space-y-6">
+        <PageHeader title="Equipments & Tools" description="You do not have access to this page." />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -331,11 +511,19 @@ export default function CompanyAssets() {
             const assetBorrows = borrowTransactions.filter((t) => t.asset_id === asset.id && t.status !== "Returned");
 
             return (
-              <Card key={asset.id} className="hover:shadow-md transition-shadow">
+              <Card
+                key={asset.id}
+                className={`transition-shadow ${canClickCards ? "hover:shadow-md cursor-pointer" : "hover:shadow-md"}`}
+                onClick={() => handleCardClick(asset)}
+                title={!canClickCards ? "View only" : undefined}
+              >
                 <CardContent className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-foreground truncate">{asset.asset_name}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground truncate">{asset.asset_name}</h3>
+                        {!canClickCards && <Eye className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
+                      </div>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant="secondary" className="text-xs">
                           {asset.asset_type}
@@ -346,7 +534,7 @@ export default function CompanyAssets() {
                       </div>
                     </div>
                     {canManage && (
-                      <div className="flex gap-1">
+                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(asset)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
@@ -397,18 +585,21 @@ export default function CompanyAssets() {
                               Qty: {bt.borrowed_qty - bt.returned_qty} • {bt.borrower_profile?.full_name || "Unknown"}
                             </p>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-6 text-[10px] px-2 ml-2"
-                            onClick={() => {
-                              setReturnTransaction(bt);
-                              setReturnQty(bt.borrowed_qty - bt.returned_qty);
-                              setReturnRemarks("");
-                            }}
-                          >
-                            Return
-                          </Button>
+                          {canManage && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-6 text-[10px] px-2 ml-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReturnTransaction(bt);
+                                setReturnQty(bt.borrowed_qty - bt.returned_qty);
+                                setReturnRemarks("");
+                              }}
+                            >
+                              Return
+                            </Button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -419,6 +610,213 @@ export default function CompanyAssets() {
           })}
         </div>
       )}
+
+      {/* Asset Detail Modal (Admin/Super Admin only) */}
+      <Dialog open={!!selectedAsset} onOpenChange={(open) => !open && setSelectedAsset(null)}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="flex-shrink-0 px-6 py-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              {selectedAsset?.asset_name}
+              {selectedAsset?.asset_code && (
+                <span className="text-sm font-mono text-muted-foreground">{selectedAsset.asset_code}</span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {assetRequestsLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <Tabs defaultValue="borrows" className="space-y-4">
+                <TabsList className="w-full">
+                  <TabsTrigger value="borrows" className="flex-1">Active Borrows</TabsTrigger>
+                  <TabsTrigger value="borrow_requests" className="flex-1">Borrow Requests</TabsTrigger>
+                  <TabsTrigger value="return_requests" className="flex-1">Return Requests</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="borrows">
+                  {(() => {
+                    const activeBorrows = borrowTransactions.filter(
+                      (t) => t.asset_id === selectedAsset?.id && t.status !== "Returned",
+                    );
+                    return activeBorrows.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic py-4">No active borrows.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {activeBorrows.map((bt) => (
+                          <div key={bt.id} className="p-3 border rounded-lg text-sm space-y-1">
+                            <div className="flex justify-between">
+                              <span className="font-medium">{bt.project?.name || "Unknown"}</span>
+                              <Badge variant="secondary">{bt.status}</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Qty: {bt.borrowed_qty - bt.returned_qty} remaining •{" "}
+                              {bt.borrower_profile?.full_name || "Unknown"} •{" "}
+                              {formatManilaTime(bt.borrowed_at)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </TabsContent>
+
+                <TabsContent value="borrow_requests">
+                  {(() => {
+                    const borrowReqs = assetRequests.filter((r) => r.request_type === "borrow");
+                    return borrowReqs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic py-4">No borrow requests.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {borrowReqs.map((req) => (
+                          <div key={req.id} className="p-3 border rounded-lg text-sm space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-medium">{req.project?.name || "Unknown Project"}</span>
+                                <p className="text-xs text-muted-foreground">
+                                  By {req.requester_profile?.full_name || "Unknown"} • Qty: {req.quantity} •{" "}
+                                  {formatManilaTime(req.requested_at)}
+                                </p>
+                              </div>
+                              <Badge
+                                variant={
+                                  req.status === "for_approval"
+                                    ? "default"
+                                    : req.status === "approved"
+                                      ? "secondary"
+                                      : "destructive"
+                                }
+                              >
+                                {req.status === "for_approval" ? "Pending" : req.status}
+                              </Badge>
+                            </div>
+                            {req.rejection_reason && (
+                              <p className="text-xs text-destructive">Reason: {req.rejection_reason}</p>
+                            )}
+                            {req.status === "for_approval" && canManage && (
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 text-success border-success/30"
+                                  onClick={() => handleApproveRequest(req)}
+                                >
+                                  <Check className="h-3 w-3" /> Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 text-destructive border-destructive/30"
+                                  onClick={() => setRejectRequest(req)}
+                                >
+                                  <X className="h-3 w-3" /> Reject
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </TabsContent>
+
+                <TabsContent value="return_requests">
+                  {(() => {
+                    const returnReqs = assetRequests.filter((r) => r.request_type === "return");
+                    return returnReqs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic py-4">No return requests.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {returnReqs.map((req) => (
+                          <div key={req.id} className="p-3 border rounded-lg text-sm space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-medium">{req.project?.name || "Unknown Project"}</span>
+                                <p className="text-xs text-muted-foreground">
+                                  By {req.requester_profile?.full_name || "Unknown"} • Qty: {req.quantity} •{" "}
+                                  {formatManilaTime(req.requested_at)}
+                                </p>
+                                {req.notes && (
+                                  <p className="text-xs text-muted-foreground">Notes: {req.notes}</p>
+                                )}
+                              </div>
+                              <Badge
+                                variant={
+                                  req.status === "for_approval"
+                                    ? "default"
+                                    : req.status === "approved"
+                                      ? "secondary"
+                                      : "destructive"
+                                }
+                              >
+                                {req.status === "for_approval" ? "Pending" : req.status}
+                              </Badge>
+                            </div>
+                            {req.rejection_reason && (
+                              <p className="text-xs text-destructive">Reason: {req.rejection_reason}</p>
+                            )}
+                            {req.status === "for_approval" && canManage && (
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 text-success border-success/30"
+                                  onClick={() => handleApproveRequest(req)}
+                                >
+                                  <Check className="h-3 w-3" /> Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs gap-1 text-destructive border-destructive/30"
+                                  onClick={() => setRejectRequest(req)}
+                                >
+                                  <X className="h-3 w-3" /> Reject
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </TabsContent>
+              </Tabs>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Request Dialog */}
+      <AlertDialog open={!!rejectRequest} onOpenChange={(open) => !open && setRejectRequest(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reject Request</AlertDialogTitle>
+            <AlertDialogDescription>
+              Provide a reason for rejecting this {rejectRequest?.request_type} request.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Textarea
+              placeholder="Rejection reason (optional)"
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              rows={2}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setRejectReason("")}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRejectRequest}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Reject
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create/Edit Modal */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
@@ -509,7 +907,6 @@ export default function CompanyAssets() {
                       {isBelowBorrowed && (
                         <p className="text-xs text-destructive">
                           Not allowed: Total quantity cannot be lower than currently borrowed quantity ({borrowed}).
-                          Return borrowed items first or set the quantity to at least {borrowed}.
                         </p>
                       )}
                     </div>
