@@ -131,8 +131,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAdmin = () => hasRole('admin') || hasRole('super_admin');
   const isSuperAdmin = () => hasRole('super_admin');
   const isApprover = () => hasRole('office_admin') || hasRole('admin') || hasRole('super_admin');
-  const isOfficeAdmin = () => hasRole('office_admin') || hasRole('admin') || hasRole('super_admin');
-  const isWarehouseAdmin = () => hasRole('warehouse_admin') || hasRole('admin') || hasRole('super_admin');
+  const isOfficeAdmin = () => hasRole('office_admin');
+  const isWarehouseAdmin = () => hasRole('warehouse_admin');
   const isProjectEngineer = () => hasRole('project_engineer');
   const isChecker = () => hasRole('checker');
   const isDriver = () => hasRole('driver') || hasRole('tracking_driver');

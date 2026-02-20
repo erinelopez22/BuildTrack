@@ -199,10 +199,14 @@ export function TrackingAssignmentSection({
       );
     }
 
-    const { data: driverRoles } = await supabase.from("user_roles").select("user_id").eq("role", "tracking_driver");
+    // Fetch drivers - users with role = 'driver' or 'tracking_driver'
+    const { data: driverRoles } = await supabase
+      .from("user_roles")
+      .select("user_id")
+      .in("role", ["driver", "tracking_driver"]);
 
     if (driverRoles && driverRoles.length > 0) {
-      const driverIds = driverRoles.map((r) => r.user_id);
+      const driverIds = [...new Set(driverRoles.map((r) => r.user_id))];
       const { data: driverProfiles } = await supabase
         .from("profiles")
         .select("id, full_name, email, phone")

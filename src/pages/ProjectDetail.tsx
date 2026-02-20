@@ -47,7 +47,7 @@ export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, user, isOfficeAdmin, isProjectEngineer, isSuperAdmin } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -588,50 +588,52 @@ export default function ProjectDetail() {
           </DialogHeader>
 
           <div className="space-y-6">
-            {/* Borrow Form */}
-            <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
-              <Label className="font-medium">Borrow an Asset</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <Select value={borrowAssetId} onValueChange={setBorrowAssetId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select asset..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {companyAssets
-                        .filter((a: any) => a.available_quantity > 0)
-                        .map((asset: any) => (
-                          <SelectItem key={asset.id} value={asset.id}>
-                            {asset.asset_name} — Avail: {asset.available_quantity} {asset.unit || "pcs"}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
+            {/* Borrow Form - Only for Super Admin, Admin, Office Admin, Project Engineer */}
+            {(isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer()) && (
+              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                <Label className="font-medium">Borrow an Asset</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <Select value={borrowAssetId} onValueChange={setBorrowAssetId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select asset..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {companyAssets
+                          .filter((a: any) => a.available_quantity > 0)
+                          .map((asset: any) => (
+                            <SelectItem key={asset.id} value={asset.id}>
+                              {asset.asset_name} — Avail: {asset.available_quantity} {asset.unit || "pcs"}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={companyAssets.find((a: any) => a.id === borrowAssetId)?.available_quantity || 1}
+                      value={borrowQty}
+                      onChange={(e) => setBorrowQty(parseInt(e.target.value) || 1)}
+                      placeholder="Qty"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={companyAssets.find((a: any) => a.id === borrowAssetId)?.available_quantity || 1}
-                    value={borrowQty}
-                    onChange={(e) => setBorrowQty(parseInt(e.target.value) || 1)}
-                    placeholder="Qty"
-                  />
-                </div>
+                <Button
+                  onClick={handleBorrow}
+                  disabled={!borrowAssetId || borrowQty < 1 || borrowLoading}
+                  className="w-full"
+                >
+                  {borrowLoading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Package className="h-4 w-4 mr-2" />
+                  )}
+                  Borrow
+                </Button>
               </div>
-              <Button
-                onClick={handleBorrow}
-                disabled={!borrowAssetId || borrowQty < 1 || borrowLoading}
-                className="w-full"
-              >
-                {borrowLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Package className="h-4 w-4 mr-2" />
-                )}
-                Borrow
-              </Button>
-            </div>
+            )}
 
             {/* Currently Borrowed Items */}
             <div className="space-y-3">

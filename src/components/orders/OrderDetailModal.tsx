@@ -66,7 +66,7 @@ interface OrderDetailModalProps {
 }
 
 export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }: OrderDetailModalProps) {
-  const { user, isSuperAdmin, isAdmin, canApproveOrders, canProcessLogistics, canReceiveOrders } = useAuth();
+  const { user, isSuperAdmin, isAdmin, canApproveOrders, canProcessLogistics, canReceiveOrders, isWarehouseAdmin } = useAuth();
   const { toast } = useToast();
   const [order, setOrder] = useState<Order | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
@@ -332,7 +332,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       disabled?: boolean;
     }[] = [];
     const hasFullAccess = isSuperAdmin() || isAdmin();
-    const canHold = hasFullAccess || canProcessLogistics();
+    const canHold = hasFullAccess || (canProcessLogistics() && !isWarehouseAdmin());
 
     switch (order.status) {
       case "for_approval":
@@ -447,7 +447,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
         }
         break;
       case "on_hold":
-        if (hasFullAccess || canProcessLogistics()) {
+        if (hasFullAccess || (canProcessLogistics() && !isWarehouseAdmin())) {
           const previousStatus = (order as any).previous_status as OrderStatus | null;
           const resumeStatus = previousStatus || "for_approval";
           const resumeLabel = resumeStatus.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
