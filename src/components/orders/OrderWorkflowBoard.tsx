@@ -29,9 +29,8 @@ const MAIN_WORKFLOW_LANES: { key: string; dbStatuses: OrderStatus[]; label: stri
   { key: "delivered", dbStatuses: ["delivered", "partially_received", "fully_received", "closed"], label: "Delivered", color: "bg-success/10 border-success/30" },
 ];
 
-// Exception lanes shown below main flow
+// Exception lanes shown below main flow (Rejected removed - shown in dedicated table on Orders page)
 const EXCEPTION_LANES: { key: string; dbStatuses: OrderStatus[]; label: string; color: string }[] = [
-  { key: "rejected", dbStatuses: ["rejected"], label: "Rejected", color: "bg-destructive/10 border-destructive/30" },
   { key: "on_hold", dbStatuses: ["on_hold"], label: "On Hold", color: "bg-amber-500/10 border-amber-500/30" },
 ];
 
