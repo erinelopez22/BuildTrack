@@ -140,6 +140,7 @@ export function TrackingAssignmentSection({
   const [receiverEvidence, setReceiverEvidence] = useState<Record<string, ReceiverEvidenceFile[]>>({});
   const [trackingRemarksMap, setTrackingRemarksMap] = useState<Record<string, string>>({});
   const [remarksSaving, setRemarksSaving] = useState<string | null>(null);
+  const [onTransitAt, setOnTransitAt] = useState<string | null>(null);
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   const canEdit = !readOnly && (isSuperAdmin() || isAdmin() || canProcessLogistics());
@@ -171,6 +172,16 @@ export function TrackingAssignmentSection({
 
   const fetchData = async () => {
     setLoading(true);
+
+    // Fetch on_transit_at from the order
+    const { data: orderData } = await supabase
+      .from("orders")
+      .select("on_transit_at")
+      .eq("id", orderId)
+      .single();
+    if (orderData?.on_transit_at) {
+      setOnTransitAt(orderData.on_transit_at);
+    }
 
     const { data: items } = await supabase
       .from("order_items")
@@ -1235,11 +1246,11 @@ export function TrackingAssignmentSection({
                 <p className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
                   <Clock className="h-3 w-3" /> Tracking Timeline
                 </p>
-                {assignment.created_at && (isInTransit || isDelivered || assignment.tracking_status === "arrived") && (
+                {onTransitAt && (isInTransit || isDelivered || assignment.tracking_status === "arrived") && (
                   <div className="flex items-center gap-2 text-xs">
                     <Truck className="h-3 w-3 text-blue-600 flex-shrink-0" />
                     <span className="text-muted-foreground">On Transit:</span>
-                    <span className="font-medium">{formatManilaTime(assignment.created_at)}</span>
+                    <span className="font-medium">{formatManilaTime(onTransitAt)}</span>
                   </div>
                 )}
                 {assignment.held_at && (
