@@ -93,6 +93,11 @@ export default function CompanyAssets() {
     notes: "",
   });
 
+  // Top-level tab + history project selector
+  const [activeTopTab, setActiveTopTab] = useState("assets");
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+
   const canManage = isAdmin();
   const canClickCards = isSuperAdmin() || isAdmin();
   const canAccessPage = isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer() || isChecker();
@@ -137,8 +142,22 @@ export default function CompanyAssets() {
     setLoading(false);
   };
 
+  const fetchProjects = async () => {
+    const { data } = await supabase
+      .from("projects")
+      .select("id, name")
+      .neq("status", "deleted")
+      .order("name");
+    const projectList = data || [];
+    setProjects(projectList);
+    if (projectList.length > 0 && !selectedProjectId) {
+      setSelectedProjectId(projectList[0].id);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchProjects();
   }, []);
 
   const getAvailableQty = (asset: CompanyAsset): number => {
@@ -479,6 +498,19 @@ export default function CompanyAssets() {
         description="Manage company-owned assets that can be borrowed by projects"
       />
 
+      <Tabs value={activeTopTab} onValueChange={setActiveTopTab}>
+        <TabsList>
+          <TabsTrigger value="assets" className="gap-1.5">
+            <Package className="h-4 w-4" />
+            Assets
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5">
+            <History className="h-4 w-4" />
+            History
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="assets" className="space-y-4 mt-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -611,6 +643,37 @@ export default function CompanyAssets() {
           })}
         </div>
       )}
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-4 space-y-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="w-full max-w-xs">
+              <Label className="text-xs text-muted-foreground mb-1 block">Select Project</Label>
+              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {selectedProjectId ? (
+            <EquipmentHistoryTab projectId={selectedProjectId} />
+          ) : (
+            <EmptyState
+              icon={History}
+              title="Select a project"
+              description="Choose a project above to view equipment history."
+            />
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Asset Detail Modal (Admin/Super Admin only) */}
       <Dialog open={!!selectedAsset} onOpenChange={(open) => !open && setSelectedAsset(null)}>
