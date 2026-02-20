@@ -143,10 +143,12 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     let { data: orderData } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
 
     // If not found in orders, try rejected_orders table
+    let rejected = false;
     if (!orderData) {
       const { data: rejectedData } = await supabase.from("rejected_orders").select("*").eq("id", orderId).maybeSingle();
       if (rejectedData) {
         orderData = rejectedData;
+        rejected = true;
         setIsRejectedOrder(true);
       }
     }
@@ -155,7 +157,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       setOrder(orderData as Order);
 
       // Fetch order items - from rejected_order_items if rejected, otherwise order_items
-      if (isRejectedOrder) {
+      if (rejected) {
         const { data: items } = await supabase
           .from("rejected_order_items" as any)
           .select("id, sku_id, quantity_ordered, quantity_received, notes")
