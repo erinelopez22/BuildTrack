@@ -9,7 +9,17 @@ import { CompletedOrdersModal } from "./CompletedOrdersModal";
 import { OnHoldReasonDialog } from "./OnHoldReasonDialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ArrowLeft, Loader2, Archive } from "lucide-react";
+import { Plus, ArrowLeft, Loader2, Archive, Trash2, XCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { logActivity } from "@/lib/activityLogger";
 import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 import type { Order, Project, OrderStatus } from "@/types/database";
@@ -35,7 +45,7 @@ const EXCEPTION_LANES: { key: string; dbStatuses: OrderStatus[]; label: string; 
 ];
 
 export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps) {
-  const { user, isSuperAdmin, isAdmin, canCreateOrders, canApproveOrders, canProcessLogistics, canReceiveOrders, isWarehouseAdmin } =
+  const { user, isSuperAdmin, isAdmin, canCreateOrders, canApproveOrders, canProcessLogistics, canReceiveOrders, isWarehouseAdmin, isOfficeAdmin, isProjectEngineer } =
     useAuth();
   const { toast } = useToast();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -48,13 +58,17 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   const [isRejecting, setIsRejecting] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
   const [isCompletedModalOpen, setIsCompletedModalOpen] = useState(false);
+  const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const canDeleteRejected = isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer();
 
   const fetchOrders = async () => {
     const { data, error } = await supabase
       .from("orders")
       .select("*")
       .eq("project_id", project.id)
-      .neq("status", "closed")
+      .not("status", "eq", "closed")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -63,6 +77,60 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       setOrders(data as Order[]);
     }
     setLoading(false);
+  };
+
+  const handleDeleteRejectedOrder = async () => {
+    if (!deletingOrderId || !user) return;
+    setDeleteLoading(true);
+
+    try {
+      const { data: assignments } = await supabase
+        .from("order_tracking_assignments")
+        .select("id")
+        .eq("order_id", deletingOrderId);
+
+      const assignmentIds = (assignments || []).map((a: any) => a.id);
+
+      if (assignmentIds.length > 0) {
+        await supabase.from("receiver_evidence").delete().in("order_tracking_assignment_id", assignmentIds);
+        await supabase.from("order_tracking_evidence").delete().in("order_tracking_assignment_id", assignmentIds);
+        await supabase.from("tracking_driver_materials").delete().in("tracking_assignment_id", assignmentIds);
+        await supabase.from("order_tracking_assignments").delete().eq("order_id", deletingOrderId);
+      }
+
+      await supabase.from("order_evidence").delete().eq("order_id", deletingOrderId);
+
+      const { data: deliveries } = await supabase
+        .from("deliveries")
+        .select("id")
+        .eq("order_id", deletingOrderId);
+
+      const deliveryIds = (deliveries || []).map((d: any) => d.id);
+      if (deliveryIds.length > 0) {
+        await supabase.from("delivery_items").delete().in("delivery_id", deliveryIds);
+        await supabase.from("deliveries").delete().eq("order_id", deletingOrderId);
+      }
+
+      await supabase.from("order_items").delete().eq("order_id", deletingOrderId);
+      await supabase.from("orders").delete().eq("id", deletingOrderId);
+
+      await logActivity({
+        action: "delete_rejected_order",
+        tableName: "orders",
+        recordId: deletingOrderId,
+        oldValues: { status: "rejected" },
+        newValues: null,
+        userId: user.id,
+      });
+
+      toast({ title: "Success", description: "Rejected order permanently deleted." });
+      setDeletingOrderId(null);
+      fetchOrders();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -544,7 +612,66 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         </div>
       </div>
 
-      {/* Create Order Modal */}
+      {/* Rejected Orders Section */}
+      {(() => {
+        const rejectedOrders = orders.filter(o => o.status === "rejected");
+        if (rejectedOrders.length === 0) return null;
+        return (
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-muted-foreground px-1 flex items-center gap-2">
+              <XCircle className="h-4 w-4 text-destructive" />
+              Rejected Orders ({rejectedOrders.length})
+            </h3>
+            <div className="border rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="text-left p-3 font-medium">Order #</th>
+                    <th className="text-left p-3 font-medium">Company</th>
+                    <th className="text-left p-3 font-medium">Rejection Reason</th>
+                    <th className="text-left p-3 font-medium">Rejected Date</th>
+                    {canDeleteRejected && <th className="text-center p-3 font-medium w-[60px]">Action</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rejectedOrders.map((order) => (
+                    <tr
+                      key={order.id}
+                      className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
+                      onClick={() => setSelectedOrderId(order.id)}
+                    >
+                      <td className="p-3 font-mono font-medium">{order.order_number}</td>
+                      <td className="p-3">{order.supplier_name || "Jagon"}</td>
+                      <td className="p-3 max-w-[250px] truncate" title={order.rejection_reason || ""}>
+                        {order.rejection_reason || "—"}
+                      </td>
+                      <td className="p-3 text-muted-foreground">
+                        {order.rejected_at ? formatManilaTime(order.rejected_at) : "—"}
+                      </td>
+                      {canDeleteRejected && (
+                        <td className="p-3 text-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingOrderId(order.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
+
       <CreateOrderModal
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
@@ -588,6 +715,29 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         onOpenChange={setIsCompletedModalOpen}
         onOrderDeleted={fetchOrders}
       />
+
+      {/* Delete Rejected Order Confirmation */}
+      <AlertDialog open={!!deletingOrderId} onOpenChange={(open) => !open && setDeletingOrderId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Rejected Order?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the rejected order and all related data (materials, tracking entries, driver assignments, evidence uploads). This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteRejectedOrder}
+              disabled={deleteLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Delete Permanently
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
