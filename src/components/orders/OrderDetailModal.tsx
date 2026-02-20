@@ -543,9 +543,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                         </div>
                       </div>
 
-                      <div className="flex items-start gap-3">
-                        <Calendar className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                      </div>
+                      <div className="flex items-start gap-3"></div>
 
                       {order.status !== "for_approval" &&
                         order.status !== "rejected" &&
