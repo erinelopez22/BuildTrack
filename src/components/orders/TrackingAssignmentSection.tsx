@@ -9,19 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -195,14 +184,11 @@ export function TrackingAssignmentSection({
           sku_name: item.skus?.name || "Unknown",
           unit: item.skus?.unit_of_measure || "pcs",
           quantity_ordered: item.quantity_ordered,
-        }))
+        })),
       );
     }
 
-    const { data: driverRoles } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .eq("role", "tracking_driver");
+    const { data: driverRoles } = await supabase.from("user_roles").select("user_id").eq("role", "tracking_driver");
 
     if (driverRoles && driverRoles.length > 0) {
       const driverIds = driverRoles.map((r) => r.user_id);
@@ -381,10 +367,7 @@ export function TrackingAssignmentSection({
     const assignment = assignments.find((a) => a.driver_user_id === driverUserId);
 
     if (assignment?.id && !assignment.isNew) {
-      const { error } = await supabase
-        .from("order_tracking_assignments")
-        .delete()
-        .eq("id", assignment.id);
+      const { error } = await supabase.from("order_tracking_assignments").delete().eq("id", assignment.id);
 
       if (error) {
         toast({ title: "Error", description: "Failed to remove driver assignment", variant: "destructive" });
@@ -395,7 +378,10 @@ export function TrackingAssignmentSection({
         action: "tracking_removed",
         tableName: "orders",
         recordId: orderId,
-        oldValues: { driver_name: assignment.driver.full_name || assignment.driver.email, plate_number: assignment.plate_number },
+        oldValues: {
+          driver_name: assignment.driver.full_name || assignment.driver.email,
+          plate_number: assignment.plate_number,
+        },
         newValues: null,
         userId: user?.id,
       });
@@ -416,11 +402,7 @@ export function TrackingAssignmentSection({
   };
 
   const handleFieldChange = (driverUserId: string, field: keyof DriverAssignment, value: string) => {
-    setAssignments((prev) =>
-      prev.map((a) =>
-        a.driver_user_id === driverUserId ? { ...a, [field]: value } : a
-      )
-    );
+    setAssignments((prev) => prev.map((a) => (a.driver_user_id === driverUserId ? { ...a, [field]: value } : a)));
     setHasSaved(false);
   };
 
@@ -451,7 +433,7 @@ export function TrackingAssignmentSection({
             },
           ],
         };
-      })
+      }),
     );
     setHasSaved(false);
   };
@@ -461,7 +443,7 @@ export function TrackingAssignmentSection({
       prev.map((a) => {
         if (a.driver_user_id !== driverUserId) return a;
         return { ...a, materials: a.materials.filter((m) => m.order_item_id !== orderItemId) };
-      })
+      }),
     );
     setHasSaved(false);
   };
@@ -476,10 +458,10 @@ export function TrackingAssignmentSection({
         return {
           ...a,
           materials: a.materials.map((m) =>
-            m.order_item_id === orderItemId ? { ...m, assigned_quantity: clampedQty } : m
+            m.order_item_id === orderItemId ? { ...m, assigned_quantity: clampedQty } : m,
           ),
         };
-      })
+      }),
     );
     setHasSaved(false);
   };
@@ -497,19 +479,15 @@ export function TrackingAssignmentSection({
     }
 
     setAssignments((prev) =>
-      prev.map((a) =>
-        a.driver_user_id === driverUserId ? { ...a, evidence: [...a.evidence, ...newEvidence] } : a
-      )
+      prev.map((a) => (a.driver_user_id === driverUserId ? { ...a, evidence: [...a.evidence, ...newEvidence] } : a)),
     );
   };
 
   const handleRemoveEvidence = (driverUserId: string, index: number) => {
     setAssignments((prev) =>
       prev.map((a) =>
-        a.driver_user_id === driverUserId
-          ? { ...a, evidence: a.evidence.filter((_, i) => i !== index) }
-          : a
-      )
+        a.driver_user_id === driverUserId ? { ...a, evidence: a.evidence.filter((_, i) => i !== index) } : a,
+      ),
     );
   };
 
@@ -528,27 +506,21 @@ export function TrackingAssignmentSection({
       const fileExt = file.name.split(".").pop();
       const fileName = `${orderId}/${assignmentId}/${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("tracking-evidence")
-        .upload(fileName, file);
+      const { error: uploadError } = await supabase.storage.from("tracking-evidence").upload(fileName, file);
 
       if (uploadError) {
         toast({ title: "Upload Error", description: uploadError.message, variant: "destructive" });
         continue;
       }
 
-      const { data: urlData } = supabase.storage
-        .from("tracking-evidence")
-        .getPublicUrl(fileName);
+      const { data: urlData } = supabase.storage.from("tracking-evidence").getPublicUrl(fileName);
 
-      const { error: evidenceError } = await supabase
-        .from("order_tracking_evidence")
-        .insert({
-          order_tracking_assignment_id: assignmentId,
-          file_url: urlData.publicUrl,
-          file_name: file.name,
-          uploaded_by: user.id,
-        });
+      const { error: evidenceError } = await supabase.from("order_tracking_evidence").insert({
+        order_tracking_assignment_id: assignmentId,
+        file_url: urlData.publicUrl,
+        file_name: file.name,
+        uploaded_by: user.id,
+      });
 
       if (evidenceError) {
         toast({ title: "Error", description: evidenceError.message, variant: "destructive" });
@@ -563,11 +535,16 @@ export function TrackingAssignmentSection({
                 ...a,
                 evidence: [
                   ...a.evidence,
-                  { file_url: urlData.publicUrl, file_name: file.name, uploaded_by: user.id, uploaded_at: new Date().toISOString() },
+                  {
+                    file_url: urlData.publicUrl,
+                    file_name: file.name,
+                    uploaded_by: user.id,
+                    uploaded_at: new Date().toISOString(),
+                  },
                 ],
               }
-            : a
-        )
+            : a,
+        ),
       );
     }
 
@@ -587,18 +564,14 @@ export function TrackingAssignmentSection({
       const fileExt = file.name.split(".").pop();
       const fileName = `${orderId}/receiver/${assignmentId}/${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from("tracking-evidence")
-        .upload(fileName, file);
+      const { error: uploadError } = await supabase.storage.from("tracking-evidence").upload(fileName, file);
 
       if (uploadError) {
         toast({ title: "Upload Error", description: uploadError.message, variant: "destructive" });
         continue;
       }
 
-      const { data: urlData } = supabase.storage
-        .from("tracking-evidence")
-        .getPublicUrl(fileName);
+      const { data: urlData } = supabase.storage.from("tracking-evidence").getPublicUrl(fileName);
 
       const { data: inserted, error: insertError } = await supabase
         .from("receiver_evidence")
@@ -660,7 +633,11 @@ export function TrackingAssignmentSection({
 
     // Block deletion for delivered orders
     if (status === "delivered") {
-      toast({ title: "Locked", description: "Evidence cannot be removed from delivered orders.", variant: "destructive" });
+      toast({
+        title: "Locked",
+        description: "Evidence cannot be removed from delivered orders.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -668,7 +645,11 @@ export function TrackingAssignmentSection({
     const canRemove = isSuperAdmin() || isAdmin() || canProcessLogistics();
     const ev = (receiverEvidence[assignmentId] || []).find((e) => e.id === evidenceId);
     if (!canRemove && ev?.uploaded_by !== user.id) {
-      toast({ title: "Permission Denied", description: "Only the uploader, Admin, or Tracking Admin can remove evidence.", variant: "destructive" });
+      toast({
+        title: "Permission Denied",
+        description: "Only the uploader, Admin, or Tracking Admin can remove evidence.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -716,18 +697,31 @@ export function TrackingAssignmentSection({
   };
 
   // Remove preparing evidence (saved evidence with id)
-  const handleRemovePreparingEvidence = async (assignmentId: string, evidenceId: string, driverUserId: string, fileName: string) => {
+  const handleRemovePreparingEvidence = async (
+    assignmentId: string,
+    evidenceId: string,
+    driverUserId: string,
+    fileName: string,
+  ) => {
     if (!user) return;
 
     // Block deletion for delivered orders
     if (status === "delivered") {
-      toast({ title: "Locked", description: "Evidence cannot be removed from delivered orders.", variant: "destructive" });
+      toast({
+        title: "Locked",
+        description: "Evidence cannot be removed from delivered orders.",
+        variant: "destructive",
+      });
       return;
     }
 
     const canRemove = isSuperAdmin() || isAdmin() || canProcessLogistics();
     if (!canRemove) {
-      toast({ title: "Permission Denied", description: "Only Admin or Tracking Admin can remove evidence.", variant: "destructive" });
+      toast({
+        title: "Permission Denied",
+        description: "Only Admin or Tracking Admin can remove evidence.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -750,10 +744,8 @@ export function TrackingAssignmentSection({
     // Update local state
     setAssignments((prev) =>
       prev.map((a) =>
-        a.driver_user_id === driverUserId
-          ? { ...a, evidence: a.evidence.filter((e) => e.id !== evidenceId) }
-          : a
-      )
+        a.driver_user_id === driverUserId ? { ...a, evidence: a.evidence.filter((e) => e.id !== evidenceId) } : a,
+      ),
     );
 
     await logActivity({
@@ -784,7 +776,11 @@ export function TrackingAssignmentSection({
     // Check RECEIVER evidence exists (not preparing evidence)
     const recEv = receiverEvidence[assignmentId] || [];
     if (recEv.length === 0) {
-      toast({ title: "Evidence Required", description: "Receiver's evidence photo is required before tracking arrived.", variant: "destructive" });
+      toast({
+        title: "Evidence Required",
+        description: "Receiver's evidence photo is required before tracking arrived.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -803,9 +799,7 @@ export function TrackingAssignmentSection({
     }
 
     setAssignments((prev) =>
-      prev.map((a) =>
-        a.id === assignmentId ? { ...a, tracking_status: "arrived", arrived_at: arrivedAt } : a
-      )
+      prev.map((a) => (a.id === assignmentId ? { ...a, tracking_status: "arrived", arrived_at: arrivedAt } : a)),
     );
 
     await logActivity({
@@ -833,7 +827,7 @@ export function TrackingAssignmentSection({
 
   const handleHoldDriver = async () => {
     if (!user || !holdDialogDriverId || !holdRemarks.trim()) return;
-    
+
     const assignment = assignments.find((a) => a.id === holdDialogDriverId);
     if (!assignment) return;
 
@@ -857,8 +851,8 @@ export function TrackingAssignmentSection({
       prev.map((a) =>
         a.id === holdDialogDriverId
           ? { ...a, tracking_status: "on_hold", hold_remarks: holdRemarks.trim(), held_at: heldAt }
-          : a
-      )
+          : a,
+      ),
     );
 
     await logActivity({
@@ -912,8 +906,8 @@ export function TrackingAssignmentSection({
       prev.map((a) =>
         a.id === resumeDialogDriverId
           ? { ...a, tracking_status: "on_transit", resumed_at: resumedAt, resume_remarks: resumeRemarks.trim() }
-          : a
-      )
+          : a,
+      ),
     );
 
     await logActivity({
@@ -921,7 +915,12 @@ export function TrackingAssignmentSection({
       tableName: "orders",
       recordId: orderId,
       oldValues: { tracking_status: "on_hold", hold_remarks: assignment.hold_remarks },
-      newValues: { tracking_status: "on_transit", driver_name: driverName, resume_remarks: resumeRemarks.trim(), resumed_at: resumedAt },
+      newValues: {
+        tracking_status: "on_transit",
+        driver_name: driverName,
+        resume_remarks: resumeRemarks.trim(),
+        resumed_at: resumedAt,
+      },
       userId: user.id,
     });
 
@@ -1030,18 +1029,14 @@ export function TrackingAssignmentSection({
 
             if (uploadError) throw uploadError;
 
-            const { data: urlData } = supabase.storage
-              .from("tracking-evidence")
-              .getPublicUrl(fileName);
+            const { data: urlData } = supabase.storage.from("tracking-evidence").getPublicUrl(fileName);
 
-            const { error: evidenceError } = await supabase
-              .from("order_tracking_evidence")
-              .insert({
-                order_tracking_assignment_id: assignmentId,
-                file_url: urlData.publicUrl,
-                file_name: evidence.file_name,
-                uploaded_by: user.id,
-              });
+            const { error: evidenceError } = await supabase.from("order_tracking_evidence").insert({
+              order_tracking_assignment_id: assignmentId,
+              file_url: urlData.publicUrl,
+              file_name: evidence.file_name,
+              uploaded_by: user.id,
+            });
 
             if (evidenceError) throw evidenceError;
           }
@@ -1049,10 +1044,7 @@ export function TrackingAssignmentSection({
 
         // Save material assignments
         if (assignmentId) {
-          await supabase
-            .from("tracking_driver_materials")
-            .delete()
-            .eq("tracking_assignment_id", assignmentId);
+          await supabase.from("tracking_driver_materials").delete().eq("tracking_assignment_id", assignmentId);
 
           if (assignment.materials.length > 0) {
             const materialInserts = assignment.materials.map((m) => ({
@@ -1061,9 +1053,7 @@ export function TrackingAssignmentSection({
               assigned_quantity: m.assigned_quantity,
             }));
 
-            const { error: matError } = await supabase
-              .from("tracking_driver_materials")
-              .insert(materialInserts);
+            const { error: matError } = await supabase.from("tracking_driver_materials").insert(materialInserts);
 
             if (matError) throw matError;
           }
@@ -1112,11 +1102,26 @@ export function TrackingAssignmentSection({
   const getDriverStatusBadge = (trackingStatus: string) => {
     switch (trackingStatus) {
       case "arrived":
-        return <Badge className="bg-success/20 text-success border-success/30 text-[10px]"><CheckCircle2 className="h-3 w-3 mr-1" />Arrived</Badge>;
+        return (
+          <Badge className="bg-success/20 text-success border-success/30 text-[10px]">
+            <CheckCircle2 className="h-3 w-3 mr-1" />
+            Arrived
+          </Badge>
+        );
       case "on_hold":
-        return <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]"><PauseCircle className="h-3 w-3 mr-1" />Hold</Badge>;
+        return (
+          <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px]">
+            <PauseCircle className="h-3 w-3 mr-1" />
+            Hold
+          </Badge>
+        );
       default:
-        return <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-[10px]"><Truck className="h-3 w-3 mr-1" />On Transit</Badge>;
+        return (
+          <Badge className="bg-blue-500/20 text-blue-600 border-blue-500/30 text-[10px]">
+            <Truck className="h-3 w-3 mr-1" />
+            On Transit
+          </Badge>
+        );
     }
   };
 
@@ -1128,15 +1133,16 @@ export function TrackingAssignmentSection({
     );
   }
 
-  const availableDrivers = drivers.filter(
-    (d) => !assignments.some((a) => a.driver_user_id === d.id)
-  );
+  const availableDrivers = drivers.filter((d) => !assignments.some((a) => a.driver_user_id === d.id));
 
   // === COLLAPSED VIEW (compact summary per driver) ===
   const collapsedViewContent = (
     <div className="space-y-1.5">
       {assignments.map((a) => (
-        <div key={a.driver_user_id} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
+        <div
+          key={a.driver_user_id}
+          className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm"
+        >
           <div className="flex items-center gap-2 min-w-0">
             <Truck className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             <span className="font-medium truncate">{a.driver.full_name || a.driver.email}</span>
@@ -1148,12 +1154,12 @@ export function TrackingAssignmentSection({
               {a.tracking_status === "arrived" && a.arrived_at
                 ? `Arrived: ${formatManilaTime(a.arrived_at)}`
                 : a.tracking_status === "on_hold" && a.held_at
-                ? `Held: ${formatManilaTime(a.held_at)}`
-                : a.tracking_status === "on_transit" && a.resumed_at
-                ? `Since: ${formatManilaTime(a.resumed_at)}`
-                : a.created_at
-                ? `Since: ${formatManilaTime(a.created_at)}`
-                : ""}
+                  ? `Held: ${formatManilaTime(a.held_at)}`
+                  : a.tracking_status === "on_transit" && a.resumed_at
+                    ? `Since: ${formatManilaTime(a.resumed_at)}`
+                    : a.created_at
+                      ? `Since: ${formatManilaTime(a.created_at)}`
+                      : ""}
             </span>
           </div>
         </div>
@@ -1165,10 +1171,7 @@ export function TrackingAssignmentSection({
   const expandedViewContent = (
     <div className="space-y-4">
       {assignments.map((assignment) => (
-        <div
-          key={assignment.driver_user_id}
-          className="border rounded-lg p-4 space-y-3 bg-card"
-        >
+        <div key={assignment.driver_user_id} className="border rounded-lg p-4 space-y-3 bg-card">
           {/* Driver Header */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
@@ -1226,49 +1229,44 @@ export function TrackingAssignmentSection({
           </div>
 
           {/* Milestone Timestamps */}
-          {assignment.id && (assignment.created_at || assignment.arrived_at || assignment.held_at || assignment.resumed_at) && (
-            <div className="space-y-1.5 border rounded-md px-3 py-2.5 bg-muted/30">
-              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
-                <Clock className="h-3 w-3" /> Tracking Timeline
-              </p>
-              {assignment.created_at && (
-                <div className="flex items-center gap-2 text-xs">
-                  <Truck className="h-3 w-3 text-blue-600 flex-shrink-0" />
-                  <span className="text-muted-foreground">On Transit:</span>
-                  <span className="font-medium">{formatManilaTime(assignment.created_at)}</span>
-                </div>
-              )}
-              {assignment.held_at && (
-                <div className="flex items-center gap-2 text-xs">
-                  <PauseCircle className="h-3 w-3 text-amber-600 flex-shrink-0" />
-                  <span className="text-muted-foreground">Hold:</span>
-                  <span className="font-medium text-amber-700 dark:text-amber-400">{formatManilaTime(assignment.held_at)}</span>
-                </div>
-              )}
-              {assignment.resumed_at && (
-                <div className="flex items-center gap-2 text-xs">
-                  <Truck className="h-3 w-3 text-blue-600 flex-shrink-0" />
-                  <span className="text-muted-foreground">Resumed:</span>
-                  <span className="font-medium">{formatManilaTime(assignment.resumed_at)}</span>
-                </div>
-              )}
-              {assignment.arrived_at && (
-                <div className="flex items-center gap-2 text-xs">
-                  <CheckCircle2 className="h-3 w-3 text-success flex-shrink-0" />
-                  <span className="text-muted-foreground">Arrived:</span>
-                  <span className="font-medium text-success">{formatManilaTime(assignment.arrived_at)}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Arrival / Hold info (status banners) */}
-          {assignment.tracking_status === "arrived" && assignment.arrived_at && (
-            <div className="flex items-center gap-2 text-sm bg-success/10 border border-success/20 rounded-md px-3 py-2">
-              <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
-              <span className="text-success font-medium">Arrived at: {formatManilaTime(assignment.arrived_at)}</span>
-            </div>
-          )}
+          {assignment.id &&
+            (assignment.created_at || assignment.arrived_at || assignment.held_at || assignment.resumed_at) && (
+              <div className="space-y-1.5 border rounded-md px-3 py-2.5 bg-muted/30">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
+                  <Clock className="h-3 w-3" /> Tracking Timeline
+                </p>
+                {assignment.created_at && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Truck className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                    <span className="text-muted-foreground">On Transit:</span>
+                    <span className="font-medium">{formatManilaTime(assignment.created_at)}</span>
+                  </div>
+                )}
+                {assignment.held_at && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <PauseCircle className="h-3 w-3 text-amber-600 flex-shrink-0" />
+                    <span className="text-muted-foreground">Hold:</span>
+                    <span className="font-medium text-amber-700 dark:text-amber-400">
+                      {formatManilaTime(assignment.held_at)}
+                    </span>
+                  </div>
+                )}
+                {assignment.resumed_at && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Truck className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                    <span className="text-muted-foreground">Resumed:</span>
+                    <span className="font-medium">{formatManilaTime(assignment.resumed_at)}</span>
+                  </div>
+                )}
+                {assignment.arrived_at && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <CheckCircle2 className="h-3 w-3 text-success flex-shrink-0" />
+                    <span className="text-muted-foreground">Arrived:</span>
+                    <span className="font-medium text-success">{formatManilaTime(assignment.arrived_at)}</span>
+                  </div>
+                )}
+              </div>
+            )}
 
           {assignment.tracking_status === "on_hold" && (
             <div className="space-y-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
@@ -1334,104 +1332,114 @@ export function TrackingAssignmentSection({
           )}
 
           {/* Per-driver action buttons (On Transit page only) */}
-          {isInTransit && canDoDriverActions && assignment.id && assignment.tracking_status === "on_transit" && (() => {
-            const driverReceiverEv = receiverEvidence[assignment.id!] || [];
-            const hasReceiverEvidence = driverReceiverEv.length > 0;
-            return (
-            <div className="space-y-3 pt-1">
-              {/* Receiver's Evidence requirement notice */}
-              {!hasReceiverEvidence && (
-                <div className="flex items-center gap-2 text-xs bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2 text-amber-600">
-                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
-                  Receiver's evidence photo is required before tracking arrived.
-                </div>
-              )}
-              {/* Receiver's Evidence Upload */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted-foreground">Receiver's Evidence</p>
-                  <div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      ref={(el) => { fileInputRefs.current[`receiver_${assignment.id}`] = el; }}
-                      onChange={(e) => handleReceiverEvidenceUpload(assignment.id!, e.target.files)}
-                    />
+          {isInTransit &&
+            canDoDriverActions &&
+            assignment.id &&
+            assignment.tracking_status === "on_transit" &&
+            (() => {
+              const driverReceiverEv = receiverEvidence[assignment.id!] || [];
+              const hasReceiverEvidence = driverReceiverEv.length > 0;
+              return (
+                <div className="space-y-3 pt-1">
+                  {/* Receiver's Evidence requirement notice */}
+                  {!hasReceiverEvidence && (
+                    <div className="flex items-center gap-2 text-xs bg-amber-500/10 border border-amber-500/20 rounded-md px-3 py-2 text-amber-600">
+                      <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                      Receiver's evidence photo is required before tracking arrived.
+                    </div>
+                  )}
+                  {/* Receiver's Evidence Upload */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-medium text-muted-foreground">Receiver's Evidence</p>
+                      <div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          ref={(el) => {
+                            fileInputRefs.current[`receiver_${assignment.id}`] = el;
+                          }}
+                          onChange={(e) => handleReceiverEvidenceUpload(assignment.id!, e.target.files)}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => fileInputRefs.current[`receiver_${assignment.id}`]?.click()}
+                        >
+                          <Upload className="h-3 w-3 mr-1" /> Upload Receiver Evidence
+                        </Button>
+                      </div>
+                    </div>
+                    {driverReceiverEv.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {driverReceiverEv.map((ev, index) => (
+                          <div key={ev.id} className="relative">
+                            <img
+                              src={ev.file_url}
+                              alt={ev.file_name}
+                              className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => {
+                                window.dispatchEvent(
+                                  new CustomEvent("open-lightbox", {
+                                    detail: {
+                                      images: driverReceiverEv.map((e) => ({ url: e.file_url, name: e.file_name })),
+                                      startIndex: index,
+                                    },
+                                  }),
+                                );
+                              }}
+                            />
+                            {!isDelivered && (
+                              <button
+                                className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
+                                onClick={() => handleRemoveReceiverEvidence(assignment.id!, ev.id, ev.file_name)}
+                                title="Remove evidence"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">No receiver evidence uploaded yet</p>
+                    )}
+                  </div>
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2">
                     <Button
-                      variant="outline"
                       size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => fileInputRefs.current[`receiver_${assignment.id}`]?.click()}
+                      variant="outline"
+                      className="gap-1.5 text-success border-success/30 hover:bg-success/10"
+                      onClick={() =>
+                        handleTrackArrived(assignment.id!, assignment.driver.full_name || assignment.driver.email)
+                      }
+                      disabled={actionLoading === assignment.id || !hasReceiverEvidence}
                     >
-                      <Upload className="h-3 w-3 mr-1" /> Upload Receiver Evidence
+                      {actionLoading === assignment.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <MapPin className="h-3.5 w-3.5" />
+                      )}
+                      Track Arrived
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
+                      onClick={() => setHoldDialogDriverId(assignment.id!)}
+                      disabled={actionLoading === assignment.id}
+                    >
+                      <PauseCircle className="h-3.5 w-3.5" />
+                      Hold
                     </Button>
                   </div>
                 </div>
-                {driverReceiverEv.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {driverReceiverEv.map((ev, index) => (
-                      <div key={ev.id} className="relative">
-                        <img
-                          src={ev.file_url}
-                          alt={ev.file_name}
-                          className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
-                          onClick={() => {
-                            window.dispatchEvent(new CustomEvent("open-lightbox", {
-                              detail: {
-                                images: driverReceiverEv.map((e) => ({ url: e.file_url, name: e.file_name })),
-                                startIndex: index,
-                              },
-                            }));
-                          }}
-                        />
-                        {!isDelivered && (
-                        <button
-                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
-                          onClick={() => handleRemoveReceiverEvidence(assignment.id!, ev.id, ev.file_name)}
-                          title="Remove evidence"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-muted-foreground italic">No receiver evidence uploaded yet</p>
-                )}
-              </div>
-              {/* Action buttons */}
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-success border-success/30 hover:bg-success/10"
-                  onClick={() => handleTrackArrived(assignment.id!, assignment.driver.full_name || assignment.driver.email)}
-                  disabled={actionLoading === assignment.id || !hasReceiverEvidence}
-                >
-                  {actionLoading === assignment.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <MapPin className="h-3.5 w-3.5" />
-                  )}
-                  Track Arrived
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 text-amber-600 border-amber-500/30 hover:bg-amber-500/10"
-                  onClick={() => setHoldDialogDriverId(assignment.id!)}
-                  disabled={actionLoading === assignment.id}
-                >
-                  <PauseCircle className="h-3.5 w-3.5" />
-                  Hold
-                </Button>
-              </div>
-            </div>
-            );
-          })()}
+              );
+            })()}
 
           {/* Resume button for On Hold drivers */}
           {isInTransit && canDoDriverActions && assignment.id && assignment.tracking_status === "on_hold" && (
@@ -1516,7 +1524,7 @@ export function TrackingAssignmentSection({
                               handleMaterialQuantityChange(
                                 assignment.driver_user_id,
                                 mat.order_item_id,
-                                parseInt(e.target.value) || 1
+                                parseInt(e.target.value) || 1,
                               )
                             }
                             className="h-8 w-20 text-sm"
@@ -1532,7 +1540,9 @@ export function TrackingAssignmentSection({
                           </Button>
                         </div>
                       ) : (
-                        <span className="font-mono text-sm">{mat.assigned_quantity} {mat.unit}</span>
+                        <span className="font-mono text-sm">
+                          {mat.assigned_quantity} {mat.unit}
+                        </span>
                       )}
                     </div>
                   );
@@ -1554,7 +1564,9 @@ export function TrackingAssignmentSection({
                     accept="image/*"
                     multiple
                     className="hidden"
-                    ref={(el) => { fileInputRefs.current[assignment.driver_user_id] = el; }}
+                    ref={(el) => {
+                      fileInputRefs.current[assignment.driver_user_id] = el;
+                    }}
                     onChange={(e) => handleFileSelect(assignment.driver_user_id, e.target.files)}
                   />
                   <Button
@@ -1578,22 +1590,30 @@ export function TrackingAssignmentSection({
                         alt={evidence.file_name}
                         className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => {
-                          window.dispatchEvent(new CustomEvent("open-lightbox", {
-                            detail: {
-                              images: assignment.evidence.map((e) => ({ url: e.file_url, name: e.file_name })),
-                              startIndex: index,
-                            },
-                          }));
+                          window.dispatchEvent(
+                            new CustomEvent("open-lightbox", {
+                              detail: {
+                                images: assignment.evidence.map((e) => ({ url: e.file_url, name: e.file_name })),
+                                startIndex: index,
+                              },
+                            }),
+                          );
                         }}
                       />
                       {evidence.uploaded_at && (
-                        <p className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate" title={formatManilaTime(evidence.uploaded_at)}>
+                        <p
+                          className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate"
+                          title={formatManilaTime(evidence.uploaded_at)}
+                        >
                           {formatManilaTime(evidence.uploaded_at)}
                         </p>
                       )}
                     </div>
                     {evidence.isUploading && (
-                      <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center" style={{ bottom: evidence.uploaded_at ? '18px' : '0' }}>
+                      <div
+                        className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center"
+                        style={{ bottom: evidence.uploaded_at ? "18px" : "0" }}
+                      >
                         <Loader2 className="h-4 w-4 animate-spin text-white" />
                       </div>
                     )}
@@ -1602,7 +1622,12 @@ export function TrackingAssignmentSection({
                         className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
                         onClick={() => {
                           if (evidence.id && assignment.id) {
-                            handleRemovePreparingEvidence(assignment.id, evidence.id, assignment.driver_user_id, evidence.file_name);
+                            handleRemovePreparingEvidence(
+                              assignment.id,
+                              evidence.id,
+                              assignment.driver_user_id,
+                              evidence.file_name,
+                            );
                           } else {
                             handleRemoveEvidence(assignment.driver_user_id, index);
                           }
@@ -1623,42 +1648,53 @@ export function TrackingAssignmentSection({
           {/* Receiver's Evidence (display for all statuses, with remove for authorized) */}
           {assignment.id && (receiverEvidence[assignment.id] || []).length > 0 && !isInTransit && (
             <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Receiver's Evidence ({(receiverEvidence[assignment.id] || []).length})</p>
+              <p className="text-xs font-medium text-muted-foreground">
+                Receiver's Evidence ({(receiverEvidence[assignment.id] || []).length})
+              </p>
               <div className="flex flex-wrap gap-2">
                 {(receiverEvidence[assignment.id] || []).map((ev, index) => {
-                  const canRemoveEvidence = isSuperAdmin() || isAdmin() || canProcessLogistics() || ev.uploaded_by === user?.id;
+                  const canRemoveEvidence =
+                    isSuperAdmin() || isAdmin() || canProcessLogistics() || ev.uploaded_by === user?.id;
                   return (
-                  <div key={ev.id} className="relative">
-                    <div>
-                      <img
-                        src={ev.file_url}
-                        alt={ev.file_name}
-                        className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => {
-                          window.dispatchEvent(new CustomEvent("open-lightbox", {
-                            detail: {
-                              images: (receiverEvidence[assignment.id!] || []).map((e) => ({ url: e.file_url, name: e.file_name })),
-                              startIndex: index,
-                            },
-                          }));
-                        }}
-                      />
-                      {ev.uploaded_at && (
-                        <p className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate" title={formatManilaTime(ev.uploaded_at)}>
-                          {formatManilaTime(ev.uploaded_at)}
-                        </p>
+                    <div key={ev.id} className="relative">
+                      <div>
+                        <img
+                          src={ev.file_url}
+                          alt={ev.file_name}
+                          className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent("open-lightbox", {
+                                detail: {
+                                  images: (receiverEvidence[assignment.id!] || []).map((e) => ({
+                                    url: e.file_url,
+                                    name: e.file_name,
+                                  })),
+                                  startIndex: index,
+                                },
+                              }),
+                            );
+                          }}
+                        />
+                        {ev.uploaded_at && (
+                          <p
+                            className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate"
+                            title={formatManilaTime(ev.uploaded_at)}
+                          >
+                            {formatManilaTime(ev.uploaded_at)}
+                          </p>
+                        )}
+                      </div>
+                      {canRemoveEvidence && !isDelivered && (
+                        <button
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
+                          onClick={() => handleRemoveReceiverEvidence(assignment.id!, ev.id, ev.file_name)}
+                          title="Remove evidence"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
                       )}
                     </div>
-                    {canRemoveEvidence && !isDelivered && (
-                      <button
-                        className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
-                        onClick={() => handleRemoveReceiverEvidence(assignment.id!, ev.id, ev.file_name)}
-                        title="Remove evidence"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
                   );
                 })}
               </div>
@@ -1742,9 +1778,7 @@ export function TrackingAssignmentSection({
           {!isExpanded && <div className="mt-2">{collapsedViewContent}</div>}
 
           {/* Expanded full view */}
-          <CollapsibleContent className="mt-3">
-            {expandedViewContent}
-          </CollapsibleContent>
+          <CollapsibleContent className="mt-3">{expandedViewContent}</CollapsibleContent>
         </Collapsible>
       )}
 
@@ -1754,12 +1788,20 @@ export function TrackingAssignmentSection({
           <Button
             className="w-full"
             onClick={handleSaveAssignments}
-            disabled={saving || assignments.some((a) => !a.plate_number.trim()) || assignments.some((a) => a.evidence.length === 0)}
+            disabled={
+              saving ||
+              assignments.some((a) => !a.plate_number.trim()) ||
+              assignments.some((a) => a.evidence.length === 0)
+            }
           >
             {saving ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...
+              </>
             ) : (
-              <><Check className="h-4 w-4 mr-2" /> Save Tracking Assignment</>
+              <>
+                <Check className="h-4 w-4 mr-2" /> Save Tracking Assignment
+              </>
             )}
           </Button>
           {!hasSaved && (
@@ -1776,16 +1818,22 @@ export function TrackingAssignmentSection({
       )}
 
       {/* Hold Remarks Dialog */}
-      <AlertDialog open={!!holdDialogDriverId} onOpenChange={(open) => { if (!open) { setHoldDialogDriverId(null); setHoldRemarks(""); } }}>
+      <AlertDialog
+        open={!!holdDialogDriverId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setHoldDialogDriverId(null);
+            setHoldRemarks("");
+          }
+        }}
+      >
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
               <PauseCircle className="h-5 w-5" />
               Hold Driver
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Please provide remarks for placing this driver on hold.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Please provide remarks for placing this driver on hold.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
             <Textarea
@@ -1796,7 +1844,14 @@ export function TrackingAssignmentSection({
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setHoldDialogDriverId(null); setHoldRemarks(""); }}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel
+              onClick={() => {
+                setHoldDialogDriverId(null);
+                setHoldRemarks("");
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleHoldDriver}
               disabled={!holdRemarks.trim() || !!actionLoading}
@@ -1810,16 +1865,22 @@ export function TrackingAssignmentSection({
       </AlertDialog>
 
       {/* Resume Remarks Dialog */}
-      <AlertDialog open={!!resumeDialogDriverId} onOpenChange={(open) => { if (!open) { setResumeDialogDriverId(null); setResumeRemarks(""); } }}>
+      <AlertDialog
+        open={!!resumeDialogDriverId}
+        onOpenChange={(open) => {
+          if (!open) {
+            setResumeDialogDriverId(null);
+            setResumeRemarks("");
+          }
+        }}
+      >
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-blue-600">
               <Truck className="h-5 w-5" />
               Resume Driver
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              Please provide remarks for resuming this driver from hold.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Please provide remarks for resuming this driver from hold.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
             <Textarea
@@ -1830,7 +1891,14 @@ export function TrackingAssignmentSection({
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setResumeDialogDriverId(null); setResumeRemarks(""); }}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel
+              onClick={() => {
+                setResumeDialogDriverId(null);
+                setResumeRemarks("");
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleResumeDriver}
               disabled={!resumeRemarks.trim() || !!actionLoading}
