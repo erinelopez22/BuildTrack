@@ -227,8 +227,7 @@ export default function Orders() {
       key: "status",
       header: "Status",
       render: (order) => <StatusBadge status={order.status} />,
-    }
-
+    },
     {
       key: "created",
       header: (
