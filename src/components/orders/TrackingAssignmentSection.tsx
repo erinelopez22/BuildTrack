@@ -1225,7 +1225,44 @@ export function TrackingAssignmentSection({
             )}
           </div>
 
-          {/* Arrival / Hold info */}
+          {/* Milestone Timestamps */}
+          {assignment.id && (assignment.created_at || assignment.arrived_at || assignment.held_at || assignment.resumed_at) && (
+            <div className="space-y-1.5 border rounded-md px-3 py-2.5 bg-muted/30">
+              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1 mb-1.5">
+                <Clock className="h-3 w-3" /> Tracking Timeline
+              </p>
+              {assignment.created_at && (
+                <div className="flex items-center gap-2 text-xs">
+                  <Truck className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                  <span className="text-muted-foreground">On Transit:</span>
+                  <span className="font-medium">{formatManilaTime(assignment.created_at)}</span>
+                </div>
+              )}
+              {assignment.held_at && (
+                <div className="flex items-center gap-2 text-xs">
+                  <PauseCircle className="h-3 w-3 text-amber-600 flex-shrink-0" />
+                  <span className="text-muted-foreground">Hold:</span>
+                  <span className="font-medium text-amber-700 dark:text-amber-400">{formatManilaTime(assignment.held_at)}</span>
+                </div>
+              )}
+              {assignment.resumed_at && (
+                <div className="flex items-center gap-2 text-xs">
+                  <Truck className="h-3 w-3 text-blue-600 flex-shrink-0" />
+                  <span className="text-muted-foreground">Resumed:</span>
+                  <span className="font-medium">{formatManilaTime(assignment.resumed_at)}</span>
+                </div>
+              )}
+              {assignment.arrived_at && (
+                <div className="flex items-center gap-2 text-xs">
+                  <CheckCircle2 className="h-3 w-3 text-success flex-shrink-0" />
+                  <span className="text-muted-foreground">Arrived:</span>
+                  <span className="font-medium text-success">{formatManilaTime(assignment.arrived_at)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Arrival / Hold info (status banners) */}
           {assignment.tracking_status === "arrived" && assignment.arrived_at && (
             <div className="flex items-center gap-2 text-sm bg-success/10 border border-success/20 rounded-md px-3 py-2">
               <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0" />
@@ -1534,22 +1571,29 @@ export function TrackingAssignmentSection({
             {assignment.evidence.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {assignment.evidence.map((evidence, index) => (
-                  <div key={evidence.id || index} className="relative">
-                    <img
-                      src={evidence.file_url}
-                      alt={evidence.file_name}
-                      className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => {
-                        window.dispatchEvent(new CustomEvent("open-lightbox", {
-                          detail: {
-                            images: assignment.evidence.map((e) => ({ url: e.file_url, name: e.file_name })),
-                            startIndex: index,
-                          },
-                        }));
-                      }}
-                    />
+                  <div key={evidence.id || index} className="relative group">
+                    <div>
+                      <img
+                        src={evidence.file_url}
+                        alt={evidence.file_name}
+                        className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent("open-lightbox", {
+                            detail: {
+                              images: assignment.evidence.map((e) => ({ url: e.file_url, name: e.file_name })),
+                              startIndex: index,
+                            },
+                          }));
+                        }}
+                      />
+                      {evidence.uploaded_at && (
+                        <p className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate" title={formatManilaTime(evidence.uploaded_at)}>
+                          {formatManilaTime(evidence.uploaded_at)}
+                        </p>
+                      )}
+                    </div>
                     {evidence.isUploading && (
-                      <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/50 rounded-md flex items-center justify-center" style={{ bottom: evidence.uploaded_at ? '18px' : '0' }}>
                         <Loader2 className="h-4 w-4 animate-spin text-white" />
                       </div>
                     )}
@@ -1585,19 +1629,26 @@ export function TrackingAssignmentSection({
                   const canRemoveEvidence = isSuperAdmin() || isAdmin() || canProcessLogistics() || ev.uploaded_by === user?.id;
                   return (
                   <div key={ev.id} className="relative">
-                    <img
-                      src={ev.file_url}
-                      alt={ev.file_name}
-                      className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => {
-                        window.dispatchEvent(new CustomEvent("open-lightbox", {
-                          detail: {
-                            images: (receiverEvidence[assignment.id!] || []).map((e) => ({ url: e.file_url, name: e.file_name })),
-                            startIndex: index,
-                          },
-                        }));
-                      }}
-                    />
+                    <div>
+                      <img
+                        src={ev.file_url}
+                        alt={ev.file_name}
+                        className="h-16 w-16 object-cover rounded-md border cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => {
+                          window.dispatchEvent(new CustomEvent("open-lightbox", {
+                            detail: {
+                              images: (receiverEvidence[assignment.id!] || []).map((e) => ({ url: e.file_url, name: e.file_name })),
+                              startIndex: index,
+                            },
+                          }));
+                        }}
+                      />
+                      {ev.uploaded_at && (
+                        <p className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate" title={formatManilaTime(ev.uploaded_at)}>
+                          {formatManilaTime(ev.uploaded_at)}
+                        </p>
+                      )}
+                    </div>
                     {canRemoveEvidence && !isDelivered && (
                       <button
                         className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm"
