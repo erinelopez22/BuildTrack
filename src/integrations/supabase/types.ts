@@ -247,6 +247,88 @@ export type Database = {
           },
         ]
       }
+      equipment_requests: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          asset_id: string
+          borrow_transaction_id: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          project_id: string
+          quantity: number
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          request_type: string
+          requested_at: string
+          requested_by: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          asset_id: string
+          borrow_transaction_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id: string
+          quantity?: number
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          request_type: string
+          requested_at?: string
+          requested_by: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          asset_id?: string
+          borrow_transaction_id?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          project_id?: string
+          quantity?: number
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          request_type?: string
+          requested_at?: string
+          requested_by?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipment_requests_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "company_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_requests_borrow_transaction_id_fkey"
+            columns: ["borrow_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "borrow_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipment_requests_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_transactions: {
         Row: {
           created_at: string | null

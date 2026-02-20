@@ -418,6 +418,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
         }
         break;
       case "in_transit":
+        // PE + Checker + Super Admin + Admin all get full access for in_transit → delivered
         if (hasFullAccess || canReceiveOrders()) {
           actions.push({
             label: "Delivered",
@@ -427,7 +428,8 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             disabled: !allDriversArrived,
           });
         }
-        if (canHold) {
+        // On-Hold: allowed for full access, PE, Checker — but NOT warehouse_admin
+        if (hasFullAccess || canReceiveOrders()) {
           actions.push({
             label: "On-Hold",
             action: () => setShowOnHoldDialog(true),
@@ -663,7 +665,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                         onValidationChange={setTrackingValid}
                         onAssignmentsLoaded={setHasTrackingAssignments}
                         onAllDriversArrived={setAllDriversArrived}
-                        readOnly={false}
+                        readOnly={order.status === "in_transit" && isWarehouseAdmin() && !isSuperAdmin() && !isAdmin()}
                       />
                       {order.status === "preparing" && !trackingValid && (
                         <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded mt-3">
