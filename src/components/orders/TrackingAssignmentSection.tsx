@@ -1605,7 +1605,7 @@ export function TrackingAssignmentSection({
                           className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate"
                           title={formatManilaTime(evidence.uploaded_at)}
                         >
-                          {formatManilaTime(evidence.uploaded_at)}
+                          {new Date(evidence.uploaded_at).toLocaleTimeString("en-PH", { timeZone: "Asia/Manila", hour: "numeric", minute: "2-digit", hour12: true })}
                         </p>
                       )}
                     </div>
@@ -1681,7 +1681,7 @@ export function TrackingAssignmentSection({
                             className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate"
                             title={formatManilaTime(ev.uploaded_at)}
                           >
-                            {formatManilaTime(ev.uploaded_at)}
+                            {new Date(ev.uploaded_at).toLocaleTimeString("en-PH", { timeZone: "Asia/Manila", hour: "numeric", minute: "2-digit", hour12: true })}
                           </p>
                         )}
                       </div>
