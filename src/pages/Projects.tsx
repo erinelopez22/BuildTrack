@@ -110,38 +110,17 @@ export default function Projects() {
         if (error) throw error;
         toast({ title: 'Success', description: 'Project updated successfully' });
       } else {
-        // Create new project
-        const { data: newProject, error } = await supabase.from('projects').insert({
-          name: data.name,
-          description: data.description || null,
-          location: data.location,
-          start_date: data.start_date,
-          end_date: data.end_date,
-          status: data.status,
-          created_by: user?.id,
-        }).select().single();
+        // Create new project using RPC for atomic insert + membership
+        const { data: newProjectId, error } = await supabase.rpc('create_project_with_membership', {
+          _name: data.name,
+          _description: data.description || null,
+          _location: data.location,
+          _start_date: data.start_date,
+          _end_date: data.end_date,
+          _status: data.status,
+        });
 
         if (error) throw error;
-
-        // If Project Engineer created the project, auto-assign them as project_engineer member
-        if (newProject && user) {
-          const { data: userRoles } = await supabase
-            .from('user_roles')
-            .select('role')
-            .eq('user_id', user.id);
-          
-          const isProjectEngineerRole = (userRoles || []).some(r => r.role === 'project_engineer');
-          const isAdminRole = (userRoles || []).some(r => r.role === 'admin' || r.role === 'super_admin');
-
-          if (isProjectEngineerRole && !isAdminRole) {
-            await supabase.from('project_members').insert({
-              project_id: newProject.id,
-              user_id: user.id,
-              role: 'project_engineer',
-              created_by: user.id,
-            });
-          }
-        }
 
         toast({ title: 'Success', description: 'Project created successfully' });
       }
