@@ -1603,9 +1603,9 @@ export function TrackingAssignmentSection({
                       {evidence.uploaded_at && (
                         <p
                           className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate"
-                          title={formatManilaTime2(evidence.uploaded_at)}
+                          title={formatManilaTime(evidence.uploaded_at)}
                         >
-                          {formatManilaTime2(evidence.uploaded_at)}
+                          {formatManilaTime(evidence.uploaded_at)}
                         </p>
                       )}
                     </div>
