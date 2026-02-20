@@ -838,6 +838,7 @@ export type Database = {
           end_date: string | null
           estimated_cost: number | null
           id: string
+          is_hidden: boolean
           location: string | null
           name: string
           project_manager_id: string | null
@@ -853,6 +854,7 @@ export type Database = {
           end_date?: string | null
           estimated_cost?: number | null
           id?: string
+          is_hidden?: boolean
           location?: string | null
           name: string
           project_manager_id?: string | null
@@ -868,6 +870,7 @@ export type Database = {
           end_date?: string | null
           estimated_cost?: number | null
           id?: string
+          is_hidden?: boolean
           location?: string | null
           name?: string
           project_manager_id?: string | null
@@ -1277,6 +1280,8 @@ export type Database = {
         | "tracking_driver"
         | "office_admin"
         | "warehouse_admin"
+        | "checker"
+        | "driver"
       order_status:
         | "draft"
         | "for_approval"
@@ -1448,6 +1453,8 @@ export const Constants = {
         "tracking_driver",
         "office_admin",
         "warehouse_admin",
+        "checker",
+        "driver",
       ],
       order_status: [
         "draft",
