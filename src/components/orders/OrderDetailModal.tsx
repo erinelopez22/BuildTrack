@@ -75,6 +75,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   const [rejector, setRejector] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isRejectedOrder, setIsRejectedOrder] = useState(false);
 
   // Dialogs for actions requiring reason
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -117,7 +118,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       .limit(50);
 
     if (data) {
-      // Fetch user profiles for logs
       const userIds = [...new Set(data.map((l) => l.user_id).filter(Boolean))];
       const { data: profiles } =
         userIds.length > 0
@@ -137,9 +137,19 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   const fetchOrderDetails = async () => {
     if (!orderId) return;
     setLoading(true);
+    setIsRejectedOrder(false);
 
-    // Fetch order
-    const { data: orderData, error } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
+    // Try fetching from orders table first
+    let { data: orderData } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
+
+    // If not found in orders, try rejected_orders table
+    if (!orderData) {
+      const { data: rejectedData } = await supabase.from("rejected_orders").select("*").eq("id", orderId).maybeSingle();
+      if (rejectedData) {
+        orderData = rejectedData;
+        setIsRejectedOrder(true);
+      }
+    }
 
     if (orderData) {
       setOrder(orderData as Order);
@@ -193,7 +203,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   };
 
   const handleStatusChange = async (newStatus: OrderStatus, additionalData?: Record<string, unknown>) => {
-    if (!order || !user) return;
+    if (!order || !user || isRejectedOrder) return;
     setActionLoading(true);
 
     const updateData: Record<string, unknown> = {
@@ -201,23 +211,19 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       ...additionalData,
     };
 
-    // Set approval info if approving
     if (newStatus === "approved" && order.status === "for_approval") {
       updateData.approved_by = user.id;
       updateData.approved_at = new Date().toISOString();
     }
 
-    // When putting on hold, store previous status (unless already set via additionalData)
     if (newStatus === "on_hold" && !updateData.previous_status) {
       updateData.previous_status = order.status;
     }
 
-    // When resuming from on_hold, clear previous_status
     if (order.status === "on_hold") {
       updateData.previous_status = null;
     }
 
-    // B) Set milestone timestamps (only if not already set)
     if (newStatus === "in_transit" && !(order as any).on_transit_at) {
       updateData.on_transit_at = new Date().toISOString();
     }
@@ -233,7 +239,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       return;
     }
 
-    // When order is marked as "delivered", update order_items.quantity_received
     if (newStatus === "delivered") {
       const { data: items } = await supabase
         .from("order_items")
@@ -247,7 +252,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       }
     }
 
-    // Log activity
     await logActivity({
       action: newStatus === "approved" ? "approve" : newStatus === "rejected" ? "reject" : "status_change",
       tableName: "orders",
@@ -257,7 +261,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       userId: user.id,
     });
 
-    // Notify project members
     const statusLabel =
       newStatus === "closed" ? "Completed" : newStatus.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
     await notifyProjectMembers({
@@ -277,19 +280,55 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   };
 
   const handleReject = async () => {
-    if (!reason.trim()) {
+    if (!reason.trim() || !order || !user) {
       toast({ title: "Error", description: "Rejection reason is required", variant: "destructive" });
       return;
     }
 
-    await handleStatusChange("rejected", {
-      rejected_by: user?.id,
-      rejected_at: new Date().toISOString(),
-      rejection_reason: reason.trim(),
-    });
+    setActionLoading(true);
 
-    setShowRejectDialog(false);
-    setReason("");
+    try {
+      // Use atomic RPC to move order to rejected_orders table
+      const { error } = await supabase.rpc("reject_order", {
+        _order_id: order.id,
+        _rejection_reason: reason.trim(),
+      });
+
+      if (error) throw error;
+
+      await logActivity({
+        action: "reject",
+        tableName: "orders",
+        recordId: order.id,
+        oldValues: { status: order.status },
+        newValues: {
+          status: "rejected",
+          order_number: order.order_number,
+          rejection_reason: reason.trim(),
+        },
+        userId: user.id,
+      });
+
+      await notifyProjectMembers({
+        projectId: order.project_id,
+        title: "Order Rejected",
+        message: `Order ${order.order_number} has been rejected: ${reason.trim()}`,
+        type: "order",
+        referenceType: "order",
+        referenceId: order.id,
+        excludeUserId: user.id,
+      });
+
+      toast({ title: "Order Rejected", description: `Order ${order.order_number} has been rejected` });
+      setShowRejectDialog(false);
+      setReason("");
+      setActionLoading(false);
+      onStatusChange?.();
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+      setActionLoading(false);
+    }
   };
 
   const handleOnHold = async () => {
@@ -298,7 +337,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
       return;
     }
 
-    // Store on-hold reason in notes (append)
     const updatedNotes = order?.notes
       ? `${order.notes}\n\n[ON-HOLD ${formatManilaTime(new Date())}]: ${reason.trim()}`
       : `[ON-HOLD ${formatManilaTime(new Date())}]: ${reason.trim()}`;
@@ -309,7 +347,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     setReason("");
   };
 
-  // Statuses that can be put on hold
   const holdableStatuses: OrderStatus[] = [
     "draft",
     "for_approval",
@@ -320,9 +357,8 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     "in_transit",
   ];
 
-  // Determine available actions based on status and permissions
   const getAvailableActions = () => {
-    if (!order) return [];
+    if (!order || isRejectedOrder) return [];
 
     const actions: {
       label: string;
@@ -418,7 +454,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
         }
         break;
       case "in_transit":
-        // PE + Checker + Super Admin + Admin all get full access for in_transit → delivered
         if (hasFullAccess || canReceiveOrders()) {
           actions.push({
             label: "Delivered",
@@ -428,7 +463,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             disabled: !allDriversArrived,
           });
         }
-        // On-Hold: allowed for full access, PE, Checker — but NOT warehouse_admin
         if (hasFullAccess || canReceiveOrders()) {
           actions.push({
             label: "On-Hold",
@@ -470,7 +504,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
   const availableActions = getAvailableActions();
 
-  // Show tracking section for preparing, in_transit, and delivered
   const showTrackingSection = order && ["preparing", "in_transit", "delivered"].includes(order.status);
 
   if (!open) return null;
@@ -484,6 +517,9 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
             <DialogTitle className="flex items-center gap-3 flex-wrap">
               <span className="font-mono text-lg">{order?.order_number || "Loading..."}</span>
               {order && <StatusBadge status={order.status} />}
+              {isRejectedOrder && (
+                <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded">Archived</span>
+              )}
             </DialogTitle>
           </DialogHeader>
 
@@ -495,7 +531,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
           ) : order ? (
             <div className="flex-1 overflow-y-auto min-h-0">
               <div className="px-4 sm:px-6 py-4 space-y-6">
-                {/* Rejected Alert - Always visible at top */}
+                {/* Rejected Alert */}
                 {order.status === "rejected" && (
                   <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 space-y-2">
                     <div className="flex items-center gap-2 text-destructive font-medium">
@@ -559,7 +595,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                           </div>
                         )}
 
-                      {/* Milestone Timestamps */}
                       {(order as any).on_transit_at && (
                         <div className="flex items-start gap-3">
                           <Truck className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
@@ -580,7 +615,6 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                       )}
                     </div>
 
-                    {/* Total Amount */}
                     {order.total_amount && (
                       <div className="flex justify-between items-center pt-2 border-t">
                         <span className="text-muted-foreground">Total Amount</span>
@@ -665,7 +699,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                         onValidationChange={setTrackingValid}
                         onAssignmentsLoaded={setHasTrackingAssignments}
                         onAllDriversArrived={setAllDriversArrived}
-                        readOnly={order.status === "in_transit" && isWarehouseAdmin() && !isSuperAdmin() && !isAdmin()}
+                        readOnly={isRejectedOrder || (order.status === "in_transit" && isWarehouseAdmin() && !isSuperAdmin() && !isAdmin())}
                       />
                       {order.status === "preparing" && !trackingValid && (
                         <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 p-2 rounded mt-3">
@@ -740,10 +774,10 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                 </Collapsible>
 
                 {/* Read-only notice for rejected orders */}
-                {order.status === "rejected" && (
+                {(order.status === "rejected" || isRejectedOrder) && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-3 rounded-lg">
                     <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                    This order is read-only. Only Super Admin can modify rejected orders.
+                    This order has been rejected and archived. It is read-only.
                   </div>
                 )}
               </div>

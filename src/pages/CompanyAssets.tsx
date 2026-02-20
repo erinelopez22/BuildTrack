@@ -25,8 +25,9 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
 import { formatManilaTime } from "@/lib/notificationService";
-import { Wrench, Plus, Search, Pencil, Trash2, Loader2, Package, ArrowLeftRight, Check, X, Eye } from "lucide-react";
+import { Wrench, Plus, Search, Pencil, Trash2, Loader2, Package, ArrowLeftRight, Check, X, Eye, History } from "lucide-react";
 import type { CompanyAsset, AssetType, AssetCondition, BorrowTransaction, Project, Profile } from "@/types/database";
+import { EquipmentHistoryTab } from "@/components/equipment/EquipmentHistoryTab";
 
 interface BorrowWithDetails extends BorrowTransaction {
   project?: Project;

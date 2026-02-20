@@ -39,10 +39,19 @@ const MAIN_WORKFLOW_LANES: { key: string; dbStatuses: OrderStatus[]; label: stri
   { key: "delivered", dbStatuses: ["delivered", "partially_received", "fully_received", "closed"], label: "Delivered", color: "bg-success/10 border-success/30" },
 ];
 
-// Exception lanes shown below main flow (Rejected removed - shown in dedicated table on Orders page)
 const EXCEPTION_LANES: { key: string; dbStatuses: OrderStatus[]; label: string; color: string }[] = [
   { key: "on_hold", dbStatuses: ["on_hold"], label: "On Hold", color: "bg-amber-500/10 border-amber-500/30" },
 ];
+
+interface RejectedOrderRow {
+  id: string;
+  order_number: string;
+  supplier_name: string | null;
+  rejection_reason: string | null;
+  rejected_at: string | null;
+  rejected_by: string | null;
+  project_id: string;
+}
 
 export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps) {
   const { user, isSuperAdmin, isAdmin, canCreateOrders, canApproveOrders, canProcessLogistics, canReceiveOrders, isWarehouseAdmin, isOfficeAdmin, isProjectEngineer } =
@@ -61,7 +70,10 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const canDeleteRejected = isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer();
+  // Rejected orders from rejected_orders table
+  const [rejectedOrders, setRejectedOrders] = useState<RejectedOrderRow[]>([]);
+
+  const canDeleteRejected = isSuperAdmin() || isAdmin();
 
   const fetchOrders = async () => {
     const { data, error } = await supabase
@@ -77,6 +89,19 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       setOrders(data as Order[]);
     }
     setLoading(false);
+
+    // Fetch rejected orders from rejected_orders table
+    fetchRejectedOrders();
+  };
+
+  const fetchRejectedOrders = async () => {
+    const { data } = await supabase
+      .from("rejected_orders")
+      .select("id, order_number, supplier_name, rejection_reason, rejected_at, rejected_by, project_id")
+      .eq("project_id", project.id)
+      .order("rejected_at", { ascending: false });
+
+    setRejectedOrders((data || []) as RejectedOrderRow[]);
   };
 
   const handleDeleteRejectedOrder = async () => {
@@ -84,39 +109,15 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     setDeleteLoading(true);
 
     try {
-      const { data: assignments } = await supabase
-        .from("order_tracking_assignments")
-        .select("id")
-        .eq("order_id", deletingOrderId);
+      const { error } = await supabase.rpc("delete_rejected_order", {
+        _order_id: deletingOrderId,
+      });
 
-      const assignmentIds = (assignments || []).map((a: any) => a.id);
-
-      if (assignmentIds.length > 0) {
-        await supabase.from("receiver_evidence").delete().in("order_tracking_assignment_id", assignmentIds);
-        await supabase.from("order_tracking_evidence").delete().in("order_tracking_assignment_id", assignmentIds);
-        await supabase.from("tracking_driver_materials").delete().in("tracking_assignment_id", assignmentIds);
-        await supabase.from("order_tracking_assignments").delete().eq("order_id", deletingOrderId);
-      }
-
-      await supabase.from("order_evidence").delete().eq("order_id", deletingOrderId);
-
-      const { data: deliveries } = await supabase
-        .from("deliveries")
-        .select("id")
-        .eq("order_id", deletingOrderId);
-
-      const deliveryIds = (deliveries || []).map((d: any) => d.id);
-      if (deliveryIds.length > 0) {
-        await supabase.from("delivery_items").delete().in("delivery_id", deliveryIds);
-        await supabase.from("deliveries").delete().eq("order_id", deletingOrderId);
-      }
-
-      await supabase.from("order_items").delete().eq("order_id", deletingOrderId);
-      await supabase.from("orders").delete().eq("id", deletingOrderId);
+      if (error) throw error;
 
       await logActivity({
         action: "delete_rejected_order",
-        tableName: "orders",
+        tableName: "rejected_orders",
         recordId: deletingOrderId,
         oldValues: { status: "rejected" },
         newValues: null,
@@ -125,7 +126,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
       toast({ title: "Success", description: "Rejected order permanently deleted." });
       setDeletingOrderId(null);
-      fetchOrders();
+      fetchRejectedOrders();
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -274,7 +275,6 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
     let hasPermission = false;
 
-    // Trucking Admin (warehouse_admin) cannot set on_hold or resume from on_hold
     if (newStatus === "on_hold" && isWarehouseAdmin() && !isSuperAdmin() && !isAdmin()) {
       hasPermission = false;
     } else if (isSuperAdmin() || isAdmin()) {
@@ -295,7 +295,6 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     } else if (order.status === "delivered" && newStatus === "closed") {
       hasPermission = canApproveOrders() || isAdmin() || isSuperAdmin();
     } else if (order.status === "on_hold") {
-      // Resume: restore previous status - block for warehouse_admin (Trucking Admin)
       hasPermission = isSuperAdmin() || isAdmin() || (canProcessLogistics() && !isWarehouseAdmin());
     }
 
@@ -315,17 +314,14 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       updateData.approved_at = new Date().toISOString();
     }
 
-    // When putting on hold, store previous status
     if (newStatus === "on_hold") {
       updateData.previous_status = order.status;
     }
 
-    // When resuming from on_hold, clear previous_status
     if (order.status === "on_hold") {
       updateData.previous_status = null;
     }
 
-    // Milestone timestamps
     if (newStatus === "in_transit" && !(order as any).on_transit_at) {
       updateData.on_transit_at = new Date().toISOString();
     }
@@ -382,19 +378,15 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     if (!orderToReject || !user) return;
     setIsRejecting(true);
 
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        status: "rejected" as OrderStatus,
-        rejected_by: user.id,
-        rejected_at: new Date().toISOString(),
-        rejection_reason: reason || null,
-      })
-      .eq("id", orderToReject.id);
+    try {
+      // Use atomic RPC to move order to rejected_orders table
+      const { error } = await supabase.rpc("reject_order", {
+        _order_id: orderToReject.id,
+        _rejection_reason: reason || null,
+      });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+      if (error) throw error;
+
       await logActivity({
         action: "reject",
         tableName: "orders",
@@ -421,6 +413,8 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       toast({ title: "Order Rejected", description: `Order ${orderToReject.order_number} has been rejected` });
       setOrderToReject(null);
       fetchOrders();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
 
     setIsRejecting(false);
@@ -577,7 +571,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         </div>
       </div>
 
-      {/* Exception Lanes: Rejected & On Hold */}
+      {/* Exception Lanes: On Hold */}
       <div className="space-y-2">
         <h3 className="text-sm font-medium text-muted-foreground px-1">Exceptions</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -612,65 +606,61 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         </div>
       </div>
 
-      {/* Rejected Orders Section */}
-      {(() => {
-        const rejectedOrders = orders.filter(o => o.status === "rejected");
-        if (rejectedOrders.length === 0) return null;
-        return (
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium text-muted-foreground px-1 flex items-center gap-2">
-              <XCircle className="h-4 w-4 text-destructive" />
-              Rejected Orders ({rejectedOrders.length})
-            </h3>
-            <div className="border rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr>
-                    <th className="text-left p-3 font-medium">Order #</th>
-                    <th className="text-left p-3 font-medium">Company</th>
-                    <th className="text-left p-3 font-medium">Rejection Reason</th>
-                    <th className="text-left p-3 font-medium">Rejected Date</th>
-                    {canDeleteRejected && <th className="text-center p-3 font-medium w-[60px]">Action</th>}
+      {/* Rejected Orders Section - from rejected_orders table */}
+      {rejectedOrders.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-muted-foreground px-1 flex items-center gap-2">
+            <XCircle className="h-4 w-4 text-destructive" />
+            Rejected Orders ({rejectedOrders.length})
+          </h3>
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-3 font-medium">Order #</th>
+                  <th className="text-left p-3 font-medium">Company</th>
+                  <th className="text-left p-3 font-medium">Rejection Reason</th>
+                  <th className="text-left p-3 font-medium">Rejected Date</th>
+                  {canDeleteRejected && <th className="text-center p-3 font-medium w-[60px]">Action</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {rejectedOrders.map((ro) => (
+                  <tr
+                    key={ro.id}
+                    className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setSelectedOrderId(ro.id)}
+                  >
+                    <td className="p-3 font-mono font-medium">{ro.order_number}</td>
+                    <td className="p-3">{ro.supplier_name || "Jagon"}</td>
+                    <td className="p-3 max-w-[250px] truncate" title={ro.rejection_reason || ""}>
+                      {ro.rejection_reason || "—"}
+                    </td>
+                    <td className="p-3 text-muted-foreground">
+                      {ro.rejected_at ? formatManilaTime(ro.rejected_at) : "—"}
+                    </td>
+                    {canDeleteRejected && (
+                      <td className="p-3 text-center">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingOrderId(ro.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    )}
                   </tr>
-                </thead>
-                <tbody>
-                  {rejectedOrders.map((order) => (
-                    <tr
-                      key={order.id}
-                      className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => setSelectedOrderId(order.id)}
-                    >
-                      <td className="p-3 font-mono font-medium">{order.order_number}</td>
-                      <td className="p-3">{order.supplier_name || "Jagon"}</td>
-                      <td className="p-3 max-w-[250px] truncate" title={order.rejection_reason || ""}>
-                        {order.rejection_reason || "—"}
-                      </td>
-                      <td className="p-3 text-muted-foreground">
-                        {order.rejected_at ? formatManilaTime(order.rejected_at) : "—"}
-                      </td>
-                      {canDeleteRejected && (
-                        <td className="p-3 text-center">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeletingOrderId(order.id);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      )}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       <CreateOrderModal
         open={isCreateDialogOpen}
