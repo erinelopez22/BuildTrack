@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
-import { notifyProjectMembers, formatManilaTime, formatManilaTime2 } from "@/lib/notificationService";
+import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -1603,9 +1603,9 @@ export function TrackingAssignmentSection({
                       {evidence.uploaded_at && (
                         <p
                           className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate"
-                          title={formatManilaTime(evidence.uploaded_at)}
+                          title={formatManilaTime2(evidence.uploaded_at)}
                         >
-                          {formatManilaTime(evidence.uploaded_at)}
+                          {formatManilaTime2(evidence.uploaded_at)}
                         </p>
                       )}
                     </div>
@@ -1679,9 +1679,9 @@ export function TrackingAssignmentSection({
                         {ev.uploaded_at && (
                           <p
                             className="text-[9px] text-muted-foreground mt-0.5 text-center w-16 truncate"
-                            title={formatManilaTime2(ev.uploaded_at)}
+                            title={formatManilaTime(ev.uploaded_at)}
                           >
-                            {formatManilaTime2(ev.uploaded_at)}
+                            {formatManilaTime(ev.uploaded_at)}
                           </p>
                         )}
                       </div>
