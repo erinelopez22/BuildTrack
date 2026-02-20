@@ -154,31 +154,54 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     if (orderData) {
       setOrder(orderData as Order);
 
-      // Fetch order items with SKU info
-      const { data: items } = await supabase
-        .from("order_items")
-        .select(
-          `
-          id,
-          sku_id,
-          quantity_ordered,
-          quantity_received,
-          notes,
-          skus (
-            name,
-            unit_of_measure
-          )
-        `,
-        )
-        .eq("order_id", orderId);
+      // Fetch order items - from rejected_order_items if rejected, otherwise order_items
+      if (isRejectedOrder) {
+        const { data: items } = await supabase
+          .from("rejected_order_items" as any)
+          .select("id, sku_id, quantity_ordered, quantity_received, notes")
+          .eq("order_id", orderId);
 
-      if (items) {
-        setOrderItems(
-          items.map((item) => ({
-            ...item,
-            sku: item.skus as unknown as { name: string; unit_of_measure: string } | undefined,
-          })),
-        );
+        if (items && (items as any[]).length > 0) {
+          // Fetch SKU info separately
+          const skuIds = [...new Set((items as any[]).map((i: any) => i.sku_id))];
+          const { data: skus } = await supabase.from("skus").select("id, name, unit_of_measure").in("id", skuIds);
+          const skuMap = new Map((skus || []).map((s: any) => [s.id, s]));
+
+          setOrderItems(
+            (items as any[]).map((item: any) => ({
+              ...item,
+              sku: skuMap.get(item.sku_id) as { name: string; unit_of_measure: string } | undefined,
+            })),
+          );
+        } else {
+          setOrderItems([]);
+        }
+      } else {
+        const { data: items } = await supabase
+          .from("order_items")
+          .select(
+            `
+            id,
+            sku_id,
+            quantity_ordered,
+            quantity_received,
+            notes,
+            skus (
+              name,
+              unit_of_measure
+            )
+          `,
+          )
+          .eq("order_id", orderId);
+
+        if (items) {
+          setOrderItems(
+            items.map((item) => ({
+              ...item,
+              sku: item.skus as unknown as { name: string; unit_of_measure: string } | undefined,
+            })),
+          );
+        }
       }
 
       // Fetch profiles in parallel
