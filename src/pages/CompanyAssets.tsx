@@ -247,6 +247,10 @@ export default function CompanyAssets() {
           project_id: request.project_id,
           borrowed_qty: request.quantity,
           borrowed_by: request.requested_by,
+          borrow_requested_at: request.requested_at,
+          borrow_requested_by: request.requested_by,
+          borrow_approved_at: new Date().toISOString(),
+          borrow_approved_by: user.id,
         });
         if (error) throw error;
 
@@ -277,6 +281,8 @@ export default function CompanyAssets() {
               returned_at: new Date().toISOString(),
               return_remarks: request.notes || null,
               status: newStatus,
+              return_approved_at: new Date().toISOString(),
+              return_approved_by: user.id,
             })
             .eq("id", request.borrow_transaction_id);
 
