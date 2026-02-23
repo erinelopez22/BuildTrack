@@ -310,9 +310,16 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
                   <Badge variant={getActionBadgeVariant(row.action_type)} className="text-xs">
                     {row.action_type}
                   </Badge>
-                  <span className="text-xs text-muted-foreground ml-auto hidden sm:inline">
-                    {row.requested_by_name}
-                  </span>
+                  <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground">
+                    {row.requested_at && (
+                      <span className="hidden sm:inline flex items-center gap-1">
+                        <Clock className="h-3 w-3 inline" />
+                        {formatManilaTime(row.requested_at)}
+                      </span>
+                    )}
+                    <span className="hidden sm:inline">•</span>
+                    <span className="hidden sm:inline">{row.requested_by_name}</span>
+                  </div>
                 </div>
               </AccordionTrigger>
               <AccordionContent className="px-4 pb-4 pt-0">
