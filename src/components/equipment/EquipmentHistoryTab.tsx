@@ -311,7 +311,7 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
                     {row.action_type}
                   </Badge>
                   <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground">
-                    {row.requested_at && (
+                    {row.requested_at && row.action_type.startsWith("Borrow") && (
                       <span className="hidden sm:inline flex items-center gap-1">
                         <Clock className="h-3 w-3 inline" />
                         {formatManilaTime(row.requested_at)}
@@ -362,7 +362,7 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
                       <Calendar className="h-3 w-3" /> Timestamps
                     </h4>
                     {row.requested_at && <DetailRow label="Requested" value={formatManilaTime(row.requested_at)} />}
-                    {row.approved_at && <DetailRow label="Approved" value={formatManilaTime(row.approved_at)} />}
+                    {row.approved_at && row.action_type.startsWith("Borrow") && <DetailRow label="Approved" value={formatManilaTime(row.approved_at)} />}
                     {row.rejected_at && <DetailRow label="Rejected" value={formatManilaTime(row.rejected_at)} />}
                     {row.borrow_timestamp && <DetailRow label="Borrow Start" value={formatManilaTime(row.borrow_timestamp)} />}
                     {row.return_timestamp && <DetailRow label="Returned At" value={formatManilaTime(row.return_timestamp)} />}
