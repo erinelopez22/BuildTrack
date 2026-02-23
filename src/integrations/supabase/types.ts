@@ -53,6 +53,10 @@ export type Database = {
       borrow_transactions: {
         Row: {
           asset_id: string
+          borrow_approved_at: string | null
+          borrow_approved_by: string | null
+          borrow_requested_at: string | null
+          borrow_requested_by: string | null
           borrowed_at: string
           borrowed_by: string
           borrowed_qty: number
@@ -60,7 +64,11 @@ export type Database = {
           expected_return_date: string | null
           id: string
           project_id: string
+          return_approved_at: string | null
+          return_approved_by: string | null
           return_remarks: string | null
+          return_requested_at: string | null
+          return_requested_by: string | null
           returned_at: string | null
           returned_qty: number
           status: string
@@ -68,6 +76,10 @@ export type Database = {
         }
         Insert: {
           asset_id: string
+          borrow_approved_at?: string | null
+          borrow_approved_by?: string | null
+          borrow_requested_at?: string | null
+          borrow_requested_by?: string | null
           borrowed_at?: string
           borrowed_by: string
           borrowed_qty: number
@@ -75,7 +87,11 @@ export type Database = {
           expected_return_date?: string | null
           id?: string
           project_id: string
+          return_approved_at?: string | null
+          return_approved_by?: string | null
           return_remarks?: string | null
+          return_requested_at?: string | null
+          return_requested_by?: string | null
           returned_at?: string | null
           returned_qty?: number
           status?: string
@@ -83,6 +99,10 @@ export type Database = {
         }
         Update: {
           asset_id?: string
+          borrow_approved_at?: string | null
+          borrow_approved_by?: string | null
+          borrow_requested_at?: string | null
+          borrow_requested_by?: string | null
           borrowed_at?: string
           borrowed_by?: string
           borrowed_qty?: number
@@ -90,7 +110,11 @@ export type Database = {
           expected_return_date?: string | null
           id?: string
           project_id?: string
+          return_approved_at?: string | null
+          return_approved_by?: string | null
           return_remarks?: string | null
+          return_requested_at?: string | null
+          return_requested_by?: string | null
           returned_at?: string | null
           returned_qty?: number
           status?: string

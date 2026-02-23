@@ -30,11 +30,17 @@ interface HistoryRow {
   returned_at: string | null;
   borrow_timestamp: string | null;
   return_timestamp: string | null;
-  // Linked borrow request info (for return rows)
+  // Lifecycle timestamps from borrow_transactions
   borrow_requested_at: string | null;
+  borrow_requested_by_name: string | null;
   borrow_approved_at: string | null;
   borrow_approved_by_name: string | null;
   borrow_approved_by_role: string | null;
+  return_requested_at: string | null;
+  return_requested_by_name: string | null;
+  return_approved_at: string | null;
+  return_approved_by_name: string | null;
+  return_approved_by_role: string | null;
   duration: string | null;
   borrowed_qty: number | null;
   returned_qty: number | null;
@@ -122,7 +128,7 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
     const [assetsRes, profilesRes, borrowsRes, rolesRes] = await Promise.all([
       supabase.from("company_assets").select("id, asset_name, unit").in("id", assetIds),
       userIds.length > 0 ? supabase.from("profiles").select("id, full_name, email").in("id", userIds) : { data: [] },
-      borrowTxIds.length > 0 ? supabase.from("borrow_transactions").select("*").in("id", borrowTxIds) : { data: [] },
+      borrowTxIds.length > 0 ? supabase.from("borrow_transactions").select("*, borrow_requested_at, borrow_requested_by, borrow_approved_at, borrow_approved_by, return_requested_at, return_requested_by, return_approved_at, return_approved_by").in("id", borrowTxIds) : { data: [] },
       userIds.length > 0 ? supabase.from("user_roles").select("user_id, role").in("user_id", userIds) : { data: [] },
     ]);
 
@@ -134,9 +140,30 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
     const roleMap = new Map<string, string>();
     for (const r of (rolesRes.data || []) as { user_id: string; role: string }[]) {
       const displayName = ROLE_DISPLAY_NAMES[r.role as AppRole] || r.role;
-      // Keep the first one (typically highest priority from DB)
       if (!roleMap.has(r.user_id)) {
         roleMap.set(r.user_id, displayName);
+      }
+    }
+
+    // Collect additional user IDs from borrow_transactions lifecycle fields
+    const txUserIds = new Set<string>();
+    for (const b of (borrowsRes.data || [])) {
+      if (b.borrow_approved_by && !profileMap.has(b.borrow_approved_by)) txUserIds.add(b.borrow_approved_by);
+      if (b.borrow_requested_by && !profileMap.has(b.borrow_requested_by)) txUserIds.add(b.borrow_requested_by);
+      if (b.return_requested_by && !profileMap.has(b.return_requested_by)) txUserIds.add(b.return_requested_by);
+      if (b.return_approved_by && !profileMap.has(b.return_approved_by)) txUserIds.add(b.return_approved_by);
+    }
+    if (txUserIds.size > 0) {
+      const { data: extraProfiles } = await supabase.from("profiles").select("id, full_name, email").in("id", [...txUserIds]);
+      for (const p of (extraProfiles || [])) {
+        profileMap.set(p.id, p.full_name || p.email || "Unknown");
+      }
+      const { data: extraRoles } = await supabase.from("user_roles").select("user_id, role").in("user_id", [...txUserIds]);
+      for (const r of (extraRoles || []) as { user_id: string; role: string }[]) {
+        const displayName = ROLE_DISPLAY_NAMES[r.role as AppRole] || r.role;
+        if (!roleMap.has(r.user_id)) {
+          roleMap.set(r.user_id, displayName);
+        }
       }
     }
 
@@ -180,11 +207,17 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
       let borrowedByName: string | null = null;
       let returnedByName: string | null = null;
 
-      // Linked borrow request info for return rows
-      let borrowRequestedAt: string | null = null;
-      let borrowApprovedAt: string | null = null;
-      let borrowApprovedByName: string | null = null;
-      let borrowApprovedByRole: string | null = null;
+      // Lifecycle timestamps from borrow_transactions DB columns
+      let txBorrowRequestedAt: string | null = null;
+      let txBorrowRequestedByName: string | null = null;
+      let txBorrowApprovedAt: string | null = null;
+      let txBorrowApprovedByName: string | null = null;
+      let txBorrowApprovedByRole: string | null = null;
+      let txReturnRequestedAt: string | null = null;
+      let txReturnRequestedByName: string | null = null;
+      let txReturnApprovedAt: string | null = null;
+      let txReturnApprovedByName: string | null = null;
+      let txReturnApprovedByRole: string | null = null;
 
       if (tx) {
         borrowTimestamp = tx.borrowed_at;
@@ -193,24 +226,36 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
         returnedQty = tx.returned_qty > 0 ? tx.returned_qty : null;
         borrowedByName = profileMap.get(tx.borrowed_by) || null;
 
+        // Read lifecycle fields directly from borrow_transactions
+        txBorrowRequestedAt = tx.borrow_requested_at || null;
+        txBorrowRequestedByName = tx.borrow_requested_by ? (profileMap.get(tx.borrow_requested_by) || null) : null;
+        txBorrowApprovedAt = tx.borrow_approved_at || null;
+        txBorrowApprovedByName = tx.borrow_approved_by ? (profileMap.get(tx.borrow_approved_by) || null) : null;
+        txBorrowApprovedByRole = tx.borrow_approved_by ? (roleMap.get(tx.borrow_approved_by) || null) : null;
+        txReturnRequestedAt = tx.return_requested_at || null;
+        txReturnRequestedByName = tx.return_requested_by ? (profileMap.get(tx.return_requested_by) || null) : null;
+        txReturnApprovedAt = tx.return_approved_at || null;
+        txReturnApprovedByName = tx.return_approved_by ? (profileMap.get(tx.return_approved_by) || null) : null;
+        txReturnApprovedByRole = tx.return_approved_by ? (roleMap.get(tx.return_approved_by) || null) : null;
+
         if (req.request_type === "return" && req.status === "approved") {
-          const d = computeDuration(tx.borrowed_at, req.approved_at || tx.returned_at);
+          const d = computeDuration(tx.borrowed_at, tx.return_approved_at || req.approved_at || tx.returned_at);
           duration = d.text + (d.ongoing ? " (Ongoing)" : "");
           returnedByName = profileMap.get(req.requested_by) || null;
         } else if (req.request_type === "borrow" && req.status === "approved") {
-          const d = computeDuration(req.approved_at || tx.borrowed_at, tx.returned_at);
+          const d = computeDuration(tx.borrow_approved_at || req.approved_at || tx.borrowed_at, tx.returned_at);
           duration = d.text + (d.ongoing ? " (Ongoing)" : "");
         }
 
-        // For return requests, look up the original borrow request details
-        if (req.request_type === "return" && req.borrow_transaction_id) {
+        // Fallback: if DB lifecycle columns are empty, try equipment_requests cross-reference
+        if (!txBorrowRequestedAt && req.request_type === "return" && req.borrow_transaction_id) {
           const origBorrowReq = borrowRequestByTxId.get(req.borrow_transaction_id);
           if (origBorrowReq) {
-            borrowRequestedAt = origBorrowReq.requested_at;
-            borrowApprovedAt = origBorrowReq.approved_at;
-            if (origBorrowReq.approved_by) {
-              borrowApprovedByName = profileMap.get(origBorrowReq.approved_by) || null;
-              borrowApprovedByRole = roleMap.get(origBorrowReq.approved_by) || null;
+            txBorrowRequestedAt = origBorrowReq.requested_at;
+            txBorrowApprovedAt = txBorrowApprovedAt || origBorrowReq.approved_at;
+            if (!txBorrowApprovedByName && origBorrowReq.approved_by) {
+              txBorrowApprovedByName = profileMap.get(origBorrowReq.approved_by) || null;
+              txBorrowApprovedByRole = roleMap.get(origBorrowReq.approved_by) || null;
             }
           }
         }
@@ -219,6 +264,28 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
         borrowedQty = req.quantity;
         const d = computeDuration(req.approved_at, null);
         duration = d.text + " (Ongoing)";
+      }
+
+      // For borrow requests without a tx yet, use request's own timestamps
+      if (req.request_type === "borrow") {
+        if (!txBorrowRequestedAt) txBorrowRequestedAt = req.requested_at;
+        if (!txBorrowRequestedByName) txBorrowRequestedByName = profileMap.get(req.requested_by) || null;
+        if (!txBorrowApprovedAt && req.status === "approved") txBorrowApprovedAt = req.approved_at;
+        if (!txBorrowApprovedByName && req.approved_by) {
+          txBorrowApprovedByName = profileMap.get(req.approved_by) || null;
+          txBorrowApprovedByRole = roleMap.get(req.approved_by) || null;
+        }
+      }
+
+      // For return requests without tx lifecycle, use request's own timestamps
+      if (req.request_type === "return") {
+        if (!txReturnRequestedAt) txReturnRequestedAt = req.requested_at;
+        if (!txReturnRequestedByName) txReturnRequestedByName = profileMap.get(req.requested_by) || null;
+        if (!txReturnApprovedAt && req.status === "approved") txReturnApprovedAt = req.approved_at;
+        if (!txReturnApprovedByName && req.status === "approved" && req.approved_by) {
+          txReturnApprovedByName = profileMap.get(req.approved_by) || null;
+          txReturnApprovedByRole = roleMap.get(req.approved_by) || null;
+        }
       }
 
       if (!borrowedQty && req.request_type === "borrow") borrowedQty = req.quantity;
@@ -245,10 +312,17 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
         returned_at: returnTimestamp,
         borrow_timestamp: borrowTimestamp,
         return_timestamp: returnTimestamp,
-        borrow_requested_at: borrowRequestedAt,
-        borrow_approved_at: borrowApprovedAt,
-        borrow_approved_by_name: borrowApprovedByName,
-        borrow_approved_by_role: borrowApprovedByRole,
+        // Lifecycle from DB
+        borrow_requested_at: txBorrowRequestedAt,
+        borrow_requested_by_name: txBorrowRequestedByName,
+        borrow_approved_at: txBorrowApprovedAt,
+        borrow_approved_by_name: txBorrowApprovedByName,
+        borrow_approved_by_role: txBorrowApprovedByRole,
+        return_requested_at: txReturnRequestedAt,
+        return_requested_by_name: txReturnRequestedByName,
+        return_approved_at: txReturnApprovedAt,
+        return_approved_by_name: txReturnApprovedByName,
+        return_approved_by_role: txReturnApprovedByRole,
         duration,
         borrowed_qty: borrowedQty,
         returned_qty: returnedQty,
@@ -427,40 +501,27 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
                     </h4>
                     <DetailRow
                       label="Borrow Requested At"
-                      value={
-                        row.request_type === "borrow"
-                          ? (row.requested_at ? formatManilaTime(row.requested_at) : "Not yet available")
-                          : (row.borrow_requested_at ? formatManilaTime(row.borrow_requested_at) : "Not yet available")
-                      }
-                      highlight={
-                        row.request_type === "borrow" ? !row.requested_at : !row.borrow_requested_at
-                      }
+                      value={row.borrow_requested_at ? formatManilaTime(row.borrow_requested_at) : "Not yet available"}
+                      highlight={!row.borrow_requested_at}
+                    />
+                    <DetailRow
+                      label="Requested By"
+                      value={row.borrow_requested_by_name || "Not yet available"}
+                      highlight={!row.borrow_requested_by_name}
                     />
                     <DetailRow
                       label="Borrow Approved At"
-                      value={
-                        row.request_type === "borrow"
-                          ? (row.approved_at ? formatManilaTime(row.approved_at) : "Not yet available")
-                          : (row.borrow_approved_at ? formatManilaTime(row.borrow_approved_at) : "Not yet available")
-                      }
-                      highlight={
-                        row.request_type === "borrow" ? !row.approved_at : !row.borrow_approved_at
-                      }
+                      value={row.borrow_approved_at ? formatManilaTime(row.borrow_approved_at) : "Not yet available"}
+                      highlight={!row.borrow_approved_at}
                     />
                     <DetailRow
                       label="Approved By"
                       value={
-                        row.request_type === "borrow"
-                          ? (row.approved_by_name
-                              ? `${row.approved_by_name}${row.approved_by_role ? ` (${row.approved_by_role})` : ""}`
-                              : "Not yet available")
-                          : (row.borrow_approved_by_name
-                              ? `${row.borrow_approved_by_name}${row.borrow_approved_by_role ? ` (${row.borrow_approved_by_role})` : ""}`
-                              : "Not yet available")
+                        row.borrow_approved_by_name
+                          ? `${row.borrow_approved_by_name}${row.borrow_approved_by_role ? ` (${row.borrow_approved_by_role})` : ""}`
+                          : "Not yet available"
                       }
-                      highlight={
-                        row.request_type === "borrow" ? !row.approved_by_name : !row.borrow_approved_by_name
-                      }
+                      highlight={!row.borrow_approved_by_name}
                     />
                   </div>
 
@@ -471,30 +532,27 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
                     </h4>
                     <DetailRow
                       label="Return Requested At"
-                      value={
-                        row.request_type === "return"
-                          ? (row.requested_at ? formatManilaTime(row.requested_at) : "Not yet available")
-                          : "Not yet available"
-                      }
-                      highlight={row.request_type !== "return" || !row.requested_at}
+                      value={row.return_requested_at ? formatManilaTime(row.return_requested_at) : "Not yet available"}
+                      highlight={!row.return_requested_at}
+                    />
+                    <DetailRow
+                      label="Requested By"
+                      value={row.return_requested_by_name || "Not yet available"}
+                      highlight={!row.return_requested_by_name}
                     />
                     <DetailRow
                       label="Return Approved At"
-                      value={
-                        row.request_type === "return"
-                          ? (row.approved_at ? formatManilaTime(row.approved_at) : "Not yet available")
-                          : "Not yet available"
-                      }
-                      highlight={row.request_type !== "return" || !row.approved_at}
+                      value={row.return_approved_at ? formatManilaTime(row.return_approved_at) : "Not yet available"}
+                      highlight={!row.return_approved_at}
                     />
                     <DetailRow
                       label="Approved By"
                       value={
-                        row.request_type === "return" && row.approved_by_name
-                          ? `${row.approved_by_name}${row.approved_by_role ? ` (${row.approved_by_role})` : ""}`
+                        row.return_approved_by_name
+                          ? `${row.return_approved_by_name}${row.return_approved_by_role ? ` (${row.return_approved_by_role})` : ""}`
                           : "Not yet available"
                       }
-                      highlight={row.request_type !== "return" || !row.approved_by_name}
+                      highlight={!row.return_approved_by_name}
                     />
                   </div>
 

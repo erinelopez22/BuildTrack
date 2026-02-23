@@ -283,6 +283,15 @@ export default function ProjectDetail() {
       });
       if (error) throw error;
 
+      // Update borrow_transaction with return request timestamps
+      await supabase
+        .from("borrow_transactions")
+        .update({
+          return_requested_at: new Date().toISOString(),
+          return_requested_by: user.id,
+        })
+        .eq("id", transactionId);
+
       toast({ title: "Request Submitted", description: "Return request submitted for approval." });
       setReturnQty((prev) => ({ ...prev, [transactionId]: 0 }));
       setReturnRemarks((prev) => ({ ...prev, [transactionId]: "" }));
