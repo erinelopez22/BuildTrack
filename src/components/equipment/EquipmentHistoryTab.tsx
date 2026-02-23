@@ -420,61 +420,83 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
                     )}
                   </div>
 
-                  {/* Borrow Workflow Timestamps */}
-                  {row.request_type === "borrow" && (
-                    <div className="space-y-2">
-                      <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Borrow Workflow
-                      </h4>
-                      <DetailRow
-                        label="Borrow Requested At"
-                        value={row.requested_at ? formatManilaTime(row.requested_at) : "—"}
-                      />
-                      <DetailRow
-                        label="Borrow Approved At"
-                        value={row.approved_at ? formatManilaTime(row.approved_at) : "Pending"}
-                        highlight={!row.approved_at && row.state !== "Rejected"}
-                      />
-                      {row.rejected_at && (
-                        <DetailRow label="Borrow Rejected At" value={formatManilaTime(row.rejected_at)} />
-                      )}
-                    </div>
-                  )}
+                  {/* SECTION 1: Borrow Request Workflow – Always Visible */}
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      <Calendar className="h-3 w-3" /> Borrow Request Workflow
+                    </h4>
+                    <DetailRow
+                      label="Borrow Requested At"
+                      value={
+                        row.request_type === "borrow"
+                          ? (row.requested_at ? formatManilaTime(row.requested_at) : "Not yet available")
+                          : (row.borrow_requested_at ? formatManilaTime(row.borrow_requested_at) : "Not yet available")
+                      }
+                      highlight={
+                        row.request_type === "borrow" ? !row.requested_at : !row.borrow_requested_at
+                      }
+                    />
+                    <DetailRow
+                      label="Borrow Approved At"
+                      value={
+                        row.request_type === "borrow"
+                          ? (row.approved_at ? formatManilaTime(row.approved_at) : "Not yet available")
+                          : (row.borrow_approved_at ? formatManilaTime(row.borrow_approved_at) : "Not yet available")
+                      }
+                      highlight={
+                        row.request_type === "borrow" ? !row.approved_at : !row.borrow_approved_at
+                      }
+                    />
+                    <DetailRow
+                      label="Approved By"
+                      value={
+                        row.request_type === "borrow"
+                          ? (row.approved_by_name
+                              ? `${row.approved_by_name}${row.approved_by_role ? ` (${row.approved_by_role})` : ""}`
+                              : "Not yet available")
+                          : (row.borrow_approved_by_name
+                              ? `${row.borrow_approved_by_name}${row.borrow_approved_by_role ? ` (${row.borrow_approved_by_role})` : ""}`
+                              : "Not yet available")
+                      }
+                      highlight={
+                        row.request_type === "borrow" ? !row.approved_by_name : !row.borrow_approved_by_name
+                      }
+                    />
+                  </div>
 
-                  {/* Return Workflow Timestamps */}
-                  {row.request_type === "return" && (
-                    <div className="space-y-2">
-                      <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <ArrowRightLeft className="h-3 w-3" /> Return Workflow
-                      </h4>
-                      {/* Show original borrow context */}
-                      {row.borrow_requested_at && (
-                        <DetailRow
-                          label="Originally Borrowed At"
-                          value={formatManilaTime(row.borrow_requested_at)}
-                        />
-                      )}
-                      {row.borrow_approved_at && (
-                        <DetailRow
-                          label="Borrow Approved By"
-                          value={`${row.borrow_approved_by_name || "Unknown"}${row.borrow_approved_by_role ? ` (${row.borrow_approved_by_role})` : ""} — ${formatManilaTime(row.borrow_approved_at)}`}
-                        />
-                      )}
-                      <div className="border-t border-border my-1" />
-                      <DetailRow
-                        label="Return Requested At"
-                        value={row.requested_at ? formatManilaTime(row.requested_at) : "—"}
-                      />
-                      <DetailRow
-                        label="Return Approved At"
-                        value={row.approved_at ? formatManilaTime(row.approved_at) : "Pending"}
-                        highlight={!row.approved_at && row.state !== "Rejected"}
-                      />
-                      {row.rejected_at && (
-                        <DetailRow label="Return Rejected At" value={formatManilaTime(row.rejected_at)} />
-                      )}
-                    </div>
-                  )}
+                  {/* SECTION 2: Return Workflow – Always Visible */}
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                      <ArrowRightLeft className="h-3 w-3" /> Return Workflow
+                    </h4>
+                    <DetailRow
+                      label="Return Requested At"
+                      value={
+                        row.request_type === "return"
+                          ? (row.requested_at ? formatManilaTime(row.requested_at) : "Not yet available")
+                          : "Not yet available"
+                      }
+                      highlight={row.request_type !== "return" || !row.requested_at}
+                    />
+                    <DetailRow
+                      label="Return Approved At"
+                      value={
+                        row.request_type === "return"
+                          ? (row.approved_at ? formatManilaTime(row.approved_at) : "Not yet available")
+                          : "Not yet available"
+                      }
+                      highlight={row.request_type !== "return" || !row.approved_at}
+                    />
+                    <DetailRow
+                      label="Approved By"
+                      value={
+                        row.request_type === "return" && row.approved_by_name
+                          ? `${row.approved_by_name}${row.approved_by_role ? ` (${row.approved_by_role})` : ""}`
+                          : "Not yet available"
+                      }
+                      highlight={row.request_type !== "return" || !row.approved_by_name}
+                    />
+                  </div>
 
                   {/* Notes & References */}
                   <div className="space-y-2">
