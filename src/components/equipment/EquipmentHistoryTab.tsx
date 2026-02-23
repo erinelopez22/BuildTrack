@@ -5,8 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Loader2, Search, Clock, User, Calendar, Package, FileText, ChevronUp, ChevronDown } from "lucide-react";
+import { Loader2, Search, Clock, User, Calendar, Package, FileText, ChevronUp, ChevronDown, ArrowRightLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ROLE_DISPLAY_NAMES, type AppRole } from "@/types/database";
 
 interface HistoryRow {
   id: string;
@@ -14,18 +15,26 @@ interface HistoryRow {
   asset_unit: string | null;
   asset_id: string;
   action_type: string;
+  request_type: string;
   state: string;
   requested_by_name: string;
   borrowed_by_name: string | null;
   returned_by_name: string | null;
   approved_by_name: string | null;
+  approved_by_role: string | null;
   rejected_by_name: string | null;
+  rejected_by_role: string | null;
   requested_at: string | null;
   approved_at: string | null;
   rejected_at: string | null;
   returned_at: string | null;
   borrow_timestamp: string | null;
   return_timestamp: string | null;
+  // Linked borrow request info (for return rows)
+  borrow_requested_at: string | null;
+  borrow_approved_at: string | null;
+  borrow_approved_by_name: string | null;
+  borrow_approved_by_role: string | null;
   duration: string | null;
   borrowed_qty: number | null;
   returned_qty: number | null;
@@ -110,15 +119,34 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
     ])];
     const borrowTxIds = requests.filter((r: any) => r.borrow_transaction_id).map((r: any) => r.borrow_transaction_id);
 
-    const [assetsRes, profilesRes, borrowsRes] = await Promise.all([
+    const [assetsRes, profilesRes, borrowsRes, rolesRes] = await Promise.all([
       supabase.from("company_assets").select("id, asset_name, unit").in("id", assetIds),
       userIds.length > 0 ? supabase.from("profiles").select("id, full_name, email").in("id", userIds) : { data: [] },
       borrowTxIds.length > 0 ? supabase.from("borrow_transactions").select("*").in("id", borrowTxIds) : { data: [] },
+      userIds.length > 0 ? supabase.from("user_roles").select("user_id, role").in("user_id", userIds) : { data: [] },
     ]);
 
     const assetMap = new Map((assetsRes.data || []).map((a: any) => [a.id, a]));
     const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p.full_name || p.email || "Unknown"]));
     const borrowMap = new Map((borrowsRes.data || []).map((b: any) => [b.id, b]));
+
+    // Build role map: user_id → highest role display name
+    const roleMap = new Map<string, string>();
+    for (const r of (rolesRes.data || []) as { user_id: string; role: string }[]) {
+      const displayName = ROLE_DISPLAY_NAMES[r.role as AppRole] || r.role;
+      // Keep the first one (typically highest priority from DB)
+      if (!roleMap.has(r.user_id)) {
+        roleMap.set(r.user_id, displayName);
+      }
+    }
+
+    // Build a lookup: borrow_transaction_id → the original borrow request (approved)
+    const borrowRequestByTxId = new Map<string, any>();
+    for (const req of requests) {
+      if (req.request_type === "borrow" && req.borrow_transaction_id) {
+        borrowRequestByTxId.set(req.borrow_transaction_id, req);
+      }
+    }
 
     const rows: HistoryRow[] = requests.map((req: any) => {
       let actionType = "Borrow Request";
@@ -152,6 +180,12 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
       let borrowedByName: string | null = null;
       let returnedByName: string | null = null;
 
+      // Linked borrow request info for return rows
+      let borrowRequestedAt: string | null = null;
+      let borrowApprovedAt: string | null = null;
+      let borrowApprovedByName: string | null = null;
+      let borrowApprovedByRole: string | null = null;
+
       if (tx) {
         borrowTimestamp = tx.borrowed_at;
         returnTimestamp = tx.returned_at;
@@ -166,6 +200,19 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
         } else if (req.request_type === "borrow" && req.status === "approved") {
           const d = computeDuration(req.approved_at || tx.borrowed_at, tx.returned_at);
           duration = d.text + (d.ongoing ? " (Ongoing)" : "");
+        }
+
+        // For return requests, look up the original borrow request details
+        if (req.request_type === "return" && req.borrow_transaction_id) {
+          const origBorrowReq = borrowRequestByTxId.get(req.borrow_transaction_id);
+          if (origBorrowReq) {
+            borrowRequestedAt = origBorrowReq.requested_at;
+            borrowApprovedAt = origBorrowReq.approved_at;
+            if (origBorrowReq.approved_by) {
+              borrowApprovedByName = profileMap.get(origBorrowReq.approved_by) || null;
+              borrowApprovedByRole = roleMap.get(origBorrowReq.approved_by) || null;
+            }
+          }
         }
       } else if (req.request_type === "borrow" && req.status === "approved") {
         borrowTimestamp = req.approved_at;
@@ -183,18 +230,25 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
         asset_unit: asset?.unit || null,
         asset_id: req.asset_id,
         action_type: actionType,
+        request_type: req.request_type,
         state,
         requested_by_name: profileMap.get(req.requested_by) || "Unknown",
         borrowed_by_name: borrowedByName || (req.request_type === "borrow" ? profileMap.get(req.requested_by) || null : null),
         returned_by_name: returnedByName,
         approved_by_name: req.approved_by ? profileMap.get(req.approved_by) || null : null,
+        approved_by_role: req.approved_by ? roleMap.get(req.approved_by) || null : null,
         rejected_by_name: req.rejected_by ? profileMap.get(req.rejected_by) || null : null,
+        rejected_by_role: req.rejected_by ? roleMap.get(req.rejected_by) || null : null,
         requested_at: req.requested_at,
         approved_at: req.approved_at,
         rejected_at: req.rejected_at,
         returned_at: returnTimestamp,
         borrow_timestamp: borrowTimestamp,
         return_timestamp: returnTimestamp,
+        borrow_requested_at: borrowRequestedAt,
+        borrow_approved_at: borrowApprovedAt,
+        borrow_approved_by_name: borrowApprovedByName,
+        borrow_approved_by_role: borrowApprovedByRole,
         duration,
         borrowed_qty: borrowedQty,
         returned_qty: returnedQty,
@@ -311,9 +365,9 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
                     {row.action_type}
                   </Badge>
                   <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground">
-                    {row.requested_at && row.action_type.startsWith("Borrow") && (
-                      <span className="hidden sm:inline flex items-center gap-1">
-                        <Clock className="h-3 w-3 inline" />
+                    {row.requested_at && (
+                      <span className="hidden sm:inline-flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
                         {formatManilaTime(row.requested_at)}
                       </span>
                     )}
@@ -352,21 +406,75 @@ export function EquipmentHistoryTab({ projectId }: EquipmentHistoryTabProps) {
                     <DetailRow label="Requested By" value={row.requested_by_name} />
                     {row.borrowed_by_name && <DetailRow label="Borrowed By" value={row.borrowed_by_name} />}
                     {row.returned_by_name && <DetailRow label="Returned By" value={row.returned_by_name} />}
-                    {row.approved_by_name && <DetailRow label="Approved By" value={row.approved_by_name} />}
-                    {row.rejected_by_name && <DetailRow label="Rejected By" value={row.rejected_by_name} />}
+                    {row.approved_by_name && (
+                      <DetailRow
+                        label={row.request_type === "return" ? "Return Approved By" : "Borrow Approved By"}
+                        value={`${row.approved_by_name}${row.approved_by_role ? ` (${row.approved_by_role})` : ""}`}
+                      />
+                    )}
+                    {row.rejected_by_name && (
+                      <DetailRow
+                        label="Rejected By"
+                        value={`${row.rejected_by_name}${row.rejected_by_role ? ` (${row.rejected_by_role})` : ""}`}
+                      />
+                    )}
                   </div>
 
-                  {/* Timestamps */}
-                  <div className="space-y-2">
-                    <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                      <Calendar className="h-3 w-3" /> Timestamps
-                    </h4>
-                    {row.requested_at && <DetailRow label="Requested" value={formatManilaTime(row.requested_at)} />}
-                    {row.approved_at && row.action_type.startsWith("Borrow") && <DetailRow label="Approved" value={formatManilaTime(row.approved_at)} />}
-                    {row.rejected_at && <DetailRow label="Rejected" value={formatManilaTime(row.rejected_at)} />}
-                    {row.borrow_timestamp && <DetailRow label="Borrow Start" value={formatManilaTime(row.borrow_timestamp)} />}
-                    {row.return_timestamp && <DetailRow label="Returned At" value={formatManilaTime(row.return_timestamp)} />}
-                  </div>
+                  {/* Borrow Workflow Timestamps */}
+                  {row.request_type === "borrow" && (
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <Calendar className="h-3 w-3" /> Borrow Workflow
+                      </h4>
+                      <DetailRow
+                        label="Borrow Requested At"
+                        value={row.requested_at ? formatManilaTime(row.requested_at) : "—"}
+                      />
+                      <DetailRow
+                        label="Borrow Approved At"
+                        value={row.approved_at ? formatManilaTime(row.approved_at) : "Pending"}
+                        highlight={!row.approved_at && row.state !== "Rejected"}
+                      />
+                      {row.rejected_at && (
+                        <DetailRow label="Borrow Rejected At" value={formatManilaTime(row.rejected_at)} />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Return Workflow Timestamps */}
+                  {row.request_type === "return" && (
+                    <div className="space-y-2">
+                      <h4 className="font-semibold text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <ArrowRightLeft className="h-3 w-3" /> Return Workflow
+                      </h4>
+                      {/* Show original borrow context */}
+                      {row.borrow_requested_at && (
+                        <DetailRow
+                          label="Originally Borrowed At"
+                          value={formatManilaTime(row.borrow_requested_at)}
+                        />
+                      )}
+                      {row.borrow_approved_at && (
+                        <DetailRow
+                          label="Borrow Approved By"
+                          value={`${row.borrow_approved_by_name || "Unknown"}${row.borrow_approved_by_role ? ` (${row.borrow_approved_by_role})` : ""} — ${formatManilaTime(row.borrow_approved_at)}`}
+                        />
+                      )}
+                      <div className="border-t border-border my-1" />
+                      <DetailRow
+                        label="Return Requested At"
+                        value={row.requested_at ? formatManilaTime(row.requested_at) : "—"}
+                      />
+                      <DetailRow
+                        label="Return Approved At"
+                        value={row.approved_at ? formatManilaTime(row.approved_at) : "Pending"}
+                        highlight={!row.approved_at && row.state !== "Rejected"}
+                      />
+                      {row.rejected_at && (
+                        <DetailRow label="Return Rejected At" value={formatManilaTime(row.rejected_at)} />
+                      )}
+                    </div>
+                  )}
 
                   {/* Notes & References */}
                   <div className="space-y-2">
