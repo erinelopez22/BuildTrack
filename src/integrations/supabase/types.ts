@@ -271,6 +271,57 @@ export type Database = {
           },
         ]
       }
+      email_logs: {
+        Row: {
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          error: string | null
+          event_type: string | null
+          id: string
+          mode: string
+          project_id: string | null
+          provider: string
+          provider_message_id: string | null
+          status: string
+          subject: string
+          to_email: string
+          to_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error?: string | null
+          event_type?: string | null
+          id?: string
+          mode?: string
+          project_id?: string | null
+          provider?: string
+          provider_message_id?: string | null
+          status?: string
+          subject: string
+          to_email: string
+          to_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          error?: string | null
+          event_type?: string | null
+          id?: string
+          mode?: string
+          project_id?: string | null
+          provider?: string
+          provider_message_id?: string | null
+          status?: string
+          subject?: string
+          to_email?: string
+          to_user_id?: string | null
+        }
+        Relationships: []
+      }
       equipment_requests: {
         Row: {
           approved_at: string | null
@@ -422,6 +473,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notification_settings: {
+        Row: {
+          api_key_set: boolean
+          api_key_updated_at: string | null
+          api_key_updated_by: string | null
+          email_enabled: boolean
+          from_email: string | null
+          from_name: string | null
+          id: string
+          provider: string
+          reply_to: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          api_key_set?: boolean
+          api_key_updated_at?: string | null
+          api_key_updated_by?: string | null
+          email_enabled?: boolean
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          provider?: string
+          reply_to?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          api_key_set?: boolean
+          api_key_updated_at?: string | null
+          api_key_updated_by?: string | null
+          email_enabled?: boolean
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          provider?: string
+          reply_to?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       notifications: {
         Row: {
@@ -770,6 +863,9 @@ export type Database = {
           created_at: string | null
           created_by: string | null
           email: string
+          email_opt_in: boolean
+          email_pref_updated_at: string | null
+          email_pref_updated_by: string | null
           full_name: string | null
           id: string
           is_active: boolean | null
@@ -787,6 +883,9 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           email: string
+          email_opt_in?: boolean
+          email_pref_updated_at?: string | null
+          email_pref_updated_by?: string | null
           full_name?: string | null
           id: string
           is_active?: boolean | null
@@ -804,6 +903,9 @@ export type Database = {
           created_at?: string | null
           created_by?: string | null
           email?: string
+          email_opt_in?: boolean
+          email_pref_updated_at?: string | null
+          email_pref_updated_by?: string | null
           full_name?: string | null
           id?: string
           is_active?: boolean | null
