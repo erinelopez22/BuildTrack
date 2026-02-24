@@ -773,6 +773,8 @@ export type Database = {
           full_name: string | null
           id: string
           is_active: boolean | null
+          mobile_updated_at: string | null
+          mobile_updated_by: string | null
           notification_preferences: Json | null
           phone: string | null
           sms_opt_in: boolean | null
@@ -788,6 +790,8 @@ export type Database = {
           full_name?: string | null
           id: string
           is_active?: boolean | null
+          mobile_updated_at?: string | null
+          mobile_updated_by?: string | null
           notification_preferences?: Json | null
           phone?: string | null
           sms_opt_in?: boolean | null
@@ -803,6 +807,8 @@ export type Database = {
           full_name?: string | null
           id?: string
           is_active?: boolean | null
+          mobile_updated_at?: string | null
+          mobile_updated_by?: string | null
           notification_preferences?: Json | null
           phone?: string | null
           sms_opt_in?: boolean | null
