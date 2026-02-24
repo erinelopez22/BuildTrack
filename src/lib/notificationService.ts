@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Non-blocking SMS trigger via Pingram edge function
-export async function triggerSMSNotification(params: {
+// SMS functions are disabled - kept as no-ops for backward compatibility
+export async function triggerSMSNotification(_params: {
   eventType: string;
   projectId: string;
   entityType: string;
@@ -11,21 +11,10 @@ export async function triggerSMSNotification(params: {
   actorUserId: string;
   timestamp?: string;
 }) {
-  try {
-    const { error } = await supabase.functions.invoke("send-sms-notification", {
-      body: {
-        ...params,
-        timestamp: params.timestamp || new Date().toISOString(),
-      },
-    });
-    if (error) console.warn("SMS notification edge function error:", error);
-  } catch (err) {
-    console.warn("SMS notification trigger error (non-blocking):", err);
-  }
+  // SMS disabled — no-op
 }
 
-// Legacy SMS trigger (kept for backward compat)
-export async function triggerSMS(params: {
+export async function triggerSMS(_params: {
   projectId: string;
   projectName: string;
   eventType: string;
@@ -36,14 +25,7 @@ export async function triggerSMS(params: {
   excludeUserId?: string;
   additionalRecipientUserIds?: string[];
 }) {
-  try {
-    const { error } = await supabase.functions.invoke("send-sms", {
-      body: params,
-    });
-    if (error) console.warn("SMS edge function error:", error);
-  } catch (err) {
-    console.warn("SMS trigger error (non-blocking):", err);
-  }
+  // SMS disabled — no-op
 }
 
 interface CreateNotificationParams {
@@ -108,7 +90,7 @@ export async function notifyProjectMembers({
     return { error: membersError };
   }
 
-  // Create notifications for each member (except excluded user)
+  // Create in-app notifications for each member (except excluded user)
   const notifications = members
     .filter((m) => m.user_id !== excludeUserId)
     .map((m) => ({
@@ -131,20 +113,52 @@ export async function notifyProjectMembers({
     console.error("Failed to create notifications:", error);
   }
 
-  // Trigger Pingram SMS in background (non-blocking)
+  // Trigger Resend email in background (non-blocking)
   if (projectId && excludeUserId) {
-    triggerSMSNotification({
-      eventType: type === "order" ? "order_status_change" : type === "team" ? "delivery_received" : "order_status_change",
+    triggerEmailNotification({
+      eventType: type === "order" ? "order_status_change" : type === "team" ? "equipment_update" : "project_update",
       projectId,
       entityType: referenceType || type,
       entityId: referenceId || projectId,
       title,
-      message: `[BuildTrack] ${message}`,
+      message,
       actorUserId: excludeUserId,
-    }).catch((err) => console.warn("SMS notification failed (non-blocking):", err));
+    }).catch((err) => console.warn("Email notification failed (non-blocking):", err));
   }
 
   return { error };
+}
+
+// Non-blocking email trigger via Resend edge function
+export async function triggerEmailNotification(params: {
+  eventType: string;
+  projectId: string;
+  entityType: string;
+  entityId: string;
+  title: string;
+  message: string;
+  actorUserId: string;
+  url?: string;
+}) {
+  try {
+    const { error } = await supabase.functions.invoke("send-email-notification", {
+      body: {
+        mode: "event",
+        eventType: params.eventType,
+        projectId: params.projectId,
+        entityType: params.entityType,
+        entityId: params.entityId,
+        subject: `[BuildTrack] ${params.title}`,
+        title: params.title,
+        message: params.message,
+        url: params.url,
+        actorUserId: params.actorUserId,
+      },
+    });
+    if (error) console.warn("Email notification edge function error:", error);
+  } catch (err) {
+    console.warn("Email notification trigger error (non-blocking):", err);
+  }
 }
 
 // Format timestamp to Manila timezone
@@ -175,7 +189,7 @@ export function formatManilaTime2(date: string | Date): string {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
-      hour12: true, // set to false if you want 24-hour
+      hour12: true,
     })
     .replace(",", " –");
 }

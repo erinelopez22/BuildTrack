@@ -276,15 +276,17 @@ export function SMSNotificationsTab() {
 
   return (
     <div className="space-y-4">
+      {/* SMS Disabled Banner */}
+      <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-4 py-3">
+        <span className="text-sm font-medium text-foreground">⚠️ SMS notifications are temporarily disabled.</span>
+        <span className="text-xs text-muted-foreground">Mobile numbers and settings are preserved for future use.</span>
+      </div>
+
       <div className="flex items-center justify-between gap-4">
         <div className="relative max-w-sm flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <Button onClick={() => setTestModalOpen(true)} size="sm">
-          <SendHorizonal className="mr-1 h-4 w-4" />
-          Test Notification
-        </Button>
       </div>
 
       <DataTable columns={columns} data={filteredUsers} loading={loading} emptyMessage="No users found" />

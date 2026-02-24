@@ -24,11 +24,12 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff, MessageSquare } from 'lucide-react';
+import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff, MessageSquare, Mail } from 'lucide-react';
 import type { Profile, UserRole, AppRole } from '@/types/database';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import { SMSNotificationsTab } from '@/components/users/SMSNotificationsTab';
+import { EmailNotificationsTab } from '@/components/users/EmailNotificationsTab';
 
 interface UserWithRoles extends Profile {
   roles: UserRole[];
@@ -412,6 +413,10 @@ export default function UsersPage() {
             <Users className="mr-2 h-4 w-4" />
             Users & Roles
           </TabsTrigger>
+          <TabsTrigger value="notifications">
+            <Mail className="mr-2 h-4 w-4" />
+            Notifications
+          </TabsTrigger>
           <TabsTrigger value="sms">
             <MessageSquare className="mr-2 h-4 w-4" />
             SMS Notifications
@@ -548,6 +553,10 @@ export default function UsersPage() {
         users={users}
       />
 
+        </TabsContent>
+
+        <TabsContent value="notifications" className="mt-4">
+          <EmailNotificationsTab />
         </TabsContent>
 
         <TabsContent value="sms" className="mt-4">
