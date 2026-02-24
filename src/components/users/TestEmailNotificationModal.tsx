@@ -39,7 +39,6 @@ import {
   XCircle,
   ChevronsUpDown,
   Check,
-  AlertTriangle,
 } from "lucide-react";
 import { ROLE_DISPLAY_NAMES } from "@/types/database";
 import type { UserRole } from "@/types/database";
@@ -58,7 +57,7 @@ interface UserOption {
 }
 
 interface SendResult {
-  email?: { status: "sent" | "failed"; error?: string; messageId?: string };
+  email?: { status: "sent" | "failed"; error?: string };
 }
 
 export function TestEmailNotificationModal({ open, onOpenChange }: TestEmailNotificationModalProps) {
@@ -181,6 +180,15 @@ export function TestEmailNotificationModal({ open, onOpenChange }: TestEmailNoti
         setResult({
           email: { status: "failed", error: error.message },
         });
+      } else if (data?.error) {
+        toast({
+          title: "Error",
+          description: data.error,
+          variant: "destructive",
+        });
+        setResult({
+          email: { status: "failed", error: data.error },
+        });
       } else {
         setResult(data?.results || {});
         toast({ title: "Test sent", description: "Check results below." });
@@ -204,12 +212,6 @@ export function TestEmailNotificationModal({ open, onOpenChange }: TestEmailNoti
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* SMS Disabled Banner */}
-          <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-3 py-2">
-            <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
-            <p className="text-xs text-warning-foreground">SMS is temporarily disabled. Only email notifications are available.</p>
-          </div>
-
           {/* Recipient Mode */}
           <div className="space-y-2">
             <Label>Recipient Mode</Label>
@@ -336,7 +338,7 @@ export function TestEmailNotificationModal({ open, onOpenChange }: TestEmailNoti
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Email Body</Label>
+              <Label className="text-xs">Email Body (HTML allowed)</Label>
               <Textarea
                 value={emailBody}
                 onChange={(e) => setEmailBody(e.target.value)}
@@ -362,11 +364,6 @@ export function TestEmailNotificationModal({ open, onOpenChange }: TestEmailNoti
                   {result.email.error && (
                     <span className="text-xs text-destructive">
                       — {result.email.error}
-                    </span>
-                  )}
-                  {result.email.messageId && (
-                    <span className="text-xs text-muted-foreground">
-                      (ID: {result.email.messageId})
                     </span>
                   )}
                 </div>

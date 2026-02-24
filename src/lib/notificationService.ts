@@ -113,7 +113,7 @@ export async function notifyProjectMembers({
     console.error("Failed to create notifications:", error);
   }
 
-  // Trigger Resend email in background (non-blocking)
+  // Trigger Gmail SMTP email in background (non-blocking)
   if (projectId && excludeUserId) {
     triggerEmailNotification({
       eventType: type === "order" ? "order_status_change" : type === "team" ? "equipment_update" : "project_update",
@@ -129,7 +129,7 @@ export async function notifyProjectMembers({
   return { error };
 }
 
-// Non-blocking email trigger via Resend edge function
+// Non-blocking email trigger via Gmail SMTP edge function
 export async function triggerEmailNotification(params: {
   eventType: string;
   projectId: string;

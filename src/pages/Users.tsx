@@ -417,10 +417,12 @@ export default function UsersPage() {
             <Mail className="mr-2 h-4 w-4" />
             Notifications
           </TabsTrigger>
-          <TabsTrigger value="sms">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            SMS Notifications
-          </TabsTrigger>
+          {isSuperAdmin() && (
+            <TabsTrigger value="sms">
+              <MessageSquare className="mr-2 h-4 w-4" />
+              SMS Notifications
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="users" className="space-y-4 mt-4">
@@ -559,9 +561,11 @@ export default function UsersPage() {
           <EmailNotificationsTab />
         </TabsContent>
 
-        <TabsContent value="sms" className="mt-4">
-          <SMSNotificationsTab />
-        </TabsContent>
+        {isSuperAdmin() && (
+          <TabsContent value="sms" className="mt-4">
+            <SMSNotificationsTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
