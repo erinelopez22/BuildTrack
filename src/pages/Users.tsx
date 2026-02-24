@@ -12,6 +12,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -24,7 +34,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff, MessageSquare, Mail, Pencil } from 'lucide-react';
+import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff, MessageSquare, Mail, Pencil, Trash2 } from 'lucide-react';
 import type { Profile, UserRole, AppRole } from '@/types/database';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -75,6 +85,10 @@ export default function UsersPage() {
   const [editUserForm, setEditUserForm] = useState({ name: '', address: '', is_active: true });
   const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
+
+  // Delete user confirmation
+  const [deleteUser, setDeleteUser] = useState<UserWithRoles | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   const fetchUsers = async () => {
     const { data: profilesData, error: profilesError } = await supabase
@@ -203,6 +217,31 @@ export default function UsersPage() {
       toast({ title: 'Error', description: err.message || 'Failed to update user', variant: 'destructive' });
     }
     setIsUpdatingUser(false);
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteUser) return;
+    setIsDeletingUser(true);
+    try {
+      const { error: rolesError } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', deleteUser.id);
+      if (rolesError) throw rolesError;
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', deleteUser.id);
+      if (profileError) throw profileError;
+
+      toast({ title: 'Success', description: `User "${deleteUser.full_name || deleteUser.email}" has been deactivated and all roles removed.` });
+      setDeleteUser(null);
+      fetchUsers();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to delete user', variant: 'destructive' });
+    }
+    setIsDeletingUser(false);
   };
 
   // --- Debounced duplicate checks ---
@@ -439,9 +478,17 @@ export default function UsersPage() {
           }} title="Assign Role">
             <UserPlus className="h-4 w-4" />
           </Button>
+          {isSuperAdmin() && user.id !== authUser?.id && (
+            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={(e) => {
+              e.stopPropagation();
+              setDeleteUser(user);
+            }} title="Delete User">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       ),
-      className: 'w-32',
+      className: 'w-40',
     },
   ];
 
@@ -655,6 +702,28 @@ export default function UsersPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete User Confirmation */}
+      <AlertDialog open={!!deleteUser} onOpenChange={(open) => !open && setDeleteUser(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{deleteUser?.full_name || deleteUser?.email}</strong>? This will deactivate their account and remove all assigned roles. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingUser}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteUser}
+              disabled={isDeletingUser}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingUser ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</> : 'Delete User'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
         </TabsContent>
 
