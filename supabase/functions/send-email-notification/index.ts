@@ -38,15 +38,17 @@ Deno.serve(async (req) => {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: userData, error: userError } = await anonClient.auth.getUser(token);
-    if (userError || !userData?.user) {
+    const { data: claimsData, error: claimsError } = await anonClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.error("Auth claims error:", claimsError);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const callerId = userData.user.id;
+    const callerId = claimsData.claims.sub as string;
+    console.log("Authenticated caller:", callerId);
     const serviceClient = createClient(supabaseUrl, serviceRoleKey);
 
     const body = await req.json();
@@ -109,14 +111,16 @@ async function handleTestMode(
   replyTo?: string
 ) {
   // Verify caller is admin/super_admin
-  const { data: callerRoles } = await serviceClient
+  const { data: callerRoles, error: rolesError } = await serviceClient
     .from("user_roles")
     .select("role")
     .eq("user_id", callerId)
     .in("role", ["admin", "super_admin"]);
 
+  console.log("Caller roles check:", { callerId, callerRoles, rolesError });
+
   if (!callerRoles || callerRoles.length === 0) {
-    return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
+    return new Response(JSON.stringify({ error: "Forbidden: Admin access required", debug: { callerId, rolesError } }), {
       status: 403,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
