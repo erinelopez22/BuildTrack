@@ -1,6 +1,30 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Non-blocking SMS trigger via edge function
+// Non-blocking SMS trigger via Pingram edge function
+export async function triggerSMSNotification(params: {
+  eventType: string;
+  projectId: string;
+  entityType: string;
+  entityId: string;
+  title: string;
+  message: string;
+  actorUserId: string;
+  timestamp?: string;
+}) {
+  try {
+    const { error } = await supabase.functions.invoke("send-sms-notification", {
+      body: {
+        ...params,
+        timestamp: params.timestamp || new Date().toISOString(),
+      },
+    });
+    if (error) console.warn("SMS notification edge function error:", error);
+  } catch (err) {
+    console.warn("SMS notification trigger error (non-blocking):", err);
+  }
+}
+
+// Legacy SMS trigger (kept for backward compat)
 export async function triggerSMS(params: {
   projectId: string;
   projectName: string;
@@ -107,18 +131,17 @@ export async function notifyProjectMembers({
     console.error("Failed to create notifications:", error);
   }
 
-  // Trigger SMS in background (non-blocking)
-  if (projectId) {
-    triggerSMS({
-      projectId,
-      projectName: title.split("]")[0]?.replace("[", "") || "Project",
+  // Trigger Pingram SMS in background (non-blocking)
+  if (projectId && excludeUserId) {
+    triggerSMSNotification({
       eventType: type === "order" ? "order_status_change" : type === "team" ? "delivery_received" : "order_status_change",
-      eventSummary: title,
-      performedBy: "System",
-      excludeUserId,
-      referenceId,
-      referenceType,
-    }).catch((err) => console.warn("SMS trigger failed (non-blocking):", err));
+      projectId,
+      entityType: referenceType || type,
+      entityId: referenceId || projectId,
+      title,
+      message: `[BuildTrack] ${message}`,
+      actorUserId: excludeUserId,
+    }).catch((err) => console.warn("SMS notification failed (non-blocking):", err));
   }
 
   return { error };

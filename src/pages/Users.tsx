@@ -22,11 +22,13 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff, MessageSquare } from 'lucide-react';
 import type { Profile, UserRole, AppRole } from '@/types/database';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
+import { SMSNotificationsTab } from '@/components/users/SMSNotificationsTab';
 
 interface UserWithRoles extends Profile {
   roles: UserRole[];
@@ -404,12 +406,25 @@ export default function UsersPage() {
         }
       />
 
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
-      </div>
+      <Tabs defaultValue="users">
+        <TabsList>
+          <TabsTrigger value="users">
+            <Users className="mr-2 h-4 w-4" />
+            Users & Roles
+          </TabsTrigger>
+          <TabsTrigger value="sms">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            SMS Notifications
+          </TabsTrigger>
+        </TabsList>
 
-      <DataTable columns={columns} data={filteredUsers} loading={loading} emptyMessage="No users found" />
+        <TabsContent value="users" className="space-y-4 mt-4">
+          <div className="relative max-w-sm">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          </div>
+
+          <DataTable columns={columns} data={filteredUsers} loading={loading} emptyMessage="No users found" />
 
       {/* Assign Role Dialog */}
       <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
@@ -532,6 +547,13 @@ export default function UsersPage() {
         formatManilaTime={formatManilaTime}
         users={users}
       />
+
+        </TabsContent>
+
+        <TabsContent value="sms" className="mt-4">
+          <SMSNotificationsTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
