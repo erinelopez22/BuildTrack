@@ -25,9 +25,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
 import { formatManilaTime } from "@/lib/notificationService";
-import { Wrench, Plus, Search, Pencil, Trash2, Loader2, Package, ArrowLeftRight, Check, X, Eye, History } from "lucide-react";
+import { Wrench, Plus, Search, Pencil, Trash2, Loader2, Package, ArrowLeftRight, Check, X, Eye, History, ClipboardList, RotateCcw } from "lucide-react";
 import type { CompanyAsset, AssetType, AssetCondition, BorrowTransaction, Project, Profile } from "@/types/database";
 import { EquipmentHistoryTab } from "@/components/equipment/EquipmentHistoryTab";
+import { BorrowRequestsTab } from "@/components/equipment/BorrowRequestsTab";
+import { ReturnRequestsTab } from "@/components/equipment/ReturnRequestsTab";
 
 interface BorrowWithDetails extends BorrowTransaction {
   project?: Project;
@@ -505,10 +507,18 @@ export default function CompanyAssets() {
       />
 
       <Tabs value={activeTopTab} onValueChange={setActiveTopTab}>
-        <TabsList>
+        <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="assets" className="gap-1.5">
             <Package className="h-4 w-4" />
             Assets
+          </TabsTrigger>
+          <TabsTrigger value="borrow_requests" className="gap-1.5">
+            <ClipboardList className="h-4 w-4" />
+            Borrow Requests
+          </TabsTrigger>
+          <TabsTrigger value="return_requests" className="gap-1.5">
+            <RotateCcw className="h-4 w-4" />
+            Return Requests
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5">
             <History className="h-4 w-4" />
@@ -649,6 +659,14 @@ export default function CompanyAssets() {
           })}
         </div>
       )}
+        </TabsContent>
+
+        <TabsContent value="borrow_requests" className="mt-4">
+          <BorrowRequestsTab />
+        </TabsContent>
+
+        <TabsContent value="return_requests" className="mt-4">
+          <ReturnRequestsTab />
         </TabsContent>
 
         <TabsContent value="history" className="mt-4 space-y-4">
