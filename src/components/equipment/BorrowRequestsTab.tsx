@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatManilaTime } from "@/lib/notificationService";
+import { formatManilaTime, triggerSMSNotification, notifyProjectMembers } from "@/lib/notificationService";
 import { logActivity } from "@/lib/activityLogger";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -171,6 +171,17 @@ export function BorrowRequestsTab() {
         userId: user.id,
       });
 
+      // SMS notification for borrow approval
+      await notifyProjectMembers({
+        projectId: req.project_id,
+        title: "Borrow Request Approved",
+        message: `Borrow request for ${req.asset_name} (x${req.quantity}) approved for ${req.project_name}`,
+        type: "team",
+        referenceType: "equipment_request",
+        referenceId: req.id,
+        excludeUserId: user.id,
+      });
+
       toast({ title: "Approved", description: "Borrow request approved and executed." });
       fetchRequests();
     } catch (err: any) {
@@ -191,6 +202,17 @@ export function BorrowRequestsTab() {
         })
         .eq("id", rejectRequest.id);
       if (error) throw error;
+
+      // SMS notification for borrow rejection
+      await notifyProjectMembers({
+        projectId: rejectRequest.project_id,
+        title: "Borrow Request Rejected",
+        message: `Borrow request for ${rejectRequest.asset_name} rejected${rejectReason ? `: ${rejectReason}` : ""}`,
+        type: "team",
+        referenceType: "equipment_request",
+        referenceId: rejectRequest.id,
+        excludeUserId: user.id,
+      });
 
       toast({ title: "Rejected", description: "Borrow request rejected." });
       setRejectRequest(null);

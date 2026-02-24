@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { formatManilaTime } from "@/lib/notificationService";
+import { formatManilaTime, triggerSMSNotification, notifyProjectMembers } from "@/lib/notificationService";
 import { logActivity } from "@/lib/activityLogger";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -181,6 +181,17 @@ export function ReturnRequestsTab() {
           newValues: { asset_id: req.asset_id, qty: req.quantity, status: newStatus, approved_by: user.id },
           userId: user.id,
         });
+
+        // SMS notification for return approval
+        await notifyProjectMembers({
+          projectId: req.project_id,
+          title: "Return Request Approved",
+          message: `Return request for ${req.asset_name} (x${req.quantity}) approved for ${req.project_name}`,
+          type: "team",
+          referenceType: "equipment_request",
+          referenceId: req.id,
+          excludeUserId: user.id,
+        });
       }
 
       toast({ title: "Approved", description: "Return request approved and executed." });
@@ -203,6 +214,17 @@ export function ReturnRequestsTab() {
         })
         .eq("id", rejectRequest.id);
       if (error) throw error;
+
+      // SMS notification for return rejection
+      await notifyProjectMembers({
+        projectId: rejectRequest.project_id,
+        title: "Return Request Rejected",
+        message: `Return request for ${rejectRequest.asset_name} rejected${rejectReason ? `: ${rejectReason}` : ""}`,
+        type: "team",
+        referenceType: "equipment_request",
+        referenceId: rejectRequest.id,
+        excludeUserId: user.id,
+      });
 
       toast({ title: "Rejected", description: "Return request rejected." });
       setRejectRequest(null);
