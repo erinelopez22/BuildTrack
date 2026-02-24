@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Search, Loader2, Save, SendHorizonal, Mail, Settings } from "lucide-react";
+import { Search, Loader2, Save, SendHorizonal, Mail, Settings, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { ROLE_DISPLAY_NAMES } from "@/types/database";
 import type { UserRole } from "@/types/database";
 import { TestEmailNotificationModal } from "./TestEmailNotificationModal";
@@ -26,16 +26,17 @@ interface EmailUser {
   updater_name?: string;
 }
 
-interface NotificationSettings {
+interface SmtpSettings {
   id: string;
   provider: string;
   email_enabled: boolean;
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_user: string | null;
+  smtp_pass: string | null;
   from_name: string | null;
   from_email: string | null;
   reply_to: string | null;
-  api_key_set: boolean;
-  api_key_updated_at: string | null;
-  api_key_updated_by: string | null;
   updated_at: string;
   updated_by: string | null;
 }
@@ -49,28 +50,37 @@ export function EmailNotificationsTab() {
   const [testModalOpen, setTestModalOpen] = useState(false);
 
   // Settings state
-  const [settings, setSettings] = useState<NotificationSettings | null>(null);
+  const [settings, setSettings] = useState<SmtpSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
-  const [fromName, setFromName] = useState("");
-  const [fromEmail, setFromEmail] = useState("");
-  const [replyTo, setReplyTo] = useState("");
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [smtpHost, setSmtpHost] = useState("smtp.gmail.com");
+  const [smtpPort, setSmtpPort] = useState("587");
+  const [smtpUser, setSmtpUser] = useState("");
+  const [smtpPass, setSmtpPass] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [fromName, setFromName] = useState("BuildTrack");
+  const [replyTo, setReplyTo] = useState("");
+  const [hasExistingPassword, setHasExistingPassword] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     setSettingsLoading(true);
     const { data } = await supabase
       .from("notification_settings")
-      .select("*")
+      .select("id, provider, email_enabled, smtp_host, smtp_port, smtp_user, from_name, from_email, reply_to, updated_at, updated_by")
       .limit(1)
       .single();
 
     if (data) {
       setSettings(data as any);
-      setFromName(data.from_name || "");
-      setFromEmail(data.from_email || "");
-      setReplyTo(data.reply_to || "");
       setEmailEnabled(data.email_enabled);
+      setSmtpHost((data as any).smtp_host || "smtp.gmail.com");
+      setSmtpPort(String((data as any).smtp_port || 587));
+      setSmtpUser((data as any).smtp_user || "");
+      setFromName(data.from_name || "BuildTrack");
+      setReplyTo(data.reply_to || "");
+      // If smtp_user is set, assume password is configured
+      setHasExistingPassword(!!(data as any).smtp_user);
     }
     setSettingsLoading(false);
   }, []);
@@ -113,22 +123,33 @@ export function EmailNotificationsTab() {
     if (!user || !settings) return;
     setSavingSettings(true);
 
+    const updatePayload: Record<string, any> = {
+      email_enabled: emailEnabled,
+      smtp_host: smtpHost.trim() || "smtp.gmail.com",
+      smtp_port: parseInt(smtpPort) || 587,
+      smtp_user: smtpUser.trim() || null,
+      from_name: fromName.trim() || "BuildTrack",
+      from_email: smtpUser.trim() || null, // From email = SMTP username
+      reply_to: replyTo.trim() || null,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    };
+
+    // Only update password if a new one was entered
+    if (smtpPass.trim()) {
+      updatePayload.smtp_pass = smtpPass.trim();
+    }
+
     const { error } = await supabase
       .from("notification_settings")
-      .update({
-        from_name: fromName.trim() || null,
-        from_email: fromEmail.trim() || null,
-        reply_to: replyTo.trim() || null,
-        email_enabled: emailEnabled,
-        updated_at: new Date().toISOString(),
-        updated_by: user.id,
-      })
+      .update(updatePayload)
       .eq("id", settings.id);
 
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Settings saved", description: "Email notification settings updated." });
+      toast({ title: "Settings saved", description: "Gmail SMTP settings updated." });
+      setSmtpPass(""); // Clear password field after save
       fetchSettings();
     }
     setSavingSettings(false);
@@ -236,12 +257,12 @@ export function EmailNotificationsTab() {
 
   return (
     <div className="space-y-6">
-      {/* Resend Settings Card */}
+      {/* Gmail SMTP Settings Card */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Settings className="h-4 w-4" />
-            Email Provider Settings
+            Gmail SMTP Configuration
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -254,7 +275,7 @@ export function EmailNotificationsTab() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">Provider</p>
-                  <p className="text-xs text-muted-foreground">Resend</p>
+                  <p className="text-xs text-muted-foreground">Gmail SMTP (STARTTLS)</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Label htmlFor="email-enabled" className="text-sm">Enable Email Notifications</Label>
@@ -263,6 +284,67 @@ export function EmailNotificationsTab() {
                     checked={emailEnabled}
                     onCheckedChange={setEmailEnabled}
                   />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">SMTP Host</Label>
+                  <Input
+                    value={smtpHost}
+                    onChange={(e) => setSmtpHost(e.target.value)}
+                    placeholder="smtp.gmail.com"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">SMTP Port</Label>
+                  <Input
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(e.target.value)}
+                    placeholder="587"
+                    type="number"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">SMTP Username (Gmail)</Label>
+                  <Input
+                    value={smtpUser}
+                    onChange={(e) => setSmtpUser(e.target.value)}
+                    placeholder="yourapp@gmail.com"
+                    type="email"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">SMTP App Password</Label>
+                  <div className="relative">
+                    <Input
+                      value={smtpPass}
+                      onChange={(e) => setSmtpPass(e.target.value)}
+                      placeholder={hasExistingPassword ? "••••••••••••••••" : "Enter Gmail App Password"}
+                      type={showPassword ? "text" : "password"}
+                      className="pr-10"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="absolute right-0 top-0 h-full px-3"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  {hasExistingPassword && !smtpPass && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CheckCircle2 className="h-3 w-3 text-primary" />
+                      Password configured. Leave blank to keep current.
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Use a Gmail App Password, not your regular password.
+                  </p>
                 </div>
               </div>
 
@@ -280,33 +362,31 @@ export function EmailNotificationsTab() {
                 <div className="space-y-1.5">
                   <Label className="text-xs">From Email</Label>
                   <Input
-                    value={fromEmail}
-                    onChange={(e) => setFromEmail(e.target.value)}
-                    placeholder="noreply@yourdomain.com"
+                    value={smtpUser || ""}
+                    disabled
+                    className="bg-muted"
                   />
+                  <p className="text-xs text-muted-foreground">Auto-set to SMTP username to prevent spoofing.</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Reply-To (optional)</Label>
                   <Input
                     value={replyTo}
                     onChange={(e) => setReplyTo(e.target.value)}
-                    placeholder="support@yourdomain.com"
+                    placeholder="support@yourcompany.com"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Resend API Key</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value="••••••••••••••••"
-                      disabled
-                      className="font-mono text-xs"
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Managed via Supabase project secrets (RESEND_API_KEY)
-                  </p>
+                  <Label className="text-xs">Security</Label>
+                  <Input value="TLS (STARTTLS)" disabled className="bg-muted" />
                 </div>
               </div>
+
+              {settings && (
+                <div className="text-xs text-muted-foreground">
+                  Last updated: {formatManilaTime(settings.updated_at)}
+                </div>
+              )}
 
               <div className="flex justify-end">
                 <Button onClick={handleSaveSettings} disabled={savingSettings} size="sm">

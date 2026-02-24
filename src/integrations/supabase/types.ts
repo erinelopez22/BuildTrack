@@ -485,6 +485,10 @@ export type Database = {
           id: string
           provider: string
           reply_to: string | null
+          smtp_host: string | null
+          smtp_pass: string | null
+          smtp_port: number | null
+          smtp_user: string | null
           updated_at: string
           updated_by: string | null
         }
@@ -498,6 +502,10 @@ export type Database = {
           id?: string
           provider?: string
           reply_to?: string | null
+          smtp_host?: string | null
+          smtp_pass?: string | null
+          smtp_port?: number | null
+          smtp_user?: string | null
           updated_at?: string
           updated_by?: string | null
         }
@@ -511,6 +519,10 @@ export type Database = {
           id?: string
           provider?: string
           reply_to?: string | null
+          smtp_host?: string | null
+          smtp_pass?: string | null
+          smtp_port?: number | null
+          smtp_user?: string | null
           updated_at?: string
           updated_by?: string | null
         }
