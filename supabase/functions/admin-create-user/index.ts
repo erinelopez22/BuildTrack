@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
     // Validate required fields
     if (!name || !address || !email || !username || !password || !role) {
       return new Response(JSON.stringify({ error: 'All fields are required' }), {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     // Only super_admin can assign super_admin role
     if (role === 'super_admin' && !callerIsSuperAdmin) {
       return new Response(JSON.stringify({ error: 'Only Super Admin can assign Super Admin role' }), {
-        status: 403,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -77,21 +77,7 @@ Deno.serve(async (req) => {
     // Password minimum length
     if (password.length < 8) {
       return new Response(JSON.stringify({ error: 'Password must be at least 8 characters' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    // Check username uniqueness
-    const { data: existingUsername } = await adminClient
-      .from('profiles')
-      .select('id')
-      .ilike('username', username.trim())
-      .limit(1)
-
-    if (existingUsername && existingUsername.length > 0) {
-      return new Response(JSON.stringify({ error: 'Username already exists' }), {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
@@ -100,31 +86,26 @@ Deno.serve(async (req) => {
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
       email: email.trim(),
       password,
-      email_confirm: true, // auto-confirm so they can log in immediately
+      email_confirm: true,
       user_metadata: { full_name: name.trim() },
     })
 
     if (createError) {
-      // Handle duplicate email
-      if (createError.message?.includes('already been registered') || createError.message?.includes('already exists')) {
-        return new Response(JSON.stringify({ error: 'Email already exists' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        })
-      }
-      return new Response(JSON.stringify({ error: createError.message }), {
-        status: 400,
+      const msg = (createError.message?.includes('already been registered') || createError.message?.includes('already exists'))
+        ? 'Email already exists'
+        : createError.message;
+      return new Response(JSON.stringify({ error: msg }), {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // Update the profile with username, address, created_by
+    // Update the profile with address, created_by
     // The handle_new_user trigger already creates the profile row
     await adminClient
       .from('profiles')
       .update({
         full_name: name.trim(),
-        username: username.trim().toLowerCase(),
         address: address.trim(),
         created_by: callerUser.id,
       })
