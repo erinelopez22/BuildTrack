@@ -24,7 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff, MessageSquare, Mail } from 'lucide-react';
+import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff, MessageSquare, Mail, Pencil } from 'lucide-react';
 import type { Profile, UserRole, AppRole } from '@/types/database';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -69,6 +69,12 @@ export default function UsersPage() {
 
   // View user modal
   const [viewUser, setViewUser] = useState<UserWithRoles | null>(null);
+
+  // Edit user dialog
+  const [isEditUserOpen, setIsEditUserOpen] = useState(false);
+  const [editUserForm, setEditUserForm] = useState({ name: '', address: '', is_active: true });
+  const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false);
 
   const fetchUsers = async () => {
     const { data: profilesData, error: profilesError } = await supabase
@@ -158,6 +164,45 @@ export default function UsersPage() {
       toast({ title: 'Success', description: 'Role removed successfully' });
       fetchUsers();
     }
+  };
+
+  const openEditUser = (user: UserWithRoles) => {
+    setEditingUser(user);
+    setEditUserForm({
+      name: user.full_name || '',
+      address: (user as any).address || '',
+      is_active: user.is_active !== false,
+    });
+    setIsEditUserOpen(true);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setIsUpdatingUser(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          full_name: editUserForm.name.trim(),
+          address: editUserForm.address.trim(),
+          is_active: editUserForm.is_active,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingUser.id);
+
+      if (error) {
+        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      } else {
+        toast({ title: 'Success', description: 'User details updated successfully' });
+        setIsEditUserOpen(false);
+        setEditingUser(null);
+        fetchUsers();
+      }
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update user', variant: 'destructive' });
+    }
+    setIsUpdatingUser(false);
   };
 
   // --- Debounced duplicate checks ---
@@ -383,6 +428,12 @@ export default function UsersPage() {
           </Button>
           <Button size="sm" variant="ghost" onClick={(e) => {
             e.stopPropagation();
+            openEditUser(user);
+          }} title="Edit User">
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="ghost" onClick={(e) => {
+            e.stopPropagation();
             setSelectedUser(user);
             setIsRoleDialogOpen(true);
           }} title="Assign Role">
@@ -390,7 +441,7 @@ export default function UsersPage() {
           </Button>
         </div>
       ),
-      className: 'w-24',
+      className: 'w-32',
     },
   ];
 
@@ -520,7 +571,6 @@ export default function UsersPage() {
               {addUserErrors.email && <p className="text-xs text-destructive">{addUserErrors.email}</p>}
             </div>
 
-
             <div className="space-y-2">
               <Label>Password *</Label>
               <Input
@@ -554,6 +604,57 @@ export default function UsersPage() {
         formatManilaTime={formatManilaTime}
         users={users}
       />
+
+      {/* Edit User Dialog */}
+      <Dialog open={isEditUserOpen} onOpenChange={(open) => {
+        setIsEditUserOpen(open);
+        if (!open) setEditingUser(null);
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit User — {editingUser?.full_name || editingUser?.email}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleUpdateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input
+                value={editUserForm.name}
+                onChange={(e) => setEditUserForm(p => ({ ...p, name: e.target.value }))}
+                placeholder="Full name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Address</Label>
+              <Input
+                value={editUserForm.address}
+                onChange={(e) => setEditUserForm(p => ({ ...p, address: e.target.value }))}
+                placeholder="Address"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input value={editingUser?.email || ''} disabled className="opacity-60" />
+              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Label htmlFor="edit-active-toggle">Active</Label>
+              <input
+                id="edit-active-toggle"
+                type="checkbox"
+                checked={editUserForm.is_active}
+                onChange={(e) => setEditUserForm(p => ({ ...p, is_active: e.target.checked }))}
+                className="h-4 w-4 rounded border-input"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsEditUserOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={isUpdatingUser || !editUserForm.name.trim()}>
+                {isUpdatingUser ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving...</> : 'Save Changes'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
         </TabsContent>
 
