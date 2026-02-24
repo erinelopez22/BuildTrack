@@ -1,5 +1,27 @@
 import { supabase } from "@/integrations/supabase/client";
 
+// Non-blocking SMS trigger via edge function
+export async function triggerSMS(params: {
+  projectId: string;
+  projectName: string;
+  eventType: string;
+  eventSummary: string;
+  performedBy: string;
+  referenceId?: string;
+  referenceType?: string;
+  excludeUserId?: string;
+  additionalRecipientUserIds?: string[];
+}) {
+  try {
+    const { error } = await supabase.functions.invoke("send-sms", {
+      body: params,
+    });
+    if (error) console.warn("SMS edge function error:", error);
+  } catch (err) {
+    console.warn("SMS trigger error (non-blocking):", err);
+  }
+}
+
 interface CreateNotificationParams {
   userId: string;
   title: string;
@@ -83,6 +105,20 @@ export async function notifyProjectMembers({
 
   if (error) {
     console.error("Failed to create notifications:", error);
+  }
+
+  // Trigger SMS in background (non-blocking)
+  if (projectId) {
+    triggerSMS({
+      projectId,
+      projectName: title.split("]")[0]?.replace("[", "") || "Project",
+      eventType: type === "order" ? "order_status_change" : type === "team" ? "delivery_received" : "order_status_change",
+      eventSummary: title,
+      performedBy: "System",
+      excludeUserId,
+      referenceId,
+      referenceType,
+    }).catch((err) => console.warn("SMS trigger failed (non-blocking):", err));
   }
 
   return { error };
