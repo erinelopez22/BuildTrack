@@ -223,21 +223,19 @@ export default function UsersPage() {
     if (!deleteUser) return;
     setIsDeletingUser(true);
     try {
-      const { error: rolesError } = await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', deleteUser.id);
-      if (rolesError) throw rolesError;
+      const response = await supabase.functions.invoke('admin-delete-user', {
+        body: { user_id: deleteUser.id },
+      });
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('id', deleteUser.id);
-      if (profileError) throw profileError;
-
-      toast({ title: 'Success', description: `User "${deleteUser.full_name || deleteUser.email}" has been deactivated and all roles removed.` });
-      setDeleteUser(null);
-      fetchUsers();
+      if (response.error) {
+        toast({ title: 'Error', description: response.error.message || 'Failed to delete user', variant: 'destructive' });
+      } else if (response.data?.error) {
+        toast({ title: 'Error', description: response.data.error, variant: 'destructive' });
+      } else {
+        toast({ title: 'Success', description: `User "${deleteUser.full_name || deleteUser.email}" has been permanently deleted.` });
+        setDeleteUser(null);
+        fetchUsers();
+      }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message || 'Failed to delete user', variant: 'destructive' });
     }
@@ -709,7 +707,7 @@ export default function UsersPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete User</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <strong>{deleteUser?.full_name || deleteUser?.email}</strong>? This will deactivate their account and remove all assigned roles. This action cannot be undone.
+              Are you sure you want to permanently delete <strong>{deleteUser?.full_name || deleteUser?.email}</strong>? This will remove their account, all roles, and project memberships. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
