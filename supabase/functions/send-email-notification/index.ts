@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
 
     // Validate SMTP configuration
     const smtpHost = settings?.smtp_host || "smtp.gmail.com";
-    const smtpPort = settings?.smtp_port || 587;
+    const smtpPort = settings?.smtp_port || 465;
     const smtpUser = settings?.smtp_user;
     const smtpPass = settings?.smtp_pass;
 
@@ -322,7 +322,7 @@ async function sendSmtpEmail(
       connection: {
         hostname: smtp.host,
         port: smtp.port,
-        tls: false,
+        tls: true,
         auth: {
           username: smtp.user,
           password: smtp.pass,
