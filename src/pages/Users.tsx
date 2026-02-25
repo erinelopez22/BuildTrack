@@ -33,8 +33,14 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, EyeOff, MessageSquare, Mail, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Users, Search, UserPlus, Shield, Loader2, Eye, MessageSquare, Mail, Pencil, Trash2, MoreVertical } from 'lucide-react';
 import type { Profile, UserRole, AppRole } from '@/types/database';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -68,7 +74,6 @@ export default function UsersPage() {
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [addUserForm, setAddUserForm] = useState({
     name: '',
-    address: '',
     email: '',
     password: '',
     role: 'viewer' as AppRole,
@@ -77,12 +82,12 @@ export default function UsersPage() {
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [checkingDuplicates, setCheckingDuplicates] = useState<Record<string, boolean>>({});
 
-  // View user modal
+  // View/action user modal
   const [viewUser, setViewUser] = useState<UserWithRoles | null>(null);
 
   // Edit user dialog
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
-  const [editUserForm, setEditUserForm] = useState({ name: '', address: '', is_active: true });
+  const [editUserForm, setEditUserForm] = useState({ name: '', is_active: true });
   const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
 
@@ -184,7 +189,6 @@ export default function UsersPage() {
     setEditingUser(user);
     setEditUserForm({
       name: user.full_name || '',
-      address: (user as any).address || '',
       is_active: user.is_active !== false,
     });
     setIsEditUserOpen(true);
@@ -199,7 +203,6 @@ export default function UsersPage() {
         .from('profiles')
         .update({
           full_name: editUserForm.name.trim(),
-          address: editUserForm.address.trim(),
           is_active: editUserForm.is_active,
           updated_at: new Date().toISOString(),
         })
@@ -234,6 +237,7 @@ export default function UsersPage() {
       } else {
         toast({ title: 'Success', description: `User "${deleteUser.full_name || deleteUser.email}" has been permanently deleted.` });
         setDeleteUser(null);
+        setViewUser(null);
         fetchUsers();
       }
     } catch (err: any) {
@@ -295,7 +299,6 @@ export default function UsersPage() {
   const validateAddUserForm = () => {
     const errors: Record<string, string> = {};
     if (!addUserForm.name.trim()) errors.name = 'Name is required';
-    if (!addUserForm.address.trim()) errors.address = 'Address is required';
     if (!addUserForm.email.trim()) errors.email = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addUserForm.email.trim())) errors.email = 'Invalid email format';
     if (!addUserForm.password) errors.password = 'Password is required';
@@ -308,7 +311,7 @@ export default function UsersPage() {
 
   const isFormValid = () => {
     const f = addUserForm;
-    if (!f.name.trim() || !f.address.trim() || !f.email.trim() || !f.password) return false;
+    if (!f.name.trim() || !f.email.trim() || !f.password) return false;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) return false;
     if (f.password.length < 6) return false;
     if (f.role === 'super_admin' && !isSuperAdmin()) return false;
@@ -325,7 +328,6 @@ export default function UsersPage() {
       const response = await supabase.functions.invoke('admin-create-user', {
         body: {
           name: addUserForm.name.trim(),
-          address: addUserForm.address.trim(),
           email: addUserForm.email.trim(),
           username: addUserForm.email.trim().toLowerCase(),
           password: addUserForm.password,
@@ -346,7 +348,7 @@ export default function UsersPage() {
       } else {
         toast({ title: 'Success', description: 'User created successfully. They can now log in.' });
         setIsAddUserOpen(false);
-        setAddUserForm({ name: '', address: '', email: '', password: '', role: 'viewer' });
+        setAddUserForm({ name: '', email: '', password: '', role: 'viewer' });
         setAddUserErrors({});
         fetchUsers();
       }
@@ -368,8 +370,7 @@ export default function UsersPage() {
   const filteredUsers = users.filter(
     (user) =>
       user.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-      user.email?.toLowerCase().includes(search.toLowerCase()) ||
-      (user as any).username?.toLowerCase().includes(search.toLowerCase())
+      user.email?.toLowerCase().includes(search.toLowerCase())
   );
 
   const formatManilaTime = (dateStr: string) => {
@@ -392,54 +393,31 @@ export default function UsersPage() {
           </div>
           <div>
             <p className="font-medium">{user.full_name || 'Unknown'}</p>
-            <p className="text-xs text-muted-foreground">{user.email}</p>
           </div>
         </div>
       ),
     },
     {
+      key: 'email',
+      header: 'Email',
+      render: (user) => <span className="text-muted-foreground">{user.email}</span>,
+    },
+    {
       key: 'roles',
-      header: 'Role',
+      header: 'Role(s)',
       render: (user) => (
         <div className="flex flex-wrap gap-1">
           {user.roles.length > 0 ? (
-            user.roles.map((role) => {
-              const canRemove = role.role !== 'super_admin' || (isSuperAdmin() && user.id !== authUser?.id);
-              return (
-                <Badge
-                  key={role.id}
-                  variant="secondary"
-                  className={canRemove ? 'cursor-pointer hover:bg-destructive/20' : 'cursor-not-allowed'}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (canRemove) handleRemoveRole(user.id, role.id);
-                  }}
-                >
-                  {roleLabels[role.role]}
-                  {canRemove && <span className="ml-1 text-muted-foreground">×</span>}
-                </Badge>
-              );
-            })
+            user.roles.map((role) => (
+              <Badge key={role.id} variant="secondary">
+                {roleLabels[role.role]}
+              </Badge>
+            ))
           ) : (
             <span className="text-muted-foreground">No roles</span>
           )}
         </div>
       ),
-    },
-    {
-      key: 'address',
-      header: 'Address',
-      render: (user) => (user as any).address || '-',
-    },
-    {
-      key: 'created_at',
-      header: 'Date Created',
-      render: (user) => formatManilaTime(user.created_at),
-    },
-    {
-      key: 'created_by',
-      header: 'Created By',
-      render: (user) => user.creator_name || '-',
     },
     {
       key: 'status',
@@ -454,39 +432,23 @@ export default function UsersPage() {
     },
     {
       key: 'actions',
-      header: '',
+      header: 'Action',
       render: (user) => (
-        <div className="flex items-center gap-1">
-          <Button size="sm" variant="ghost" onClick={(e) => {
-            e.stopPropagation();
-            setViewUser(user);
-          }} title="View Details">
-            <Eye className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="ghost" onClick={(e) => {
-            e.stopPropagation();
-            openEditUser(user);
-          }} title="Edit User">
-            <Pencil className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="ghost" onClick={(e) => {
-            e.stopPropagation();
-            setSelectedUser(user);
-            setIsRoleDialogOpen(true);
-          }} title="Assign Role">
-            <UserPlus className="h-4 w-4" />
-          </Button>
-          {isSuperAdmin() && user.id !== authUser?.id && (
-            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={(e) => {
-              e.stopPropagation();
-              setDeleteUser(user);
-            }} title="Delete User">
-              <Trash2 className="h-4 w-4" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}>
+              <MoreVertical className="h-4 w-4" />
             </Button>
-          )}
-        </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setViewUser(user)}>
+              <Eye className="mr-2 h-4 w-4" />
+              View Details
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ),
-      className: 'w-40',
+      className: 'w-[70px]',
     },
   ];
 
@@ -559,7 +521,7 @@ export default function UsersPage() {
       <Dialog open={isAddUserOpen} onOpenChange={(open) => {
         setIsAddUserOpen(open);
         if (!open) {
-          setAddUserForm({ name: '', address: '', email: '', password: '', role: 'viewer' });
+          setAddUserForm({ name: '', email: '', password: '', role: 'viewer' });
           setAddUserErrors({});
         }
       }}>
@@ -576,16 +538,6 @@ export default function UsersPage() {
                 placeholder="Full name"
               />
               {addUserErrors.name && <p className="text-xs text-destructive">{addUserErrors.name}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label>Address *</Label>
-              <Input
-                value={addUserForm.address}
-                onChange={(e) => { setAddUserForm(p => ({ ...p, address: e.target.value })); setAddUserErrors(p => ({ ...p, address: '' })); }}
-                placeholder="Address"
-              />
-              {addUserErrors.address && <p className="text-xs text-destructive">{addUserErrors.address}</p>}
             </div>
 
             <div className="space-y-2">
@@ -641,13 +593,20 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* View User Details Modal */}
-      <ViewUserModal
+      {/* User Details + Actions Modal */}
+      <UserDetailModal
         user={viewUser}
         open={!!viewUser}
         onOpenChange={(open) => !open && setViewUser(null)}
         formatManilaTime={formatManilaTime}
         users={users}
+        isAdmin={isAdmin()}
+        isSuperAdmin={isSuperAdmin()}
+        authUserId={authUser?.id}
+        onEditUser={(u) => { setViewUser(null); openEditUser(u); }}
+        onAssignRole={(u) => { setViewUser(null); setSelectedUser(u); setIsRoleDialogOpen(true); }}
+        onDeleteUser={(u) => { setViewUser(null); setDeleteUser(u); }}
+        onRemoveRole={handleRemoveRole}
       />
 
       {/* Edit User Dialog */}
@@ -666,14 +625,6 @@ export default function UsersPage() {
                 value={editUserForm.name}
                 onChange={(e) => setEditUserForm(p => ({ ...p, name: e.target.value }))}
                 placeholder="Full name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Address</Label>
-              <Input
-                value={editUserForm.address}
-                onChange={(e) => setEditUserForm(p => ({ ...p, address: e.target.value }))}
-                placeholder="Address"
               />
             </div>
             <div className="space-y-2">
@@ -739,19 +690,33 @@ export default function UsersPage() {
   );
 }
 
-// --- View User Details Modal Component ---
-function ViewUserModal({
+// --- User Detail + Actions Modal ---
+function UserDetailModal({
   user,
   open,
   onOpenChange,
   formatManilaTime,
   users,
+  isAdmin,
+  isSuperAdmin,
+  authUserId,
+  onEditUser,
+  onAssignRole,
+  onDeleteUser,
+  onRemoveRole,
 }: {
   user: UserWithRoles | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   formatManilaTime: (d: string) => string;
   users: UserWithRoles[];
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+  authUserId?: string;
+  onEditUser: (u: UserWithRoles) => void;
+  onAssignRole: (u: UserWithRoles) => void;
+  onDeleteUser: (u: UserWithRoles) => void;
+  onRemoveRole: (userId: string, roleId: string) => void;
 }) {
   if (!user) return null;
 
@@ -759,33 +724,66 @@ function ViewUserModal({
     ? users.find(u => u.id === user.created_by)?.full_name || 'Unknown'
     : '-';
 
+  const canDelete = isSuperAdmin && user.id !== authUserId;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>User Details</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <DetailRow label="Full Name" value={user.full_name || '-'} />
           <DetailRow label="Email" value={user.email || '-'} />
-          <DetailRow label="Address" value={(user as any).address || '-'} />
           <Separator />
           <div>
             <p className="text-xs text-muted-foreground mb-1">Role(s)</p>
             <div className="flex flex-wrap gap-1">
-              {user.roles.length > 0 ? user.roles.map(r => (
-                <Badge key={r.id} variant="secondary">
-                  {roleLabels[r.role]}
-                </Badge>
-              )) : <span className="text-muted-foreground text-sm">No roles</span>}
+              {user.roles.length > 0 ? user.roles.map(r => {
+                const canRemove = isAdmin && (r.role !== 'super_admin' || (isSuperAdmin && user.id !== authUserId));
+                return (
+                  <Badge
+                    key={r.id}
+                    variant="secondary"
+                    className={canRemove ? 'cursor-pointer hover:bg-destructive/20' : ''}
+                    onClick={() => { if (canRemove) onRemoveRole(user.id, r.id); }}
+                  >
+                    {roleLabels[r.role]}
+                    {canRemove && <span className="ml-1 text-muted-foreground">×</span>}
+                  </Badge>
+                );
+              }) : <span className="text-muted-foreground text-sm">No roles</span>}
             </div>
           </div>
           <Separator />
           <DetailRow label="Status" value={user.is_active ? 'Active' : 'Inactive'} />
-          <DetailRow label="Created At" value={user.created_at ? formatManilaTime(user.created_at) : '-'} />
+          <DetailRow label="Date Created" value={user.created_at ? formatManilaTime(user.created_at) : '-'} />
           <DetailRow label="Created By" value={creatorName} />
           {user.updated_at && (
             <DetailRow label="Updated At" value={formatManilaTime(user.updated_at)} />
+          )}
+
+          {/* Admin Actions */}
+          {isAdmin && (
+            <>
+              <Separator />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={() => onEditUser(user)}>
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Update User
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onAssignRole(user)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Update Roles
+                </Button>
+                {canDelete && (
+                  <Button size="sm" variant="destructive" onClick={() => onDeleteUser(user)}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete User
+                  </Button>
+                )}
+              </div>
+            </>
           )}
         </div>
       </DialogContent>
