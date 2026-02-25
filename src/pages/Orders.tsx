@@ -10,6 +10,14 @@ import { OrderDetailModal } from "@/components/orders/OrderDetailModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,11 +29,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardList, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Loader2 } from "lucide-react";
+import { ClipboardList, Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2, Loader2, Eye } from "lucide-react";
 import { logActivity } from "@/lib/activityLogger";
 import { formatManilaTime } from "@/lib/notificationService";
 import type { Order, Project, OrderStatus, Profile } from "@/types/database";
 import { format } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 
 interface OrderWithProject extends Order {
   project: Project;
@@ -34,12 +43,21 @@ interface OrderWithProject extends Order {
 interface RejectedOrderRow {
   id: string;
   order_number: string;
+  project_id: string;
   project_name: string;
   requested_by: string;
   rejected_by: string;
   rejected_at: string;
   rejection_reason: string | null;
   notes: string | null;
+  created_at: string | null;
+  expected_delivery_date: string | null;
+}
+
+interface RejectedOrderMaterial {
+  material_name: string;
+  quantity: number;
+  unit: string;
 }
 
 type SortField = "created_at" | "expected_delivery_date" | "total_amount";
@@ -71,13 +89,17 @@ export default function Orders() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  // Rejected orders state - from rejected_orders table
+  // Rejected orders state
   const [rejectedOrders, setRejectedOrders] = useState<RejectedOrderRow[]>([]);
   const [rejectedLoading, setRejectedLoading] = useState(false);
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Only Super Admin and Admin can delete rejected orders
+  // Rejected order detail modal
+  const [viewRejectedOrder, setViewRejectedOrder] = useState<RejectedOrderRow | null>(null);
+  const [rejectedMaterials, setRejectedMaterials] = useState<RejectedOrderMaterial[]>([]);
+  const [materialsLoading, setMaterialsLoading] = useState(false);
+
   const canDeleteRejected = isSuperAdmin() || isAdmin();
 
   useEffect(() => {
@@ -90,7 +112,6 @@ export default function Orders() {
   }, [statusFilter, searchParams, setSearchParams]);
 
   const fetchData = async () => {
-    // Fetch non-rejected orders (rejected are now in rejected_orders table)
     const { data: ordersData } = await supabase
       .from("orders")
       .select("*, project:projects(*)")
@@ -116,8 +137,6 @@ export default function Orders() {
     setProjects((projectsData || []) as Project[]);
 
     setLoading(false);
-
-    // Fetch rejected orders from rejected_orders table
     fetchRejectedOrders();
   };
 
@@ -126,7 +145,7 @@ export default function Orders() {
     try {
       const { data: rejected } = await supabase
         .from("rejected_orders")
-        .select("id, order_number, project_id, created_by, rejected_by, rejected_at, rejection_reason, notes")
+        .select("id, order_number, project_id, created_by, created_at, rejected_by, rejected_at, rejection_reason, notes, expected_delivery_date")
         .order("rejected_at", { ascending: false });
 
       if (!rejected || rejected.length === 0) {
@@ -135,12 +154,10 @@ export default function Orders() {
         return;
       }
 
-      // Get project names
       const projectIds = [...new Set(rejected.map((r: any) => r.project_id))];
       const { data: projectsData } = await supabase.from("projects").select("id, name").in("id", projectIds);
       const projectMap = new Map((projectsData || []).map((p: any) => [p.id, p.name]));
 
-      // Get profile names
       const userIds = [
         ...new Set([
           ...rejected.map((r: any) => r.created_by),
@@ -154,12 +171,15 @@ export default function Orders() {
         rejected.map((r: any) => ({
           id: r.id,
           order_number: r.order_number,
+          project_id: r.project_id,
           project_name: projectMap.get(r.project_id) || "Unknown",
           requested_by: profileMap.get(r.created_by) || "Unknown",
           rejected_by: r.rejected_by ? profileMap.get(r.rejected_by) || "Unknown" : "Unknown",
           rejected_at: r.rejected_at || r.created_at,
           rejection_reason: r.rejection_reason,
           notes: r.notes,
+          created_at: r.created_at,
+          expected_delivery_date: r.expected_delivery_date,
         }))
       );
     } catch (err: any) {
@@ -169,12 +189,45 @@ export default function Orders() {
     }
   };
 
+  const openRejectedOrderDetail = async (ro: RejectedOrderRow) => {
+    setViewRejectedOrder(ro);
+    setMaterialsLoading(true);
+    try {
+      const { data: items } = await supabase
+        .from("rejected_order_items")
+        .select("quantity_ordered, sku_id")
+        .eq("order_id", ro.id);
+
+      if (items && items.length > 0) {
+        const skuIds = items.map((i: any) => i.sku_id);
+        const { data: skus } = await supabase.from("skus").select("id, name, unit_of_measure").in("id", skuIds);
+        const skuMap = new Map((skus || []).map((s: any) => [s.id, s]));
+
+        setRejectedMaterials(
+          items.map((i: any) => {
+            const sku = skuMap.get(i.sku_id);
+            return {
+              material_name: sku?.name || "Unknown",
+              quantity: i.quantity_ordered,
+              unit: sku?.unit_of_measure || "EA",
+            };
+          })
+        );
+      } else {
+        setRejectedMaterials([]);
+      }
+    } catch {
+      setRejectedMaterials([]);
+    } finally {
+      setMaterialsLoading(false);
+    }
+  };
+
   const handleDeleteRejectedOrder = async () => {
     if (!deletingOrderId || !user) return;
     setDeleteLoading(true);
 
     try {
-      // Use the RPC for atomic cascading delete
       const { error } = await supabase.rpc("delete_rejected_order", {
         _order_id: deletingOrderId,
       });
@@ -203,6 +256,15 @@ export default function Orders() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const formatManilaTimeLocal = (dateStr: string) => {
+    try {
+      const zonedDate = toZonedTime(new Date(dateStr), "Asia/Manila");
+      return format(zonedDate, "MMM dd, yyyy hh:mm a");
+    } catch {
+      return dateStr;
+    }
+  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -368,53 +430,40 @@ export default function Orders() {
         onRowClick={(order) => setSelectedOrderId(order.id)}
       />
 
-      {/* Rejected Orders Table - from rejected_orders table */}
+      {/* Rejected Orders Table - minimal columns */}
       {rejectedOrders.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
             <ClipboardList className="h-5 w-5 text-destructive" />
             Rejected Orders ({rejectedOrders.length})
           </h3>
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-hidden overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-left p-3 font-medium">Order #</th>
                   <th className="text-left p-3 font-medium">Project</th>
-                  <th className="text-left p-3 font-medium">Requested By</th>
-                  <th className="text-left p-3 font-medium">Rejected By</th>
                   <th className="text-left p-3 font-medium">Rejected Date</th>
-                  <th className="text-left p-3 font-medium">Reason</th>
-                  {canDeleteRejected && <th className="text-center p-3 font-medium w-[60px]">Action</th>}
+                  <th className="text-center p-3 font-medium w-[70px]">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {rejectedOrders.map((ro) => (
-                  <tr key={ro.id} className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
-                    onClick={() => setSelectedOrderId(ro.id)}>
+                  <tr key={ro.id} className="border-t hover:bg-muted/30 transition-colors">
                     <td className="p-3 font-mono font-medium">{ro.order_number}</td>
                     <td className="p-3">{ro.project_name}</td>
-                    <td className="p-3">{ro.requested_by}</td>
-                    <td className="p-3">{ro.rejected_by}</td>
-                    <td className="p-3 text-muted-foreground">{formatManilaTime(ro.rejected_at)}</td>
-                    <td className="p-3 max-w-[200px] truncate" title={ro.rejection_reason || ""}>
-                      {ro.rejection_reason || "—"}
+                    <td className="p-3 text-muted-foreground">{formatManilaTimeLocal(ro.rejected_at)}</td>
+                    <td className="p-3 text-center">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => openRejectedOrderDetail(ro)}
+                        title="View Details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
                     </td>
-                    {canDeleteRejected && (
-                      <td className="p-3 text-center">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:bg-destructive/10"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingOrderId(ro.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    )}
                   </tr>
                 ))}
               </tbody>
@@ -429,6 +478,100 @@ export default function Orders() {
         onOpenChange={(open) => !open && setSelectedOrderId(null)}
         onStatusChange={fetchData}
       />
+
+      {/* Rejected Order Detail Modal */}
+      <Dialog open={!!viewRejectedOrder} onOpenChange={(open) => !open && setViewRejectedOrder(null)}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Rejected Order Details</DialogTitle>
+          </DialogHeader>
+          {viewRejectedOrder && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <DetailRow label="Order Number" value={viewRejectedOrder.order_number} />
+                <DetailRow label="Project" value={viewRejectedOrder.project_name} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">Status</p>
+                  <Badge variant="destructive" className="mt-1">Rejected</Badge>
+                </div>
+                <DetailRow label="Requested By" value={viewRejectedOrder.requested_by} />
+              </div>
+              <Separator />
+              <DetailRow label="Rejected By" value={viewRejectedOrder.rejected_by} />
+              <DetailRow label="Rejected Date" value={formatManilaTimeLocal(viewRejectedOrder.rejected_at)} />
+              {viewRejectedOrder.rejection_reason && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Rejection Reason</p>
+                  <p className="text-sm font-medium whitespace-pre-wrap">{viewRejectedOrder.rejection_reason}</p>
+                </div>
+              )}
+              <Separator />
+              <DetailRow label="Created Date" value={viewRejectedOrder.created_at ? formatManilaTimeLocal(viewRejectedOrder.created_at) : '-'} />
+              <DetailRow label="Expected Delivery Date" value={viewRejectedOrder.expected_delivery_date || '-'} />
+              {viewRejectedOrder.notes && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Notes</p>
+                  <p className="text-sm font-medium whitespace-pre-wrap">{viewRejectedOrder.notes}</p>
+                </div>
+              )}
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground mb-2">Materials</p>
+                {materialsLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading materials...
+                  </div>
+                ) : rejectedMaterials.length > 0 ? (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left p-2 font-medium">Material</th>
+                          <th className="text-right p-2 font-medium">Quantity</th>
+                          <th className="text-left p-2 font-medium">Unit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rejectedMaterials.map((m, i) => (
+                          <tr key={i} className="border-t">
+                            <td className="p-2">{m.material_name}</td>
+                            <td className="p-2 text-right">{m.quantity}</td>
+                            <td className="p-2">{m.unit}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No materials found</p>
+                )}
+              </div>
+
+              {/* Delete action for admins */}
+              {canDeleteRejected && (
+                <>
+                  <Separator />
+                  <div className="flex justify-end">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        setDeletingOrderId(viewRejectedOrder.id);
+                        setViewRejectedOrder(null);
+                      }}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete Permanently
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation for Rejected Orders */}
       <AlertDialog open={!!deletingOrderId} onOpenChange={(open) => !open && setDeletingOrderId(null)}>
@@ -452,6 +595,15 @@ export default function Orders() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium">{value}</p>
     </div>
   );
 }
