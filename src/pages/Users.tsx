@@ -398,11 +398,6 @@ export default function UsersPage() {
       ),
     },
     {
-      key: 'email',
-      header: 'Email',
-      render: (user) => <span className="text-muted-foreground">{user.email}</span>,
-    },
-    {
       key: 'roles',
       header: 'Role(s)',
       render: (user) => (
