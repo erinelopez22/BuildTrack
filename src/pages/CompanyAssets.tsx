@@ -701,7 +701,7 @@ export default function CompanyAssets() {
 
       {/* Asset Detail Modal (Admin/Super Admin only) */}
       <Dialog open={!!selectedAsset} onOpenChange={(open) => !open && setSelectedAsset(null)}>
-        <DialogContent className="sm:max-w-2xl w-full max-h-[100dvh] sm:max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)] max-h-[85vh] flex flex-col p-0 gap-0">
           <DialogHeader className="flex-shrink-0 px-6 py-4 border-b">
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
@@ -908,7 +908,7 @@ export default function CompanyAssets() {
 
       {/* Create/Edit Modal */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-md w-full max-h-[100dvh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="max-w-md w-[calc(100%-2rem)]">
           <DialogHeader>
             <DialogTitle>{editingAsset ? "Edit Asset" : "Add Asset"}</DialogTitle>
           </DialogHeader>

@@ -243,7 +243,7 @@ export function CompletedOrdersModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-2xl w-full max-h-[100dvh] sm:max-h-[90vh] flex flex-col p-4 sm:p-6 gap-4">
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)] max-h-[85vh] flex flex-col gap-4">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Archive className="h-5 w-5 text-muted-foreground" />

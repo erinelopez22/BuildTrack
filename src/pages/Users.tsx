@@ -520,7 +520,7 @@ export default function UsersPage() {
           setAddUserErrors({});
         }
       }}>
-         <DialogContent className="sm:max-w-md w-full max-h-[100dvh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+         <DialogContent className="max-w-md w-[calc(100%-2rem)]">
           <DialogHeader>
             <DialogTitle>Add User</DialogTitle>
           </DialogHeader>
@@ -609,7 +609,7 @@ export default function UsersPage() {
         setIsEditUserOpen(open);
         if (!open) setEditingUser(null);
       }}>
-        <DialogContent className="sm:max-w-md w-full max-h-[100dvh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="max-w-md w-[calc(100%-2rem)]">
           <DialogHeader>
             <DialogTitle>Edit User — {editingUser?.full_name || editingUser?.email}</DialogTitle>
           </DialogHeader>
@@ -723,7 +723,7 @@ function UserDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md w-full max-h-[100dvh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="max-w-md w-[calc(100%-2rem)]">
         <DialogHeader>
           <DialogTitle>User Details</DialogTitle>
         </DialogHeader>

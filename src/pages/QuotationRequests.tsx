@@ -639,7 +639,7 @@ export default function QuotationRequests() {
 
       {/* ===== VIEW QUOTATION MODAL ===== */}
       <Dialog open={!!viewQuotation} onOpenChange={(open) => !open && setViewQuotation(null)}>
-        <DialogContent className="sm:max-w-3xl w-full max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="max-w-3xl w-[calc(100%-2rem)]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
@@ -788,7 +788,7 @@ export default function QuotationRequests() {
 
       {/* ===== CHANGE REQUEST DETAIL PREVIEW ===== */}
       <Dialog open={!!previewRequest} onOpenChange={(open) => !open && setPreviewRequest(null)}>
-        <DialogContent className="sm:max-w-2xl w-full max-h-[100dvh] sm:max-h-[80vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="max-w-2xl w-[calc(100%-2rem)]">
           <DialogHeader>
             <DialogTitle>
               Change Request — {previewRequest?.change_type.toUpperCase()}
