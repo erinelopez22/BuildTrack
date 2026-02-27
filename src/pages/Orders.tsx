@@ -339,17 +339,18 @@ export default function Orders() {
     {
       key: "order_number",
       header: "Order #",
-      render: (order) => <span className="font-medium">{order.order_number}</span>,
+      render: (order) => (
+        <div>
+          <span className="font-medium">{order.order_number}</span>
+          <p className="text-xs text-muted-foreground sm:hidden">{order.project?.name}</p>
+        </div>
+      ),
     },
     {
       key: "project",
       header: "Project",
-      render: (order) => <span className="text-muted-foreground">{order.project?.name}</span>,
-    },
-    {
-      key: "supplier",
-      header: "Supplier",
-      render: (order) => order.supplier_name || "-",
+      render: (order) => <span className="text-muted-foreground truncate block max-w-[150px]" title={order.project?.name}>{order.project?.name}</span>,
+      className: "hidden sm:table-cell",
     },
     {
       key: "status",
@@ -368,6 +369,7 @@ export default function Orders() {
         </button>
       ) as unknown as string,
       render: (order) => format(new Date(order.created_at), "MMM d, yyyy"),
+      className: "hidden md:table-cell",
     },
   ];
 
@@ -437,7 +439,7 @@ export default function Orders() {
             <ClipboardList className="h-5 w-5 text-destructive" />
             Rejected Orders ({rejectedOrders.length})
           </h3>
-          <div className="border rounded-lg overflow-hidden overflow-x-auto">
+          <div className="border rounded-lg overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
@@ -481,7 +483,7 @@ export default function Orders() {
 
       {/* Rejected Order Detail Modal */}
       <Dialog open={!!viewRejectedOrder} onOpenChange={(open) => !open && setViewRejectedOrder(null)}>
-        <DialogContent className="sm:max-w-lg w-full max-h-[100dvh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="max-w-lg w-[calc(100%-2rem)]">
           <DialogHeader>
             <DialogTitle>Rejected Order Details</DialogTitle>
           </DialogHeader>

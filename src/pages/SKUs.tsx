@@ -297,7 +297,7 @@ export default function SKUs() {
 
     return (
       <Dialog open={modalMode !== null} onOpenChange={(open) => !open && setModalMode(null)}>
-        <DialogContent className="sm:max-w-md w-full max-h-[100dvh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="max-w-md w-[calc(100%-2rem)]">
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
@@ -480,11 +480,11 @@ export default function SKUs() {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border bg-card overflow-x-auto">
+      <div className="rounded-lg border bg-card overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[120px]">SKU ID</TableHead>
+              <TableHead className="w-[100px]">SKU ID</TableHead>
               <TableHead>
                 <button
                   className="flex items-center gap-1 hover:text-foreground"
@@ -494,8 +494,8 @@ export default function SKUs() {
                   <ArrowUpDown className="h-3 w-3" />
                 </button>
               </TableHead>
-              <TableHead className="w-[80px]">Unit</TableHead>
-              <TableHead className="w-[130px]">
+              <TableHead className="w-[60px]">Unit</TableHead>
+              <TableHead className="hidden md:table-cell w-[130px]">
                 <button
                   className="flex items-center gap-1 hover:text-foreground"
                   onClick={() => toggleSort('created_at')}
@@ -504,40 +504,40 @@ export default function SKUs() {
                   <ArrowUpDown className="h-3 w-3" />
                 </button>
               </TableHead>
-              <TableHead className="w-[90px]">Status</TableHead>
+              <TableHead className="hidden sm:table-cell w-[80px]">Status</TableHead>
               <TableHead className="w-[50px]" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={7} className="h-24 text-center">
                   <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : filteredSKUs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                   No materials found
                 </TableCell>
               </TableRow>
             ) : (
               filteredSKUs.map((sku) => (
                 <TableRow key={sku.id}>
-                  <TableCell className="font-mono text-xs">{sku.sku_code}</TableCell>
+                 <TableCell className="font-mono text-xs truncate max-w-[100px]">{sku.sku_code}</TableCell>
                   <TableCell>
-                    <div>
-                      <p className="font-medium">{sku.name}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate" title={sku.name}>{sku.name}</p>
                       {sku.description && (
                         <p className="text-xs text-muted-foreground line-clamp-1">{sku.description}</p>
                       )}
                     </div>
                   </TableCell>
                   <TableCell>{sku.unit_of_measure}</TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell className="hidden md:table-cell text-sm">
                     {format(new Date(sku.created_at), 'MMM dd, yyyy')}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
                         sku.is_active

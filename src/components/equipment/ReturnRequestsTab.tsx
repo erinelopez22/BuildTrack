@@ -403,7 +403,7 @@ export function ReturnRequestsTab() {
 
       {/* Detail Modal */}
       <Dialog open={!!selectedRequest} onOpenChange={(open) => !open && setSelectedRequest(null)}>
-        <DialogContent className="sm:max-w-md w-full max-h-[100dvh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="max-w-md w-[calc(100%-2rem)]">
           <DialogHeader>
             <DialogTitle>Return Request Details</DialogTitle>
           </DialogHeader>

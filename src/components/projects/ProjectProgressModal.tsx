@@ -41,7 +41,7 @@ export function ProjectProgressModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl w-full max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="max-w-2xl w-[calc(100%-2rem)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
@@ -112,68 +112,48 @@ export function ProjectProgressModal({
                     {searchQuery ? "No materials match your search" : "No materials in quotation"}
                   </div>
                 ) : (
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50">
-                          <tr>
-                            <th className="text-left p-2 font-medium">Material</th>
-                            <th className="text-center p-2 font-medium w-14">Unit</th>
-                            <th className="text-center p-2 font-medium w-28">Quoted/Received</th>
-                            <th className="text-center p-2 font-medium w-20">Remaining</th>
-                            <th className="text-center p-2 font-medium w-20">Progress %</th>
-                            <th className="text-center p-2 font-medium w-20">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {filteredMaterials.map((material, index) => {
-                            const isComplete = material.percentage >= 100;
-                            const isPartial = material.deliveredQty > 0 && !isComplete;
+                  <div className="space-y-2">
+                    {filteredMaterials.map((material, index) => {
+                      const isComplete = material.percentage >= 100;
+                      const isPartial = material.deliveredQty > 0 && !isComplete;
 
-                            return (
-                              <tr key={index} className="hover:bg-muted/30">
-                                <td className="p-2 font-medium text-xs">{material.materialName}</td>
-                                <td className="p-2 text-center text-muted-foreground text-xs">
-                                  {material.unit}
-                                </td>
-                                <td className="p-2 text-center font-mono text-xs">
-                                  {material.quotedQty}/{material.deliveredQty}
-                                </td>
-                                <td className="p-2 text-center text-muted-foreground text-xs">
-                                  {material.remainingQty}
-                                </td>
-                                <td className="p-2 text-center font-medium text-xs">
-                                  {material.percentage}%
-                                </td>
-                                <td className="p-2 text-center">
-                                  {isComplete ? (
-                                    <Badge
-                                      variant="default"
-                                      className="bg-green-600 hover:bg-green-700 text-[10px] px-1.5 py-0"
-                                    >
-                                      <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
-                                      Done
-                                    </Badge>
-                                  ) : isPartial ? (
-                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                      <AlertCircle className="h-2.5 w-2.5 mr-0.5" />
-                                      Partial
-                                    </Badge>
-                                  ) : (
-                                    <Badge
-                                      variant="outline"
-                                      className="text-[10px] px-1.5 py-0 text-muted-foreground"
-                                    >
-                                      Pending
-                                    </Badge>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                      return (
+                        <div key={index} className="border rounded-lg p-3 space-y-1.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-medium text-sm leading-tight" title={material.materialName}>
+                              {material.materialName}
+                            </p>
+                            {isComplete ? (
+                              <Badge
+                                variant="default"
+                                className="bg-green-600 hover:bg-green-700 text-[10px] px-1.5 py-0 shrink-0"
+                              >
+                                <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
+                                Done
+                              </Badge>
+                            ) : isPartial ? (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">
+                                <AlertCircle className="h-2.5 w-2.5 mr-0.5" />
+                                Partial
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] px-1.5 py-0 text-muted-foreground shrink-0"
+                              >
+                                Pending
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                            <span>Unit: {material.unit}</span>
+                            <span className="font-mono">Quoted/Received: {material.quotedQty}/{material.deliveredQty}</span>
+                            <span>Remaining: {material.remainingQty}</span>
+                            <span className="font-medium text-foreground">{material.percentage}%</span>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

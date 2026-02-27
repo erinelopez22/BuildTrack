@@ -369,7 +369,7 @@ export function CreateOrderModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-2xl w-full max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="max-w-2xl w-[calc(100%-2rem)]">
         <DialogHeader>
           <DialogTitle>Create Order for {projectName}</DialogTitle>
         </DialogHeader>
@@ -426,14 +426,15 @@ export function CreateOrderModal({
 
                   return (
                     <div key={material.id} className="space-y-1">
-                      <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-start">
+                      <div className="flex gap-2 items-start flex-wrap sm:flex-nowrap">
                         {/* Material Dropdown */}
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <Select
                             value={material.materialId}
                             onValueChange={(value) => selectMaterial(material.id, value)}
                           >
                             <SelectTrigger className={cn(
+                              "truncate",
                               errors.materials && !material.materialId && 'border-destructive'
                             )}>
                               <SelectValue placeholder="Select material" />
@@ -461,33 +462,30 @@ export function CreateOrderModal({
                         </div>
 
                         {/* Unit (read-only) */}
-                        <div className="w-full sm:w-20">
-                          <Input
-                            value={material.unit || '-'}
-                            readOnly
-                            className="bg-muted text-muted-foreground"
-                            tabIndex={-1}
-                          />
-                        </div>
+                        <Input
+                          value={material.unit || '-'}
+                          readOnly
+                          className="w-16 bg-muted text-muted-foreground text-center shrink-0"
+                          tabIndex={-1}
+                        />
 
                         {/* Quantity */}
-                        <div className="w-full sm:w-24">
-                          <Input
-                            type="number"
-                            min={0}
-                            max={remainingQty > 0 ? remainingQty : undefined}
-                            placeholder="Qty"
-                            value={material.quantity}
-                            onChange={(e) => updateQuantity(material.id, parseInt(e.target.value) || 0)}
-                            onBlur={(e) => updateQuantity(material.id, parseInt(e.target.value) || 0)}
-                            disabled={noRemaining}
-                            className={cn(
-                              (errors.materials && material.quantity < 1) || hasExceeded || noRemaining
-                                ? 'border-destructive'
-                                : ''
-                            )}
-                          />
-                        </div>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={remainingQty > 0 ? remainingQty : undefined}
+                          placeholder="Qty"
+                          value={material.quantity}
+                          onChange={(e) => updateQuantity(material.id, parseInt(e.target.value) || 0)}
+                          onBlur={(e) => updateQuantity(material.id, parseInt(e.target.value) || 0)}
+                          disabled={noRemaining}
+                          className={cn(
+                            "w-20 shrink-0",
+                            (errors.materials && material.quantity < 1) || hasExceeded || noRemaining
+                              ? 'border-destructive'
+                              : ''
+                          )}
+                        />
 
                         {/* Remove Button */}
                         <Button
@@ -496,7 +494,7 @@ export function CreateOrderModal({
                           size="icon"
                           onClick={() => removeMaterial(material.id)}
                           disabled={materials.length === 1}
-                          className="shrink-0"
+                          className="shrink-0 h-9 w-9"
                         >
                           <Trash2 className="h-4 w-4 text-muted-foreground" />
                         </Button>

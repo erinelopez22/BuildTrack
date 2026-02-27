@@ -536,7 +536,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-3xl w-full max-h-[100dvh] sm:max-h-[85vh] sm:w-[95vw] flex flex-col p-0 gap-0">
+        <DialogContent className="max-w-3xl w-[calc(100%-2rem)] max-h-[85vh] flex flex-col p-0 gap-0">
           {/* Sticky Header */}
           <DialogHeader className="flex-shrink-0 px-4 sm:px-6 py-4 border-b bg-background">
             <DialogTitle className="flex items-center gap-3 flex-wrap">
