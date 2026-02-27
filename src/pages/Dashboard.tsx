@@ -208,12 +208,12 @@ export default function Dashboard() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                   <tr className="border-b text-left text-xs font-medium uppercase text-muted-foreground">
+                  <tr className="border-b text-left text-xs font-medium uppercase text-muted-foreground">
                     <th className="pb-3 pr-4">Order #</th>
                     <th className="pb-3 pr-4">Project</th>
                     <th className="pb-3 pr-4">Status</th>
-                    <th className="pb-3 pr-4 hidden sm:table-cell">Supplier</th>
-                    <th className="pb-3 text-right hidden sm:table-cell">Amount</th>
+                    <th className="pb-3 pr-4">Supplier</th>
+                    <th className="pb-3 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -226,8 +226,8 @@ export default function Dashboard() {
                       <td className="py-3 pr-4">
                         <StatusBadge status={order.status} />
                       </td>
-                      <td className="py-3 pr-4 text-muted-foreground hidden sm:table-cell">{order.supplier_name || "-"}</td>
-                      <td className="py-3 text-right hidden sm:table-cell">{order.total_amount ? formatPHP(order.total_amount) : "-"}</td>
+                      <td className="py-3 pr-4 text-muted-foreground">{order.supplier_name || "-"}</td>
+                      <td className="py-3 text-right">{order.total_amount ? formatPHP(order.total_amount) : "-"}</td>
                     </tr>
                   ))}
                 </tbody>
