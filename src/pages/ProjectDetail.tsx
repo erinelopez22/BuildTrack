@@ -475,7 +475,7 @@ export default function ProjectDetail() {
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-3">
         {(() => {
           const isNonAdmin = !isAdmin();
           const isQuotationPendingForRole = isNonAdmin && hasPendingQuotationRequest;
@@ -576,7 +576,7 @@ export default function ProjectDetail() {
 
       {/* Borrow Equipments/Tools Modal */}
       <Dialog open={isBorrowModalOpen} onOpenChange={setIsBorrowModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Wrench className="h-5 w-5" />
@@ -588,8 +588,8 @@ export default function ProjectDetail() {
             {/* Borrow Form */}
             <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
               <Label className="font-medium">Borrow an Asset</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
+              <div className="grid grid-cols-1 gap-3">
+                <div>
                   <Select value={borrowAssetId} onValueChange={setBorrowAssetId}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select asset..." />
@@ -660,27 +660,29 @@ export default function ProjectDetail() {
                           </p>
                         )}
                         {remaining > 0 && !hasPendingReturn && (
-                          <div className="flex gap-2 items-end">
-                            <div className="flex-1">
-                              <Input
-                                type="number"
-                                min={1}
-                                max={remaining}
-                                placeholder="Return qty"
-                                value={returnQty[item.id] || ""}
-                                onChange={(e) =>
-                                  setReturnQty((prev) => ({ ...prev, [item.id]: parseInt(e.target.value) || 0 }))
-                                }
-                                className="h-8"
-                              />
-                            </div>
-                            <div className="flex-1">
-                              <Input
-                                placeholder="Remarks (optional)"
-                                value={returnRemarks[item.id] || ""}
-                                onChange={(e) => setReturnRemarks((prev) => ({ ...prev, [item.id]: e.target.value }))}
-                                className="h-8"
-                              />
+                          <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                            <div className="flex gap-2 flex-1">
+                              <div className="w-24">
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={remaining}
+                                  placeholder="Qty"
+                                  value={returnQty[item.id] || ""}
+                                  onChange={(e) =>
+                                    setReturnQty((prev) => ({ ...prev, [item.id]: parseInt(e.target.value) || 0 }))
+                                  }
+                                  className="h-8"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <Input
+                                  placeholder="Remarks (optional)"
+                                  value={returnRemarks[item.id] || ""}
+                                  onChange={(e) => setReturnRemarks((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                                  className="h-8"
+                                />
+                              </div>
                             </div>
                             <Button
                               size="sm"
