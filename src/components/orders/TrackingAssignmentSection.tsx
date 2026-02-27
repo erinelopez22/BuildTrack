@@ -1847,7 +1847,7 @@ export function TrackingAssignmentSection({
           }
         }}
       >
-        <AlertDialogContent className="max-w-md">
+         <AlertDialogContent className="sm:max-w-md w-full p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
               <PauseCircle className="h-5 w-5" />
@@ -1894,7 +1894,7 @@ export function TrackingAssignmentSection({
           }
         }}
       >
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="sm:max-w-md w-full p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-blue-600">
               <Truck className="h-5 w-5" />

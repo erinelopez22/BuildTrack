@@ -499,23 +499,23 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={onBack}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div>
-            <h2 className="text-xl font-semibold text-foreground">{project.name}</h2>
+          <div className="min-w-0">
+            <h2 className="text-lg sm:text-xl font-semibold text-foreground truncate">{project.name}</h2>
             <p className="text-sm text-muted-foreground">Order Workflow</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setIsCompletedModalOpen(true)}>
+        <div className="flex items-center gap-2 pl-14 sm:pl-0">
+          <Button variant="outline" size="sm" onClick={() => setIsCompletedModalOpen(true)}>
             <Archive className="mr-2 h-4 w-4" />
             Completed
           </Button>
           {showCreateButton && (
-            <Button onClick={() => setIsCreateDialogOpen(true)}>
+            <Button size="sm" onClick={() => setIsCreateDialogOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Create Order
             </Button>
@@ -526,7 +526,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       {/* Process Legend */}
       <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
         <p className="font-medium text-foreground text-sm mb-1.5">Process Legend</p>
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-wrap items-center gap-x-1 gap-y-0.5">
           <span className="font-medium">Order Request</span><span>→</span>
           <span className="font-medium">Approved</span><span>→</span>
           <span className="font-medium">Ordered</span><span>→</span>
@@ -613,13 +613,13 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
             <XCircle className="h-4 w-4 text-destructive" />
             Rejected Orders ({rejectedOrders.length})
           </h3>
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="border rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-0">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="text-left p-3 font-medium">Order #</th>
-                  <th className="text-left p-3 font-medium">Company</th>
-                  <th className="text-left p-3 font-medium">Rejection Reason</th>
+                  <th className="text-left p-3 font-medium hidden sm:table-cell">Company</th>
+                  <th className="text-left p-3 font-medium hidden md:table-cell">Rejection Reason</th>
                   <th className="text-left p-3 font-medium">Rejected Date</th>
                   {canDeleteRejected && <th className="text-center p-3 font-medium w-[60px]">Action</th>}
                 </tr>
@@ -631,12 +631,12 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                     className="border-t hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => setSelectedOrderId(ro.id)}
                   >
-                    <td className="p-3 font-mono font-medium">{ro.order_number}</td>
-                    <td className="p-3">{ro.supplier_name || "Jagon"}</td>
-                    <td className="p-3 max-w-[250px] truncate" title={ro.rejection_reason || ""}>
+                    <td className="p-3 font-mono font-medium text-xs sm:text-sm">{ro.order_number}</td>
+                    <td className="p-3 hidden sm:table-cell">{ro.supplier_name || "Jagon"}</td>
+                    <td className="p-3 max-w-[250px] truncate hidden md:table-cell" title={ro.rejection_reason || ""}>
                       {ro.rejection_reason || "—"}
                     </td>
-                    <td className="p-3 text-muted-foreground">
+                    <td className="p-3 text-muted-foreground text-xs sm:text-sm">
                       {ro.rejected_at ? formatManilaTime(ro.rejected_at) : "—"}
                     </td>
                     {canDeleteRejected && (

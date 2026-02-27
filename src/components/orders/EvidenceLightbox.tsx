@@ -69,7 +69,7 @@ export function EvidenceLightbox({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/95 border-0">
+      <DialogContent className="w-full h-full sm:max-w-[95vw] sm:max-h-[95vh] p-0 bg-black/95 border-0">
         {/* Close button */}
         <Button
           variant="ghost"

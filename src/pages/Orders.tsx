@@ -481,7 +481,7 @@ export default function Orders() {
 
       {/* Rejected Order Detail Modal */}
       <Dialog open={!!viewRejectedOrder} onOpenChange={(open) => !open && setViewRejectedOrder(null)}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg w-full max-h-[100dvh] sm:max-h-[85vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Rejected Order Details</DialogTitle>
           </DialogHeader>

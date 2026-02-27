@@ -293,7 +293,7 @@ export function SMSNotificationsTab() {
 
       {/* Edit Mobile Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="sm:max-w-sm w-full p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Edit SMS Settings</DialogTitle>
           </DialogHeader>
