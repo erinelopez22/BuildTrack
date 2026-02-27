@@ -282,7 +282,7 @@ export function TestNotificationModal({ open, onOpenChange }: TestNotificationMo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg w-full max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Test Notification</DialogTitle>
         </DialogHeader>

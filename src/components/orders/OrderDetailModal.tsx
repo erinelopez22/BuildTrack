@@ -536,7 +536,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] md:max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogContent className="sm:max-w-3xl w-full max-h-[100dvh] sm:max-h-[85vh] sm:w-[95vw] flex flex-col p-0 gap-0">
           {/* Sticky Header */}
           <DialogHeader className="flex-shrink-0 px-4 sm:px-6 py-4 border-b bg-background">
             <DialogTitle className="flex items-center gap-3 flex-wrap">
@@ -845,7 +845,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
       {/* Reject Reason Dialog */}
       <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
-        <AlertDialogContent className="max-w-md">
+         <AlertDialogContent className="sm:max-w-md w-full p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
               <XCircle className="h-5 w-5" />
@@ -882,7 +882,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
       {/* On-Hold Reason Dialog */}
       <AlertDialog open={showOnHoldDialog} onOpenChange={setShowOnHoldDialog}>
-        <AlertDialogContent className="max-w-md">
+         <AlertDialogContent className="sm:max-w-md w-full p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-amber-600">
               <PauseCircle className="h-5 w-5" />
@@ -925,7 +925,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
           if (open) setDeliverySupplier(order?.supplier_name?.trim() || "Jagon");
         }}
       >
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="sm:max-w-md w-full p-4 sm:p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-primary" />

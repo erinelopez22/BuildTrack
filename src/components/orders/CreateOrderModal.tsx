@@ -369,7 +369,7 @@ export function CreateOrderModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-2xl w-full max-h-[100dvh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Create Order for {projectName}</DialogTitle>
         </DialogHeader>
@@ -426,7 +426,7 @@ export function CreateOrderModal({
 
                   return (
                     <div key={material.id} className="space-y-1">
-                      <div className="flex gap-2 items-start">
+                      <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-start">
                         {/* Material Dropdown */}
                         <div className="flex-1">
                           <Select
@@ -461,7 +461,7 @@ export function CreateOrderModal({
                         </div>
 
                         {/* Unit (read-only) */}
-                        <div className="w-20">
+                        <div className="w-full sm:w-20">
                           <Input
                             value={material.unit || '-'}
                             readOnly
@@ -471,7 +471,7 @@ export function CreateOrderModal({
                         </div>
 
                         {/* Quantity */}
-                        <div className="w-24">
+                        <div className="w-full sm:w-24">
                           <Input
                             type="number"
                             min={0}
