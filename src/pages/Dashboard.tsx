@@ -133,11 +133,11 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="animate-fade-in space-y-6">
+    <div className="animate-fade-in space-y-6 overflow-x-hidden">
       <PageHeader title="Dashboard" description="Overview of your construction inventory and orders" />
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Stats Grid — single column on mobile */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Active Projects"
           value={stats.activeProjects}
@@ -163,76 +163,117 @@ export default function Dashboard() {
         <CardHeader>
           <CardTitle className="text-lg font-medium">Orders by Status</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2 sm:px-6">
           {ordersByStatus.length > 0 ? (
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={ordersByStatus}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  dataKey="value"
-                  label={({ name, value }) => `${name}: ${value}`}
-                >
-                  {ordersByStatus.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={getStatusColor((entry as any).status || entry.name.replace(/ /g, "_"))}
+            <div className="flex flex-col items-center gap-4">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={ordersByStatus}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={85}
+                    dataKey="value"
+                    label={false}
+                  >
+                    {ordersByStatus.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={getStatusColor((entry as any).status || entry.name.replace(/ /g, "_"))}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "0.5rem",
+                      fontSize: "0.8125rem",
+                    }}
+                    formatter={(value: number, name: string) => [value, name]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Legend below chart */}
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-xs">
+                {ordersByStatus.map((entry) => (
+                  <div key={entry.name} className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: getStatusColor((entry as any).status || entry.name.replace(/ /g, "_")) }}
                     />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "hsl(var(--card))",
-                    border: "1px solid hsl(var(--border))",
-                    borderRadius: "0.5rem",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+                    <span className="text-muted-foreground capitalize">{entry.name}</span>
+                    <span className="font-medium">{entry.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
-            <div className="flex h-[280px] items-center justify-center text-muted-foreground">No orders yet</div>
+            <div className="flex h-[200px] items-center justify-center text-muted-foreground">No orders yet</div>
           )}
         </CardContent>
       </Card>
 
-      {/* Recent Orders Table */}
+      {/* Recent Orders — card list on mobile, table on sm+ */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg font-medium">Recent Orders</CardTitle>
         </CardHeader>
         <CardContent>
           {recentOrders.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b text-left text-xs font-medium uppercase text-muted-foreground">
-                    <th className="pb-3 pr-4">Order #</th>
-                    <th className="pb-3 pr-4">Project</th>
-                    <th className="pb-3 pr-4">Status</th>
-                    <th className="pb-3 pr-4">Supplier</th>
-                    <th className="pb-3 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {recentOrders.slice(0, 5).map((order) => (
-                    <tr key={order.id} className="text-sm">
-                      <td className="py-3 pr-4 font-medium">{order.order_number}</td>
-                      <td className="py-3 pr-4 text-muted-foreground">
-                        {(order as Order & { project?: { name: string } }).project?.name || "-"}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <StatusBadge status={order.status} />
-                      </td>
-                      <td className="py-3 pr-4 text-muted-foreground">{order.supplier_name || "-"}</td>
-                      <td className="py-3 text-right">{order.total_amount ? formatPHP(order.total_amount) : "-"}</td>
+            <>
+              {/* Mobile: card list */}
+              <div className="flex flex-col gap-3 sm:hidden">
+                {recentOrders.slice(0, 5).map((order) => (
+                  <div key={order.id} className="rounded-lg border bg-muted/30 p-3 space-y-1.5 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{order.order_number}</span>
+                      <StatusBadge status={order.status} />
+                    </div>
+                    <div className="text-muted-foreground">
+                      {(order as Order & { project?: { name: string } }).project?.name || "-"}
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>{order.supplier_name || "—"}</span>
+                      <span className="font-medium text-foreground">
+                        {order.total_amount ? formatPHP(order.total_amount) : "-"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: table */}
+              <div className="hidden sm:block">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b text-left text-xs font-medium uppercase text-muted-foreground">
+                      <th className="pb-3 pr-4">Order #</th>
+                      <th className="pb-3 pr-4">Project</th>
+                      <th className="pb-3 pr-4">Status</th>
+                      <th className="pb-3 pr-4">Supplier</th>
+                      <th className="pb-3 text-right">Amount</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y">
+                    {recentOrders.slice(0, 5).map((order) => (
+                      <tr key={order.id} className="text-sm">
+                        <td className="py-3 pr-4 font-medium">{order.order_number}</td>
+                        <td className="py-3 pr-4 text-muted-foreground">
+                          {(order as Order & { project?: { name: string } }).project?.name || "-"}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <StatusBadge status={order.status} />
+                        </td>
+                        <td className="py-3 pr-4 text-muted-foreground">{order.supplier_name || "-"}</td>
+                        <td className="py-3 text-right">{order.total_amount ? formatPHP(order.total_amount) : "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : (
             <div className="py-8 text-center text-muted-foreground">
               No orders yet. Create your first order to get started.
