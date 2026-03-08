@@ -204,7 +204,7 @@ export function ProjectFormModal({
                     <LocationAutocomplete
                       value={field.value}
                       onChange={field.onChange}
-                      placeholder="Enter project location"
+                      placeholder="Type to search..."
                     />
                   </FormControl>
                   <FormMessage />
