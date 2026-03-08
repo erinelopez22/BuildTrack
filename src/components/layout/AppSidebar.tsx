@@ -82,6 +82,12 @@ const allNavItems = [
     icon: Wrench,
     roles: ["super_admin", "admin", "project_engineer", "checker", "office_admin"],
   },
+  {
+    title: "Reports",
+    url: "/reports",
+    icon: BarChart3,
+    roles: ["super_admin", "admin", "office_admin", "project_engineer"],
+  },
 ];
 
 const adminNavItems = [
