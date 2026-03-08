@@ -37,7 +37,9 @@ import {
   MapPin,
   Clock,
   DollarSign,
-  BarChart3,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
 } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -60,14 +62,38 @@ function formatManilaDate(dateStr: string | null | undefined) {
   return formatManila(dateStr, "MMM dd, yyyy");
 }
 
+type BorrowRecord = {
+  id: string;
+  assetName: string;
+  assetType: string;
+  assetCode: string;
+  borrowedQty: number;
+  returnedQty: number;
+  status: string;
+  borrowedBy: string;
+  borrowRequestedAt: string | null;
+  borrowRequestedBy: string | null;
+  borrowApprovedAt: string | null;
+  borrowApprovedBy: string | null;
+  borrowedAt: string | null;
+  returnRequestedAt: string | null;
+  returnRequestedBy: string | null;
+  returnApprovedAt: string | null;
+  returnApprovedBy: string | null;
+  returnedAt: string | null;
+  returnRemarks: string | null;
+  expectedReturnDate: string | null;
+  duration: string;
+  ongoing: boolean;
+};
+
 type ReportData = {
   project: any;
   orders: any[];
   rejectedOrders: any[];
   quotation: any | null;
   quotationItems: any[];
-  borrowedAssets: any[];
-  returnedAssets: any[];
+  assetHistory: BorrowRecord[];
   teamMembers: any[];
   activityLogs: any[];
   materialProgress: {
@@ -119,6 +145,19 @@ function getDuration(start: string | null, end: string | null) {
   return `${months} month${months !== 1 ? "s" : ""}${rem > 0 ? `, ${rem} day${rem !== 1 ? "s" : ""}` : ""}`;
 }
 
+function computeBorrowDuration(start: string | null, end: string | null): { text: string; ongoing: boolean } {
+  if (!start) return { text: "—", ongoing: false };
+  const s = new Date(start);
+  const e = end ? new Date(end) : new Date();
+  const days = Math.max(0, Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)));
+  const ongoing = !end;
+  if (days === 0) return { text: ongoing ? "< 1 day (Ongoing)" : "< 1 day", ongoing };
+  const txt = days < 30
+    ? `${days} day${days !== 1 ? "s" : ""}`
+    : `${Math.floor(days / 30)} month${Math.floor(days / 30) !== 1 ? "s" : ""}${days % 30 > 0 ? `, ${days % 30}d` : ""}`;
+  return { text: ongoing ? `${txt} (Ongoing)` : txt, ongoing };
+}
+
 /* ─── Collapsible Report Section ─── */
 function ReportSection({
   title,
@@ -166,6 +205,28 @@ function StatMini({ label, value, sub }: { label: string; value: string | number
   );
 }
 
+/* ─── Workflow Step ─── */
+function WorkflowStep({ label, by, at, done }: { label: string; by?: string | null; at?: string | null; done: boolean }) {
+  return (
+    <div className={cn("flex items-start gap-2 text-xs", done ? "text-foreground" : "text-muted-foreground/60")}>
+      <div className={cn("mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 flex items-center justify-center",
+        done ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30"
+      )}>
+        {done && <CheckCircle2 className="h-2.5 w-2.5" />}
+      </div>
+      <div className="min-w-0">
+        <div className="font-medium">{label}</div>
+        {done && (
+          <div className="text-muted-foreground">
+            {by || "—"} • {formatManila(at)}
+          </div>
+        )}
+        {!done && <div className="text-muted-foreground/50 italic">Not yet</div>}
+      </div>
+    </div>
+  );
+}
+
 export default function Reports() {
   const { user, isAdmin, hasRole, profile } = useAuth();
   const { toast } = useToast();
@@ -178,8 +239,7 @@ export default function Reports() {
   const [includeDetails, setIncludeDetails] = useState(true);
   const [includeOrders, setIncludeOrders] = useState(true);
   const [includeQuotations, setIncludeQuotations] = useState(true);
-  const [includeBorrowed, setIncludeBorrowed] = useState(true);
-  const [includeReturned, setIncludeReturned] = useState(true);
+  const [includeAssets, setIncludeAssets] = useState(true);
   const [includeProgress, setIncludeProgress] = useState(true);
   const [includeActivity, setIncludeActivity] = useState(true);
   const [reportData, setReportData] = useState<ReportData[] | null>(null);
@@ -229,7 +289,7 @@ export default function Reports() {
           .select("*, profiles:user_id(full_name, email)")
           .eq("project_id", projectId);
 
-        // Active orders
+        // ALL active orders – no status filter
         let ordersQuery = supabase
           .from("orders")
           .select("*, order_items(*, skus(name, sku_code, unit_of_measure)), profiles:created_by(full_name), approver:approved_by(full_name), rejector:rejected_by(full_name)")
@@ -239,7 +299,7 @@ export default function Reports() {
         if (dateEnd) ordersQuery = ordersQuery.lte("created_at", dateEnd.toISOString());
         const { data: orders } = await ordersQuery;
 
-        // Rejected orders
+        // Rejected/archived orders
         let rejQuery = supabase
           .from("rejected_orders")
           .select("*, rejected_order_items(*, skus(name, sku_code, unit_of_measure)), profiles:created_by(full_name), rejector:rejected_by(full_name)")
@@ -257,7 +317,7 @@ export default function Reports() {
           quotationItems = qItems || [];
         }
 
-        // Borrow transactions
+        // ALL borrow transactions (both borrowed and returned) for full history
         let borrowQuery = supabase
           .from("borrow_transactions")
           .select("*, company_assets:asset_id(asset_name, asset_type, asset_code), profiles:borrowed_by(full_name)")
@@ -267,8 +327,46 @@ export default function Reports() {
         if (dateEnd) borrowQuery = borrowQuery.lte("borrowed_at", dateEnd.toISOString());
         const { data: borrows } = await borrowQuery;
 
-        const borrowedAssets = (borrows || []).filter((b: any) => b.status !== "Returned");
-        const returnedAssets = (borrows || []).filter((b: any) => b.status === "Returned");
+        // Get all user IDs from borrow lifecycle fields for profile resolution
+        const borrowUserIds = new Set<string>();
+        (borrows || []).forEach((b: any) => {
+          [b.borrowed_by, b.borrow_requested_by, b.borrow_approved_by, b.return_requested_by, b.return_approved_by].forEach((uid: string | null) => {
+            if (uid) borrowUserIds.add(uid);
+          });
+        });
+        let borrowProfiles = new Map<string, string>();
+        if (borrowUserIds.size > 0) {
+          const { data: bProfiles } = await supabase.from("profiles").select("id, full_name").in("id", Array.from(borrowUserIds));
+          (bProfiles || []).forEach((p: any) => borrowProfiles.set(p.id, p.full_name || p.id.slice(0, 8)));
+        }
+
+        const assetHistory: BorrowRecord[] = (borrows || []).map((b: any) => {
+          const dur = computeBorrowDuration(b.borrow_approved_at || b.borrowed_at, b.return_approved_at || b.returned_at);
+          return {
+            id: b.id,
+            assetName: (b.company_assets as any)?.asset_name || "—",
+            assetType: (b.company_assets as any)?.asset_type || "—",
+            assetCode: (b.company_assets as any)?.asset_code || "—",
+            borrowedQty: b.borrowed_qty,
+            returnedQty: b.returned_qty,
+            status: b.status,
+            borrowedBy: (b.profiles as any)?.full_name || "—",
+            borrowRequestedAt: b.borrow_requested_at,
+            borrowRequestedBy: borrowProfiles.get(b.borrow_requested_by) || null,
+            borrowApprovedAt: b.borrow_approved_at,
+            borrowApprovedBy: borrowProfiles.get(b.borrow_approved_by) || null,
+            borrowedAt: b.borrowed_at,
+            returnRequestedAt: b.return_requested_at,
+            returnRequestedBy: borrowProfiles.get(b.return_requested_by) || null,
+            returnApprovedAt: b.return_approved_at,
+            returnApprovedBy: borrowProfiles.get(b.return_approved_by) || null,
+            returnedAt: b.returned_at,
+            returnRemarks: b.return_remarks,
+            expectedReturnDate: b.expected_return_date,
+            duration: dur.text,
+            ongoing: dur.ongoing,
+          };
+        });
 
         // Activity logs
         const allOrders = [...(orders || []), ...(rejectedOrders || [])];
@@ -282,7 +380,7 @@ export default function Reports() {
             .select("*")
             .in("record_id", logRecordIds)
             .order("created_at", { ascending: false })
-            .limit(100);
+            .limit(200);
 
           if (logs && logs.length > 0) {
             const userIds = [...new Set(logs.map((l: any) => l.user_id).filter(Boolean))];
@@ -295,43 +393,46 @@ export default function Reports() {
           }
         }
 
-        // Material progress calculation
+        // Material progress – use quotation_item_id for accuracy (same logic as useProjectProgress)
         let materialProgress: ReportData["materialProgress"] = [];
         let overallProgress = { totalQuoted: 0, totalOrdered: 0, totalDelivered: 0, percentage: 0 };
 
         if (quotationItems.length > 0) {
-          const deliveredOrders = (orders || []).filter((o: any) => ["delivered", "closed", "fully_received", "partially_received"].includes(o.status));
           const allOrderItems = (orders || []).flatMap((o: any) => (o.order_items || []).map((i: any) => ({ ...i, orderStatus: o.status })));
 
-          const matMap = new Map<string, { materialName: string; unit: string; quotedQty: number; orderedQty: number; deliveredQty: number }>();
-          for (const qi of quotationItems) {
-            matMap.set(qi.id, { materialName: qi.material_name, unit: qi.unit, quotedQty: qi.quantity, orderedQty: 0, deliveredQty: 0 });
-          }
+          // Build maps by quotation_item_id
+          const receivedByQI: Record<string, number> = {};
+          const orderedByQI: Record<string, number> = {};
 
           for (const item of allOrderItems) {
-            if (item.quotation_item_id && matMap.has(item.quotation_item_id)) {
-              const m = matMap.get(item.quotation_item_id)!;
-              m.orderedQty += item.quantity_ordered || 0;
+            if (item.quotation_item_id) {
+              orderedByQI[item.quotation_item_id] = (orderedByQI[item.quotation_item_id] || 0) + (item.quantity_ordered || 0);
+              // Only count received from delivered/closed orders
               if (["delivered", "closed", "fully_received", "partially_received"].includes(item.orderStatus)) {
-                m.deliveredQty += item.quantity_received || 0;
+                receivedByQI[item.quotation_item_id] = (receivedByQI[item.quotation_item_id] || 0) + (item.quantity_received ?? 0);
               }
             }
           }
 
-          materialProgress = Array.from(matMap.values()).map((m) => {
-            const delivered = Math.min(m.deliveredQty, m.quotedQty);
+          materialProgress = quotationItems.map((qi: any) => {
+            const ordered = orderedByQI[qi.id] || 0;
+            const received = receivedByQI[qi.id] || 0;
+            const delivered = Math.min(received, qi.quantity);
             return {
-              ...m,
+              materialName: qi.material_name,
+              unit: qi.unit,
+              quotedQty: qi.quantity,
+              orderedQty: ordered,
               deliveredQty: delivered,
-              remainingQty: Math.max(0, m.quotedQty - delivered),
-              percentage: m.quotedQty > 0 ? Math.round((delivered / m.quotedQty) * 100) : 0,
+              remainingQty: Math.max(0, qi.quantity - delivered),
+              percentage: qi.quantity > 0 ? Math.round((delivered / qi.quantity) * 1000) / 10 : 0,
             };
           });
 
           const tq = materialProgress.reduce((s, m) => s + m.quotedQty, 0);
           const to = materialProgress.reduce((s, m) => s + m.orderedQty, 0);
           const td = materialProgress.reduce((s, m) => s + m.deliveredQty, 0);
-          overallProgress = { totalQuoted: tq, totalOrdered: to, totalDelivered: td, percentage: tq > 0 ? Math.round((td / tq) * 100) : 0 };
+          overallProgress = { totalQuoted: tq, totalOrdered: to, totalDelivered: td, percentage: tq > 0 ? Math.round((td / tq) * 1000) / 10 : 0 };
         }
 
         results.push({
@@ -340,8 +441,7 @@ export default function Reports() {
           rejectedOrders: rejectedOrders || [],
           quotation,
           quotationItems,
-          borrowedAssets,
-          returnedAssets,
+          assetHistory,
           teamMembers: members || [],
           activityLogs,
           materialProgress,
@@ -475,11 +575,10 @@ export default function Reports() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {[
                 { label: "Project Details", checked: includeDetails, set: setIncludeDetails },
-                { label: "Progress Report", checked: includeProgress, set: setIncludeProgress },
+                { label: "Progress & Materials", checked: includeProgress, set: setIncludeProgress },
                 { label: "Orders", checked: includeOrders, set: setIncludeOrders },
                 { label: "Quotations", checked: includeQuotations, set: setIncludeQuotations },
-                { label: "Borrowed Assets", checked: includeBorrowed, set: setIncludeBorrowed },
-                { label: "Returned Assets", checked: includeReturned, set: setIncludeReturned },
+                { label: "Equipment & Assets", checked: includeAssets, set: setIncludeAssets },
                 { label: "Activity History", checked: includeActivity, set: setIncludeActivity },
               ].map((item) => (
                 <label key={item.label} className="flex cursor-pointer items-center gap-2 text-sm">
@@ -546,6 +645,8 @@ export default function Reports() {
             {reportData.map((rd, idx) => {
               const allOrders = [...rd.orders, ...rd.rejectedOrders.map((r: any) => ({ ...r, status: "rejected" }))];
               const orderGroups = groupOrdersByStatus(rd.orders, rd.rejectedOrders);
+              const activeBorrows = rd.assetHistory.filter((a) => a.status !== "Returned");
+              const returnedBorrows = rd.assetHistory.filter((a) => a.status === "Returned");
 
               return (
                 <div key={rd.project?.id || idx} className="space-y-4 rounded-lg border bg-card p-6 shadow-sm print:shadow-none print:break-before-page print:p-4">
@@ -613,7 +714,7 @@ export default function Reports() {
                         <StatMini label="Duration" value={getDuration(rd.project?.start_date, rd.project?.end_date)} />
                       </div>
 
-                      {rd.materialProgress.length > 0 && (
+                      {rd.materialProgress.length > 0 ? (
                         <div className="mt-4">
                           <div className="mb-2 flex items-center justify-between">
                             <span className="text-sm font-medium">Overall Material Delivery Progress</span>
@@ -626,8 +727,7 @@ export default function Reports() {
                             <div>Remaining: <span className="font-semibold text-foreground">{Math.max(0, rd.overallProgress.totalQuoted - rd.overallProgress.totalDelivered)}</span></div>
                           </div>
                         </div>
-                      )}
-                      {rd.materialProgress.length === 0 && (
+                      ) : (
                         <p className="mt-2 text-sm text-muted-foreground">No quotation found for progress tracking.</p>
                       )}
                     </ReportSection>
@@ -636,7 +736,7 @@ export default function Reports() {
                   {/* ── MATERIAL PROGRESS ── */}
                   {includeProgress && rd.materialProgress.length > 0 && (
                     <ReportSection title="Material Progress Report" icon={Boxes} count={rd.materialProgress.length}>
-                      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4 mb-4">
+                      <div className="grid gap-3 sm:grid-cols-4 mb-4">
                         <StatMini label="Total Materials" value={rd.materialProgress.length} />
                         <StatMini label="Total Quoted" value={rd.overallProgress.totalQuoted} />
                         <StatMini label="Total Ordered" value={rd.overallProgress.totalOrdered} />
@@ -669,7 +769,9 @@ export default function Reports() {
                                     <div className="hidden w-16 sm:block print:block">
                                       <Progress value={m.percentage} className="h-1.5" />
                                     </div>
-                                    <span className={cn("text-xs font-semibold", m.percentage === 100 ? "text-primary" : m.percentage > 0 ? "text-foreground" : "text-muted-foreground")}>
+                                    <span className={cn("text-xs font-semibold",
+                                      m.percentage >= 100 ? "text-primary" : m.percentage > 0 ? "text-foreground" : "text-muted-foreground"
+                                    )}>
                                       {m.percentage}%
                                     </span>
                                   </div>
@@ -688,55 +790,80 @@ export default function Reports() {
                       {allOrders.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No orders found for this project.</p>
                       ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                           {orderGroups.map((group) => (
                             <div key={group.label}>
-                              <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+                              <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
                                 <span className="h-2 w-2 rounded-full bg-primary" />
                                 {group.label}
                                 <Badge variant="outline" className="text-[10px]">{group.orders.length}</Badge>
                               </h4>
-                              <div className="overflow-x-auto rounded-md border">
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                                      <th className="px-3 py-2 font-medium">Order #</th>
-                                      <th className="px-3 py-2 font-medium">Status</th>
-                                      <th className="px-3 py-2 font-medium">Supplier</th>
-                                      <th className="px-3 py-2 font-medium">Materials</th>
-                                      <th className="px-3 py-2 font-medium">Expected Delivery</th>
-                                      <th className="px-3 py-2 font-medium">Created By</th>
-                                      <th className="px-3 py-2 font-medium">Created At</th>
-                                      <th className="px-3 py-2 font-medium">Notes</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {group.orders.map((o: any) => {
-                                      const items = o.order_items || o.rejected_order_items || [];
-                                      return (
-                                        <tr key={o.id} className="border-b last:border-0 align-top">
-                                          <td className="px-3 py-2 font-mono text-xs whitespace-nowrap">{o.order_number}</td>
-                                          <td className="px-3 py-2">
-                                            <Badge variant={statusBadgeVariant(o.status)} className="text-[10px] whitespace-nowrap">{statusLabel(o.status)}</Badge>
-                                          </td>
-                                          <td className="px-3 py-2 text-xs">{o.supplier_name || "—"}</td>
-                                          <td className="px-3 py-2">
-                                            {items.map((item: any, i: number) => (
-                                              <div key={i} className="text-xs whitespace-nowrap">
-                                                {item.skus?.name || item.skus?.sku_code || "—"} × {item.quantity_ordered}
-                                                {item.skus?.unit_of_measure && <span className="text-muted-foreground"> {item.skus.unit_of_measure}</span>}
-                                              </div>
-                                            ))}
-                                          </td>
-                                          <td className="px-3 py-2 text-xs whitespace-nowrap">{formatManilaDate(o.expected_delivery_date)}</td>
-                                          <td className="px-3 py-2 text-xs whitespace-nowrap">{(o.profiles as any)?.full_name || "—"}</td>
-                                          <td className="px-3 py-2 text-xs whitespace-nowrap">{formatManila(o.created_at)}</td>
-                                          <td className="px-3 py-2 text-xs max-w-[150px] truncate">{o.notes || o.rejection_reason || "—"}</td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
+                              <div className="space-y-3">
+                                {group.orders.map((o: any) => {
+                                  const items = o.order_items || o.rejected_order_items || [];
+                                  return (
+                                    <div key={o.id} className="rounded-md border p-3 text-sm">
+                                      <div className="flex items-start justify-between gap-2 mb-2">
+                                        <div>
+                                          <span className="font-mono text-xs font-bold">{o.order_number}</span>
+                                          <Badge variant={statusBadgeVariant(o.status)} className="ml-2 text-[10px]">{statusLabel(o.status)}</Badge>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">{formatManila(o.created_at)}</span>
+                                      </div>
+                                      
+                                      <div className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-3 mb-2">
+                                        <div><span className="text-muted-foreground">Supplier:</span> {o.supplier_name || "—"}</div>
+                                        <div><span className="text-muted-foreground">Created by:</span> {(o.profiles as any)?.full_name || "—"}</div>
+                                        <div><span className="text-muted-foreground">Expected Delivery:</span> {formatManilaDate(o.expected_delivery_date)}</div>
+                                        {(o.approver as any)?.full_name && (
+                                          <div><span className="text-muted-foreground">Approved by:</span> {(o.approver as any).full_name} {o.approved_at && <span className="text-muted-foreground">({formatManila(o.approved_at)})</span>}</div>
+                                        )}
+                                        {(o.rejector as any)?.full_name && (
+                                          <div><span className="text-muted-foreground">Rejected by:</span> {(o.rejector as any).full_name} {o.rejected_at && <span className="text-muted-foreground">({formatManila(o.rejected_at)})</span>}</div>
+                                        )}
+                                        {o.rejection_reason && (
+                                          <div className="sm:col-span-3"><span className="text-muted-foreground">Rejection Reason:</span> <span className="text-destructive">{o.rejection_reason}</span></div>
+                                        )}
+                                        {o.delivered_at && (
+                                          <div><span className="text-muted-foreground">Delivered at:</span> {formatManila(o.delivered_at)}</div>
+                                        )}
+                                        {o.on_transit_at && (
+                                          <div><span className="text-muted-foreground">In Transit at:</span> {formatManila(o.on_transit_at)}</div>
+                                        )}
+                                      </div>
+
+                                      {/* Materials table */}
+                                      {items.length > 0 && (
+                                        <div className="overflow-x-auto rounded border mt-1">
+                                          <table className="w-full text-xs">
+                                            <thead>
+                                              <tr className="bg-muted/30 text-muted-foreground">
+                                                <th className="px-2 py-1 text-left font-medium">Material</th>
+                                                <th className="px-2 py-1 text-right font-medium">Ordered</th>
+                                                <th className="px-2 py-1 text-right font-medium">Received</th>
+                                                <th className="px-2 py-1 text-left font-medium">Unit</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {items.map((item: any, i: number) => (
+                                                <tr key={i} className="border-t">
+                                                  <td className="px-2 py-1">{item.skus?.name || item.skus?.sku_code || "—"}</td>
+                                                  <td className="px-2 py-1 text-right">{item.quantity_ordered}</td>
+                                                  <td className="px-2 py-1 text-right">{item.quantity_received ?? 0}</td>
+                                                  <td className="px-2 py-1 text-muted-foreground">{item.skus?.unit_of_measure || "—"}</td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </div>
+                                      )}
+
+                                      {o.notes && (
+                                        <div className="mt-1 text-xs text-muted-foreground"><span className="font-medium">Notes:</span> {o.notes}</div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           ))}
@@ -784,73 +911,65 @@ export default function Reports() {
                     </ReportSection>
                   )}
 
-                  {/* ── BORROWED ASSETS ── */}
-                  {includeBorrowed && (
-                    <ReportSection title="Borrowed Assets" icon={PackageCheck} count={rd.borrowedAssets.length}>
-                      {rd.borrowedAssets.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No borrowed assets found.</p>
+                  {/* ── EQUIPMENT & ASSET HISTORY ── */}
+                  {includeAssets && (
+                    <ReportSection title="Equipment & Asset History" icon={PackageCheck} count={rd.assetHistory.length}>
+                      {rd.assetHistory.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No equipment borrow/return history found for this project.</p>
                       ) : (
-                        <div className="overflow-x-auto rounded-md border">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                                <th className="px-3 py-2 font-medium">Asset Name</th>
-                                <th className="px-3 py-2 font-medium">Category</th>
-                                <th className="px-3 py-2 font-medium text-right">Qty Borrowed</th>
-                                <th className="px-3 py-2 font-medium">Borrowed By</th>
-                                <th className="px-3 py-2 font-medium">Borrow Date</th>
-                                <th className="px-3 py-2 font-medium">Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {rd.borrowedAssets.map((b: any) => (
-                                <tr key={b.id} className="border-b last:border-0">
-                                  <td className="px-3 py-2 font-medium">{(b.company_assets as any)?.asset_name || "—"}</td>
-                                  <td className="px-3 py-2 text-muted-foreground">{(b.company_assets as any)?.asset_type || "—"}</td>
-                                  <td className="px-3 py-2 text-right">{b.borrowed_qty}</td>
-                                  <td className="px-3 py-2">{(b.profiles as any)?.full_name || "—"}</td>
-                                  <td className="px-3 py-2 text-xs whitespace-nowrap">{formatManila(b.borrowed_at)}</td>
-                                  <td className="px-3 py-2">
-                                    <Badge variant="outline" className="text-[10px]">{b.status}</Badge>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </ReportSection>
-                  )}
+                        <div className="space-y-4">
+                          {/* Summary stats */}
+                          <div className="grid gap-3 sm:grid-cols-4 mb-2">
+                            <StatMini label="Total Records" value={rd.assetHistory.length} />
+                            <StatMini label="Currently Borrowed" value={activeBorrows.length} />
+                            <StatMini label="Returned" value={returnedBorrows.length} />
+                            <StatMini label="Total Qty Borrowed" value={rd.assetHistory.reduce((s, a) => s + a.borrowedQty, 0)} />
+                          </div>
 
-                  {/* ── RETURNED ASSETS ── */}
-                  {includeReturned && (
-                    <ReportSection title="Returned Assets" icon={RotateCcw} count={rd.returnedAssets.length}>
-                      {rd.returnedAssets.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No returned assets found.</p>
-                      ) : (
-                        <div className="overflow-x-auto rounded-md border">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                                <th className="px-3 py-2 font-medium">Asset Name</th>
-                                <th className="px-3 py-2 font-medium text-right">Qty Returned</th>
-                                <th className="px-3 py-2 font-medium">Returned By</th>
-                                <th className="px-3 py-2 font-medium">Return Date</th>
-                                <th className="px-3 py-2 font-medium">Remarks</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {rd.returnedAssets.map((r: any) => (
-                                <tr key={r.id} className="border-b last:border-0">
-                                  <td className="px-3 py-2 font-medium">{(r.company_assets as any)?.asset_name || "—"}</td>
-                                  <td className="px-3 py-2 text-right">{r.returned_qty}</td>
-                                  <td className="px-3 py-2">{(r.profiles as any)?.full_name || "—"}</td>
-                                  <td className="px-3 py-2 text-xs whitespace-nowrap">{formatManila(r.returned_at)}</td>
-                                  <td className="px-3 py-2 text-xs">{r.return_remarks || "—"}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          {/* Each record with full lifecycle */}
+                          {rd.assetHistory.map((rec) => (
+                            <div key={rec.id} className="rounded-md border p-3 text-sm">
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <div>
+                                  <span className="font-medium">{rec.assetName}</span>
+                                  <span className="ml-2 text-xs text-muted-foreground">{rec.assetCode}</span>
+                                  <Badge variant={rec.status === "Returned" ? "default" : "secondary"} className="ml-2 text-[10px]">{rec.status}</Badge>
+                                </div>
+                                <span className={cn("text-xs font-medium", rec.ongoing ? "text-amber-600" : "text-muted-foreground")}>{rec.duration}</span>
+                              </div>
+
+                              <div className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-3 mb-3">
+                                <div><span className="text-muted-foreground">Type:</span> {rec.assetType}</div>
+                                <div><span className="text-muted-foreground">Qty Borrowed:</span> {rec.borrowedQty}</div>
+                                <div><span className="text-muted-foreground">Qty Returned:</span> {rec.returnedQty}</div>
+                                <div><span className="text-muted-foreground">Borrowed By:</span> {rec.borrowedBy}</div>
+                                {rec.expectedReturnDate && (
+                                  <div><span className="text-muted-foreground">Expected Return:</span> {formatManilaDate(rec.expectedReturnDate)}</div>
+                                )}
+                                {rec.returnRemarks && (
+                                  <div className="sm:col-span-3"><span className="text-muted-foreground">Remarks:</span> {rec.returnRemarks}</div>
+                                )}
+                              </div>
+
+                              {/* Lifecycle workflow */}
+                              <div className="grid gap-4 sm:grid-cols-2 border-t pt-2">
+                                <div>
+                                  <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Borrow Workflow</div>
+                                  <div className="space-y-2">
+                                    <WorkflowStep label="Borrow Requested" by={rec.borrowRequestedBy} at={rec.borrowRequestedAt} done={!!rec.borrowRequestedAt} />
+                                    <WorkflowStep label="Borrow Approved" by={rec.borrowApprovedBy} at={rec.borrowApprovedAt} done={!!rec.borrowApprovedAt} />
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Return Workflow</div>
+                                  <div className="space-y-2">
+                                    <WorkflowStep label="Return Requested" by={rec.returnRequestedBy} at={rec.returnRequestedAt} done={!!rec.returnRequestedAt} />
+                                    <WorkflowStep label="Return Approved" by={rec.returnApprovedBy} at={rec.returnApprovedAt} done={!!rec.returnApprovedAt} />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </ReportSection>
