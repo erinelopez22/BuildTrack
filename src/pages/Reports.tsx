@@ -840,13 +840,13 @@ export default function Reports() {
                                       
                                       <div className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-3 mb-2">
                                         <div><span className="text-muted-foreground">Supplier:</span> {o.supplier_name || "—"}</div>
-                                        <div><span className="text-muted-foreground">Created by:</span> {(o.profiles as any)?.full_name || "—"}</div>
+                                        <div><span className="text-muted-foreground">Created by:</span> {o.creator_name || "—"}</div>
                                         <div><span className="text-muted-foreground">Expected Delivery:</span> {formatManilaDate(o.expected_delivery_date)}</div>
-                                        {(o.approver as any)?.full_name && (
-                                          <div><span className="text-muted-foreground">Approved by:</span> {(o.approver as any).full_name} {o.approved_at && <span className="text-muted-foreground">({formatManila(o.approved_at)})</span>}</div>
+                                        {o.approver_name && (
+                                          <div><span className="text-muted-foreground">Approved by:</span> {o.approver_name} {o.approved_at && <span className="text-muted-foreground">({formatManila(o.approved_at)})</span>}</div>
                                         )}
-                                        {(o.rejector as any)?.full_name && (
-                                          <div><span className="text-muted-foreground">Rejected by:</span> {(o.rejector as any).full_name} {o.rejected_at && <span className="text-muted-foreground">({formatManila(o.rejected_at)})</span>}</div>
+                                        {o.rejector_name && (
+                                          <div><span className="text-muted-foreground">Rejected by:</span> {o.rejector_name} {o.rejected_at && <span className="text-muted-foreground">({formatManila(o.rejected_at)})</span>}</div>
                                         )}
                                         {o.rejection_reason && (
                                           <div className="sm:col-span-3"><span className="text-muted-foreground">Rejection Reason:</span> <span className="text-destructive">{o.rejection_reason}</span></div>
