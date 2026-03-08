@@ -289,25 +289,52 @@ export default function Reports() {
           .select("*, profiles:user_id(full_name, email)")
           .eq("project_id", projectId);
 
-        // ALL active orders – no status filter
+        // ALL active orders – no status filter, fetch without profile joins (no FK exists)
         let ordersQuery = supabase
           .from("orders")
-          .select("*, order_items(*, skus(name, sku_code, unit_of_measure)), profiles:created_by(full_name), approver:approved_by(full_name), rejector:rejected_by(full_name)")
+          .select("*, order_items(*, skus(name, sku_code, unit_of_measure))")
           .eq("project_id", projectId)
           .order("created_at", { ascending: false });
         if (dateStart) ordersQuery = ordersQuery.gte("created_at", dateStart.toISOString());
         if (dateEnd) ordersQuery = ordersQuery.lte("created_at", dateEnd.toISOString());
-        const { data: orders } = await ordersQuery;
+        const { data: rawOrders } = await ordersQuery;
 
         // Rejected/archived orders
         let rejQuery = supabase
           .from("rejected_orders")
-          .select("*, rejected_order_items(*, skus(name, sku_code, unit_of_measure)), profiles:created_by(full_name), rejector:rejected_by(full_name)")
+          .select("*, rejected_order_items(*, skus(name, sku_code, unit_of_measure))")
           .eq("project_id", projectId)
           .order("created_at", { ascending: false });
         if (dateStart) rejQuery = rejQuery.gte("created_at", dateStart.toISOString());
         if (dateEnd) rejQuery = rejQuery.lte("created_at", dateEnd.toISOString());
-        const { data: rejectedOrders } = await rejQuery;
+        const { data: rawRejectedOrders } = await rejQuery;
+
+        // Resolve all user profiles referenced in orders (created_by, approved_by, rejected_by)
+        const orderUserIds = new Set<string>();
+        [...(rawOrders || []), ...(rawRejectedOrders || [])].forEach((o: any) => {
+          [o.created_by, o.approved_by, o.rejected_by].forEach((uid: string | null) => {
+            if (uid) orderUserIds.add(uid);
+          });
+        });
+        let orderProfileMap = new Map<string, string>();
+        if (orderUserIds.size > 0) {
+          const { data: oProfiles } = await supabase.from("profiles").select("id, full_name").in("id", Array.from(orderUserIds));
+          (oProfiles || []).forEach((p: any) => orderProfileMap.set(p.id, p.full_name || p.email || p.id.slice(0, 8)));
+        }
+
+        // Attach profile names to orders
+        const orders = (rawOrders || []).map((o: any) => ({
+          ...o,
+          creator_name: orderProfileMap.get(o.created_by) || null,
+          approver_name: orderProfileMap.get(o.approved_by) || null,
+          rejector_name: orderProfileMap.get(o.rejected_by) || null,
+        }));
+        const rejectedOrders = (rawRejectedOrders || []).map((o: any) => ({
+          ...o,
+          creator_name: orderProfileMap.get(o.created_by) || null,
+          approver_name: orderProfileMap.get(o.approved_by) || null,
+          rejector_name: orderProfileMap.get(o.rejected_by) || null,
+        }));
 
         // Quotation
         const { data: quotation } = await supabase.from("project_quotations").select("*").eq("project_id", projectId).maybeSingle();
