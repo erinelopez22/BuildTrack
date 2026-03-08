@@ -319,7 +319,7 @@ export default function Reports() {
         let orderProfileMap = new Map<string, string>();
         if (orderUserIds.size > 0) {
           const { data: oProfiles } = await supabase.from("profiles").select("id, full_name").in("id", Array.from(orderUserIds));
-          (oProfiles || []).forEach((p: any) => orderProfileMap.set(p.id, p.full_name || p.email || p.id.slice(0, 8)));
+          (oProfiles || []).forEach((p: any) => orderProfileMap.set(p.id, p.full_name || p.id.slice(0, 8)));
         }
 
         // Attach profile names to orders
