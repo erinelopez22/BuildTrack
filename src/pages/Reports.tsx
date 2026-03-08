@@ -1057,9 +1057,10 @@ export default function Reports() {
 
       {/* Print & report-preview styles */}
       <style>{`
+        @page { margin: 10mm; size: auto; }
         @media print {
           .print\\:hidden { display: none !important; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 11px; overflow: visible !important; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 11px; overflow: visible !important; margin: 0; }
           html { overflow: visible !important; }
           * { overflow: visible !important; }
           .report-preview { break-inside: avoid; overflow: visible !important; }
