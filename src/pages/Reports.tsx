@@ -1055,7 +1055,7 @@ export default function Reports() {
         )}
       </div>
 
-      {/* Print styles */}
+      {/* Print & report-preview styles */}
       <style>{`
         @media print {
           .print\\:hidden { display: none !important; }
@@ -1070,7 +1070,15 @@ export default function Reports() {
           table { page-break-inside: auto; }
           tr { page-break-inside: avoid; }
           main, [data-radix-scroll-area-viewport], [data-sidebar-content] { overflow: visible !important; height: auto !important; max-height: none !important; }
+          /* Hide all system UI */
+          nav, aside, header, [data-lovable-badge], .lovable-badge, [id*="lovable"], a[href*="lovable.dev"] { display: none !important; }
+          footer { display: none !important; }
         }
+        /* Hide Lovable badge inside report preview area */
+        .report-preview [data-lovable-badge],
+        .report-preview .lovable-badge,
+        .report-preview a[href*="lovable.dev"],
+        .report-preview iframe { display: none !important; }
       `}</style>
     </div>
   );
