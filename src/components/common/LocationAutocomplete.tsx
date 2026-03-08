@@ -89,6 +89,7 @@ export function LocationAutocomplete({
 
   return (
     <div ref={wrapperRef} className="relative">
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
       <Input
         ref={inputRef}
         value={value}
@@ -98,7 +99,7 @@ export function LocationAutocomplete({
         }}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className={className}
+        className={cn("pl-10", className)}
         autoComplete="off"
       />
       {isOpen && suggestions.length > 0 && (
