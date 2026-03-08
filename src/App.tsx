@@ -18,6 +18,7 @@ import Settings from "./pages/Settings";
 import Members from "./pages/Members";
 import CompanyAssets from "./pages/CompanyAssets";
 import QuotationRequests from "./pages/QuotationRequests";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
