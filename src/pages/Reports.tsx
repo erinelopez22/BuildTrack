@@ -721,7 +721,7 @@ export default function Reports() {
                           <div className="flex flex-wrap gap-2">
                             {rd.teamMembers.map((m: any) => (
                               <span key={m.id} className="inline-flex items-center gap-1 rounded-md border bg-background px-2.5 py-1 text-xs">
-                                <span className="font-medium">{(m.profiles as any)?.full_name || (m.profiles as any)?.email || "—"}</span>
+                                <span className="font-medium">{(m.profiles as any)?.full_name || "—"}</span>
                                 <span className="text-muted-foreground">• {statusLabel(m.role)}</span>
                               </span>
                             ))}
