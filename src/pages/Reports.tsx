@@ -734,28 +734,40 @@ export default function Reports() {
                   {/* ── PROJECT PROGRESS ── */}
                   {includeProgress && (
                     <ReportSection title="Project Progress Report" icon={TrendingUp} defaultOpen>
-                      <div className="grid gap-4 sm:grid-cols-4">
-                        <StatMini label="Start Date" value={formatManilaDate(rd.project?.start_date)} />
-                        <StatMini label="Expected Completion" value={formatManilaDate(rd.project?.end_date)} />
-                        <StatMini label="Status" value={statusLabel(rd.project?.status)} />
-                        <StatMini label="Duration" value={getDuration(rd.project?.start_date, rd.project?.end_date)} />
+                      <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
+                        <div className="rounded border bg-card px-3 py-2 print:p-1.5">
+                          <div className="text-[10px] text-muted-foreground">Start Date</div>
+                          <div className="text-xs font-semibold text-foreground">{formatManilaDate(rd.project?.start_date)}</div>
+                        </div>
+                        <div className="rounded border bg-card px-3 py-2 print:p-1.5">
+                          <div className="text-[10px] text-muted-foreground">Expected Completion</div>
+                          <div className="text-xs font-semibold text-foreground">{formatManilaDate(rd.project?.end_date)}</div>
+                        </div>
+                        <div className="rounded border bg-card px-3 py-2 print:p-1.5">
+                          <div className="text-[10px] text-muted-foreground">Status</div>
+                          <div className="text-xs font-semibold text-foreground">{statusLabel(rd.project?.status)}</div>
+                        </div>
+                        <div className="rounded border bg-card px-3 py-2 print:p-1.5">
+                          <div className="text-[10px] text-muted-foreground">Duration</div>
+                          <div className="text-xs font-semibold text-foreground">{getDuration(rd.project?.start_date, rd.project?.end_date)}</div>
+                        </div>
                       </div>
 
                       {rd.materialProgress.length > 0 ? (
-                        <div className="mt-4">
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className="text-sm font-medium">Overall Material Delivery Progress</span>
-                            <span className="text-lg font-bold text-primary">{rd.overallProgress.percentage}%</span>
+                        <div className="mt-3">
+                          <div className="mb-1 flex items-center justify-between">
+                            <span className="text-xs font-medium">Overall Delivery Progress</span>
+                            <span className="text-sm font-bold text-primary">{rd.overallProgress.percentage}%</span>
                           </div>
-                          <Progress value={rd.overallProgress.percentage} className="h-3" />
-                          <div className="mt-2 grid grid-cols-3 gap-2 text-center text-xs text-muted-foreground">
-                            <div>Quoted: <span className="font-semibold text-foreground">{rd.overallProgress.totalQuoted}</span></div>
-                            <div>Delivered: <span className="font-semibold text-foreground">{rd.overallProgress.totalDelivered}</span></div>
-                            <div>Remaining: <span className="font-semibold text-foreground">{Math.max(0, rd.overallProgress.totalQuoted - rd.overallProgress.totalDelivered)}</span></div>
+                          <Progress value={rd.overallProgress.percentage} className="h-2" />
+                          <div className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
+                            <span>Quoted: <span className="font-semibold text-foreground">{rd.overallProgress.totalQuoted}</span></span>
+                            <span>Delivered: <span className="font-semibold text-foreground">{rd.overallProgress.totalDelivered}</span></span>
+                            <span>Remaining: <span className="font-semibold text-foreground">{Math.max(0, rd.overallProgress.totalQuoted - rd.overallProgress.totalDelivered)}</span></span>
                           </div>
                         </div>
                       ) : (
-                        <p className="mt-2 text-sm text-muted-foreground">No quotation found for progress tracking.</p>
+                        <p className="mt-2 text-xs text-muted-foreground">No quotation found for progress tracking.</p>
                       )}
                     </ReportSection>
                   )}
@@ -763,40 +775,52 @@ export default function Reports() {
                   {/* ── MATERIAL PROGRESS ── */}
                   {includeProgress && rd.materialProgress.length > 0 && (
                     <ReportSection title="Material Progress Report" icon={Boxes} count={rd.materialProgress.length}>
-                      <div className="grid gap-3 sm:grid-cols-4 mb-4">
-                        <StatMini label="Total Materials" value={rd.materialProgress.length} />
-                        <StatMini label="Total Quoted" value={rd.overallProgress.totalQuoted} />
-                        <StatMini label="Total Ordered" value={rd.overallProgress.totalOrdered} />
-                        <StatMini label="Total Delivered" value={rd.overallProgress.totalDelivered} />
+                      <div className="grid gap-2 grid-cols-2 sm:grid-cols-4 mb-3">
+                        <div className="rounded border bg-card px-3 py-2 text-center print:p-1.5">
+                          <div className="text-sm font-bold text-foreground">{rd.materialProgress.length}</div>
+                          <div className="text-[10px] text-muted-foreground">Materials</div>
+                        </div>
+                        <div className="rounded border bg-card px-3 py-2 text-center print:p-1.5">
+                          <div className="text-sm font-bold text-foreground">{rd.overallProgress.totalQuoted}</div>
+                          <div className="text-[10px] text-muted-foreground">Quoted</div>
+                        </div>
+                        <div className="rounded border bg-card px-3 py-2 text-center print:p-1.5">
+                          <div className="text-sm font-bold text-foreground">{rd.overallProgress.totalOrdered}</div>
+                          <div className="text-[10px] text-muted-foreground">Ordered</div>
+                        </div>
+                        <div className="rounded border bg-card px-3 py-2 text-center print:p-1.5">
+                          <div className="text-sm font-bold text-foreground">{rd.overallProgress.totalDelivered}</div>
+                          <div className="text-[10px] text-muted-foreground">Delivered</div>
+                        </div>
                       </div>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-xs">
                           <thead>
-                            <tr className="border-b bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
-                              <th className="px-3 py-2 font-medium">Material</th>
-                              <th className="px-3 py-2 font-medium">Unit</th>
-                              <th className="px-3 py-2 font-medium text-right">Quoted</th>
-                              <th className="px-3 py-2 font-medium text-right">Ordered</th>
-                              <th className="px-3 py-2 font-medium text-right">Delivered</th>
-                              <th className="px-3 py-2 font-medium text-right">Remaining</th>
-                              <th className="px-3 py-2 font-medium text-right">Progress</th>
+                            <tr className="border-b bg-muted/30 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                              <th className="px-2 py-1.5 font-medium">Material</th>
+                              <th className="px-2 py-1.5 font-medium">Unit</th>
+                              <th className="px-2 py-1.5 font-medium text-right">Quoted</th>
+                              <th className="px-2 py-1.5 font-medium text-right">Ordered</th>
+                              <th className="px-2 py-1.5 font-medium text-right">Delivered</th>
+                              <th className="px-2 py-1.5 font-medium text-right">Remaining</th>
+                              <th className="px-2 py-1.5 font-medium text-right w-20">Progress</th>
                             </tr>
                           </thead>
                           <tbody>
                             {rd.materialProgress.map((m, i) => (
                               <tr key={i} className="border-b last:border-0">
-                                <td className="px-3 py-2 font-medium">{m.materialName}</td>
-                                <td className="px-3 py-2 text-muted-foreground">{m.unit}</td>
-                                <td className="px-3 py-2 text-right">{m.quotedQty}</td>
-                                <td className="px-3 py-2 text-right">{m.orderedQty}</td>
-                                <td className="px-3 py-2 text-right">{m.deliveredQty}</td>
-                                <td className="px-3 py-2 text-right">{m.remainingQty}</td>
-                                <td className="px-3 py-2 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <div className="hidden w-16 sm:block print:block">
-                                      <Progress value={m.percentage} className="h-1.5" />
+                                <td className="px-2 py-1.5 font-medium max-w-[150px] truncate">{m.materialName}</td>
+                                <td className="px-2 py-1.5 text-muted-foreground">{m.unit}</td>
+                                <td className="px-2 py-1.5 text-right">{m.quotedQty}</td>
+                                <td className="px-2 py-1.5 text-right">{m.orderedQty}</td>
+                                <td className="px-2 py-1.5 text-right">{m.deliveredQty}</td>
+                                <td className="px-2 py-1.5 text-right">{m.remainingQty}</td>
+                                <td className="px-2 py-1.5 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <div className="w-12 print:w-10">
+                                      <Progress value={m.percentage} className="h-1" />
                                     </div>
-                                    <span className={cn("text-xs font-semibold",
+                                    <span className={cn("text-[10px] font-semibold whitespace-nowrap",
                                       m.percentage >= 100 ? "text-primary" : m.percentage > 0 ? "text-foreground" : "text-muted-foreground"
                                     )}>
                                       {m.percentage}%
