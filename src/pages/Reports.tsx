@@ -1038,7 +1038,7 @@ export default function Reports() {
                               <div className="min-w-0 flex-1">
                                 <p className="text-foreground">{formatActivityDescription(log)}</p>
                                 <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
-                                  <span>By: {log.user?.full_name || log.user?.email || "System"}</span>
+                                  <span>By: {log.user?.full_name || "System"}</span>
                                   <span>{formatManila(log.created_at)}</span>
                                 </div>
                               </div>
