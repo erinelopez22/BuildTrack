@@ -1036,14 +1036,17 @@ export default function Reports() {
       <style>{`
         @media print {
           .print\\:hidden { display: none !important; }
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 11px; }
-          .report-preview { break-inside: avoid; }
+          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 11px; overflow: visible !important; }
+          html { overflow: visible !important; }
+          * { overflow: visible !important; }
+          .report-preview { break-inside: avoid; overflow: visible !important; }
           .report-section { break-inside: avoid; }
           [data-state="closed"] > [data-radix-collapsible-content] { display: block !important; height: auto !important; }
           .print\\:break-before-page { break-before: page; }
           .print\\:break-before-page:first-child { break-before: auto; }
           table { page-break-inside: auto; }
           tr { page-break-inside: avoid; }
+          main, [data-radix-scroll-area-viewport], [data-sidebar-content] { overflow: visible !important; height: auto !important; max-height: none !important; }
         }
       `}</style>
     </div>
