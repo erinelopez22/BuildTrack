@@ -14,6 +14,7 @@ import {
   Wrench,
   RotateCcw,
   FileCheck,
+  BarChart3,
 } from "lucide-react";
 import {
   Sidebar,
