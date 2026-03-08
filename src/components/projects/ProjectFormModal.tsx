@@ -201,7 +201,11 @@ export function ProjectFormModal({
                 <FormItem>
                   <FormLabel>Location *</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter project location" {...field} />
+                    <LocationAutocomplete
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Enter project location"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
