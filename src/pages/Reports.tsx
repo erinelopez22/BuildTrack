@@ -810,7 +810,7 @@ export default function Reports() {
                                   </div>
                                 </div>
                                 <Badge variant="outline" className={cn("text-[9px] ml-2 shrink-0",
-                                  m.percentage >= 100 ? "border-primary text-primary" : m.percentage > 0 ? "border-orange-400 text-orange-500" : ""
+                                  m.percentage >= 100 ? "border-primary text-primary" : m.percentage > 0 ? "border-destructive/50 text-destructive" : ""
                                 )}>
                                   {m.percentage >= 100 ? "Done" : m.percentage > 0 ? "Partial" : "Pending"}
                                 </Badge>
