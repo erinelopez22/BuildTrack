@@ -669,7 +669,7 @@ export default function Reports() {
                                     <div className="hidden w-16 sm:block print:block">
                                       <Progress value={m.percentage} className="h-1.5" />
                                     </div>
-                                    <span className={cn("text-xs font-semibold", m.percentage === 100 ? "text-green-600" : m.percentage > 0 ? "text-primary" : "text-muted-foreground")}>
+                                    <span className={cn("text-xs font-semibold", m.percentage === 100 ? "text-primary" : m.percentage > 0 ? "text-foreground" : "text-muted-foreground")}>
                                       {m.percentage}%
                                     </span>
                                   </div>
