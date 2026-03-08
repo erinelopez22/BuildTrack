@@ -793,44 +793,43 @@ export default function Reports() {
                           <div className="text-[10px] text-muted-foreground">Delivered</div>
                         </div>
                       </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="border-b bg-muted/30 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-                              <th className="px-2 py-1.5 font-medium">Material</th>
-                              <th className="px-2 py-1.5 font-medium">Unit</th>
-                              <th className="px-2 py-1.5 font-medium text-right">Quoted</th>
-                              <th className="px-2 py-1.5 font-medium text-right">Ordered</th>
-                              <th className="px-2 py-1.5 font-medium text-right">Delivered</th>
-                              <th className="px-2 py-1.5 font-medium text-right">Remaining</th>
-                              <th className="px-2 py-1.5 font-medium text-right w-20">Progress</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {rd.materialProgress.map((m, i) => (
-                              <tr key={i} className="border-b last:border-0">
-                                <td className="px-2 py-1.5 font-medium max-w-[150px] truncate">{m.materialName}</td>
-                                <td className="px-2 py-1.5 text-muted-foreground">{m.unit}</td>
-                                <td className="px-2 py-1.5 text-right">{m.quotedQty}</td>
-                                <td className="px-2 py-1.5 text-right">{m.orderedQty}</td>
-                                <td className="px-2 py-1.5 text-right">{m.deliveredQty}</td>
-                                <td className="px-2 py-1.5 text-right">{m.remainingQty}</td>
-                                <td className="px-2 py-1.5 text-right">
-                                  <div className="flex items-center justify-end gap-1.5">
-                                    <div className="w-12 print:w-10">
-                                      <Progress value={m.percentage} className="h-1" />
-                                    </div>
-                                    <span className={cn("text-[10px] font-semibold whitespace-nowrap",
+                      <div className="space-y-1.5">
+                        {rd.materialProgress.map((m, i) => (
+                          <Collapsible key={i}>
+                            <CollapsibleTrigger className="w-full">
+                              <div className="flex items-center justify-between rounded border bg-card px-3 py-2 hover:bg-muted/40 transition-colors text-left">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-xs font-semibold text-foreground">{m.materialName}</span>
+                                  <div className="flex items-center gap-3 mt-0.5 text-[10px] text-muted-foreground">
+                                    <span>Unit: {m.unit}</span>
+                                    <span>Quoted/Received: {m.quotedQty}/{m.deliveredQty}</span>
+                                    <span>Remaining: {m.remainingQty}</span>
+                                    <span className={cn("font-semibold",
                                       m.percentage >= 100 ? "text-primary" : m.percentage > 0 ? "text-foreground" : "text-muted-foreground"
-                                    )}>
-                                      {m.percentage}%
-                                    </span>
+                                    )}>{m.percentage}%</span>
                                   </div>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                                </div>
+                                <Badge variant="outline" className={cn("text-[9px] ml-2 shrink-0",
+                                  m.percentage >= 100 ? "border-primary text-primary" : m.percentage > 0 ? "border-destructive/50 text-destructive" : ""
+                                )}>
+                                  {m.percentage >= 100 ? "Done" : m.percentage > 0 ? "Partial" : "Pending"}
+                                </Badge>
+                              </div>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <div className="mx-1 rounded-b border border-t-0 bg-muted/20 px-3 py-2 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px]">
+                                <div><span className="text-muted-foreground">Quoted:</span> <span className="font-semibold">{m.quotedQty}</span></div>
+                                <div><span className="text-muted-foreground">Ordered:</span> <span className="font-semibold">{m.orderedQty}</span></div>
+                                <div><span className="text-muted-foreground">Delivered:</span> <span className="font-semibold">{m.deliveredQty}</span></div>
+                                <div><span className="text-muted-foreground">Remaining:</span> <span className="font-semibold">{m.remainingQty}</span></div>
+                                <div className="col-span-2 sm:col-span-4 flex items-center gap-2 mt-1">
+                                  <Progress value={m.percentage} className="h-1.5 flex-1" />
+                                  <span className="font-semibold text-foreground">{m.percentage}%</span>
+                                </div>
+                              </div>
+                            </CollapsibleContent>
+                          </Collapsible>
+                        ))}
                       </div>
                     </ReportSection>
                   )}
