@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { projectsApi, ordersApi, quotationsApi, companyAssetsApi } from '@/lib/apiClient';
 import { PageHeader } from "@/components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +45,6 @@ import { Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { formatActivityDescription } from "@/lib/activityLogger";
-import type { Json } from "@/integrations/supabase/types";
 
 const MANILA_TZ = "Asia/Manila";
 
@@ -251,13 +250,8 @@ export default function Reports() {
   const { data: projects = [] } = useQuery({
     queryKey: ["reports-projects"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("id, name, location, status, code")
-        .eq("is_hidden", false)
-        .order("name");
-      if (error) throw error;
-      return data || [];
+      const result = await projectsApi.getAll();
+      return (result.data || []).filter((p: any) => !p.isHidden);
     },
   });
 
@@ -282,169 +276,160 @@ export default function Reports() {
       const results: ReportData[] = [];
 
       for (const projectId of selectedProjectIds) {
-        const { data: project } = await supabase.from("projects").select("*").eq("id", projectId).single();
+        const projectResult = await projectsApi.getById(projectId);
+        const project = projectResult.data ?? null;
 
-        const { data: members } = await supabase
-          .from("project_members")
-          .select("*, profiles:user_id(full_name, email)")
-          .eq("project_id", projectId);
-
-        // ALL active orders – no status filter, fetch without profile joins (no FK exists)
-        let ordersQuery = supabase
-          .from("orders")
-          .select("*, order_items(*, skus(name, sku_code, unit_of_measure))")
-          .eq("project_id", projectId)
-          .order("created_at", { ascending: false });
-        if (dateStart) ordersQuery = ordersQuery.gte("created_at", dateStart.toISOString());
-        if (dateEnd) ordersQuery = ordersQuery.lte("created_at", dateEnd.toISOString());
-        const { data: rawOrders } = await ordersQuery;
-
-        // Rejected/archived orders
-        let rejQuery = supabase
-          .from("rejected_orders")
-          .select("*, rejected_order_items(*, skus(name, sku_code, unit_of_measure))")
-          .eq("project_id", projectId)
-          .order("created_at", { ascending: false });
-        if (dateStart) rejQuery = rejQuery.gte("created_at", dateStart.toISOString());
-        if (dateEnd) rejQuery = rejQuery.lte("created_at", dateEnd.toISOString());
-        const { data: rawRejectedOrders } = await rejQuery;
-
-        // Resolve all user profiles referenced in orders (created_by, approved_by, rejected_by)
-        const orderUserIds = new Set<string>();
-        [...(rawOrders || []), ...(rawRejectedOrders || [])].forEach((o: any) => {
-          [o.created_by, o.approved_by, o.rejected_by].forEach((uid: string | null) => {
-            if (uid) orderUserIds.add(uid);
-          });
-        });
-        let orderProfileMap = new Map<string, string>();
-        if (orderUserIds.size > 0) {
-          const { data: oProfiles } = await supabase.from("profiles").select("id, full_name").in("id", Array.from(orderUserIds));
-          (oProfiles || []).forEach((p: any) => orderProfileMap.set(p.id, p.full_name || p.id.slice(0, 8)));
-        }
-
-        // Attach profile names to orders
-        const orders = (rawOrders || []).map((o: any) => ({
-          ...o,
-          creator_name: orderProfileMap.get(o.created_by) || null,
-          approver_name: orderProfileMap.get(o.approved_by) || null,
-          rejector_name: orderProfileMap.get(o.rejected_by) || null,
+        const membersResult = await projectsApi.getMembers(projectId);
+        const members = (membersResult.data || []).map((m: any) => ({
+          ...m,
+          user_id: m.userId,
+          project_id: m.projectId,
+          profiles: { full_name: m.userFullName, email: m.userEmail },
         }));
-        const rejectedOrders = (rawRejectedOrders || []).map((o: any) => ({
+
+        // ALL active orders (exclude rejected/cancelled — fetched separately below)
+        const allOrdersResult = await ordersApi.getByProject(projectId);
+        let rawApiOrders: any[] = (allOrdersResult.data || []).filter(
+          (o: any) => !['rejected', 'cancelled'].includes(o.status)
+        );
+        // Client-side date filtering
+        if (dateStart) rawApiOrders = rawApiOrders.filter((o: any) => new Date(o.createdAt) >= dateStart!);
+        if (dateEnd) rawApiOrders = rawApiOrders.filter((o: any) => new Date(o.createdAt) <= dateEnd!);
+
+        const mapOrderItems = (items: any[]) =>
+          items.map((i: any) => ({
+            ...i,
+            sku_id: i.skuId,
+            quotation_item_id: i.quotationItemId ?? null,
+            quantity_ordered: i.quantityOrdered,
+            quantity_received: i.quantityReceived,
+            sku_name: i.skuName,
+            skus: { name: i.skuName, sku_code: i.skuCode, unit_of_measure: i.unit },
+          }));
+
+        const orders = rawApiOrders.map((o: any) => ({
           ...o,
-          creator_name: orderProfileMap.get(o.created_by) || null,
-          approver_name: orderProfileMap.get(o.approved_by) || null,
-          rejector_name: orderProfileMap.get(o.rejected_by) || null,
+          order_number: o.orderNumber,
+          project_id: o.projectId,
+          supplier_name: o.supplierName,
+          expected_delivery_date: o.expectedDeliveryDate,
+          created_at: o.createdAt,
+          rejection_reason: o.rejectionReason,
+          creator_name: o.createdByName || null,
+          approver_name: o.approvedByName || null,
+          rejector_name: o.rejectedByName || null,
+          order_items: mapOrderItems(o.items || []),
+        }));
+
+        // Rejected orders — from same endpoint filtered by status
+        const rejectedResult = await ordersApi.getAll({ status: 'rejected', projectId });
+        let rawRejApi: any[] = rejectedResult.data || [];
+        if (dateStart) rawRejApi = rawRejApi.filter((o: any) => new Date(o.createdAt) >= dateStart!);
+        if (dateEnd) rawRejApi = rawRejApi.filter((o: any) => new Date(o.createdAt) <= dateEnd!);
+
+        const rejectedOrders = rawRejApi.map((o: any) => ({
+          ...o,
+          order_number: o.orderNumber,
+          project_id: o.projectId,
+          supplier_name: o.supplierName,
+          expected_delivery_date: o.expectedDeliveryDate,
+          created_at: o.createdAt,
+          rejection_reason: o.rejectionReason,
+          creator_name: o.createdByName || null,
+          approver_name: o.approvedByName || null,
+          rejector_name: o.rejectedByName || null,
+          order_items: mapOrderItems(o.items || []),
         }));
 
         // Quotation
-        const { data: quotation } = await supabase.from("project_quotations").select("*").eq("project_id", projectId).maybeSingle();
-        let quotationItems: any[] = [];
-        if (quotation) {
-          const { data: qItems } = await supabase.from("quotation_items").select("*").eq("quotation_id", quotation.id);
-          quotationItems = qItems || [];
-        }
+        const quotationsResult = await quotationsApi.getAll(projectId);
+        const apiQuotations: any[] = quotationsResult.data || [];
+        const quotation = apiQuotations[0] ?? null;
+        const quotationItems = (quotation?.items || []).map((qi: any) => ({
+          id: qi.id,
+          material_name: qi.materialName,
+          unit: qi.unit,
+          quantity: qi.quantity,
+          received_quantity: qi.receivedQuantity,
+        }));
 
-        // ALL borrow transactions (both borrowed and returned) for full history
-        let borrowQuery = supabase
-          .from("borrow_transactions")
-          .select("*, company_assets:asset_id(asset_name, asset_type, asset_code), profiles:borrowed_by(full_name)")
-          .eq("project_id", projectId)
-          .order("borrowed_at", { ascending: false });
-        if (dateStart) borrowQuery = borrowQuery.gte("borrowed_at", dateStart.toISOString());
-        if (dateEnd) borrowQuery = borrowQuery.lte("borrowed_at", dateEnd.toISOString());
-        const { data: borrows } = await borrowQuery;
+        // Borrow transactions
+        const borrowsResult = await companyAssetsApi.getAllBorrows(projectId);
+        let borrowTxns: any[] = borrowsResult.data || [];
+        if (dateStart) borrowTxns = borrowTxns.filter((b: any) => b.borrowedAt && new Date(b.borrowedAt) >= dateStart!);
+        if (dateEnd) borrowTxns = borrowTxns.filter((b: any) => b.borrowedAt && new Date(b.borrowedAt) <= dateEnd!);
 
-        // Get all user IDs from borrow lifecycle fields for profile resolution
-        const borrowUserIds = new Set<string>();
-        (borrows || []).forEach((b: any) => {
-          [b.borrowed_by, b.borrow_requested_by, b.borrow_approved_by, b.return_requested_by, b.return_approved_by].forEach((uid: string | null) => {
-            if (uid) borrowUserIds.add(uid);
-          });
-        });
-        let borrowProfiles = new Map<string, string>();
-        if (borrowUserIds.size > 0) {
-          const { data: bProfiles } = await supabase.from("profiles").select("id, full_name").in("id", Array.from(borrowUserIds));
-          (bProfiles || []).forEach((p: any) => borrowProfiles.set(p.id, p.full_name || p.id.slice(0, 8)));
-        }
-
-        const assetHistory: BorrowRecord[] = (borrows || []).map((b: any) => {
-          const dur = computeBorrowDuration(b.borrow_approved_at || b.borrowed_at, b.return_approved_at || b.returned_at);
-          return {
-            id: b.id,
-            assetName: (b.company_assets as any)?.asset_name || "—",
-            assetType: (b.company_assets as any)?.asset_type || "—",
-            assetCode: (b.company_assets as any)?.asset_code || "—",
-            borrowedQty: b.borrowed_qty,
-            returnedQty: b.returned_qty,
-            status: b.status,
-            borrowedBy: (b.profiles as any)?.full_name || "—",
-            borrowRequestedAt: b.borrow_requested_at,
-            borrowRequestedBy: borrowProfiles.get(b.borrow_requested_by) || null,
-            borrowApprovedAt: b.borrow_approved_at,
-            borrowApprovedBy: borrowProfiles.get(b.borrow_approved_by) || null,
-            borrowedAt: b.borrowed_at,
-            returnRequestedAt: b.return_requested_at,
-            returnRequestedBy: borrowProfiles.get(b.return_requested_by) || null,
-            returnApprovedAt: b.return_approved_at,
-            returnApprovedBy: borrowProfiles.get(b.return_approved_by) || null,
-            returnedAt: b.returned_at,
-            returnRemarks: b.return_remarks,
-            expectedReturnDate: b.expected_return_date,
-            duration: dur.text,
-            ongoing: dur.ongoing,
-          };
-        });
+        const assetHistory: BorrowRecord[] = (borrowTxns || []).map((b: any) => ({
+          id: b.id,
+          assetName: b.assetName || '—',
+          assetType: '—',
+          assetCode: '—',
+          borrowedQty: b.borrowedQty,
+          returnedQty: b.returnedQty,
+          status: b.status,
+          borrowedBy: b.borrowedByName || '—',
+          borrowedAt: b.borrowedAt,
+          returnedAt: b.returnedAt,
+          returnRemarks: b.returnRemarks,
+          expectedReturnDate: b.expectedReturnDate,
+          borrowRequestedAt: null,
+          borrowRequestedBy: null,
+          borrowApprovedAt: null,
+          borrowApprovedBy: null,
+          returnRequestedAt: null,
+          returnRequestedBy: null,
+          returnApprovedAt: null,
+          returnApprovedBy: null,
+          duration: computeBorrowDuration(b.borrowedAt, b.returnedAt).text,
+          ongoing: computeBorrowDuration(b.borrowedAt, b.returnedAt).ongoing,
+        }));
 
         // Activity logs
-        const allOrders = [...(orders || []), ...(rejectedOrders || [])];
-        const orderIds = allOrders.map((o: any) => o.id);
-        const logRecordIds = [projectId, ...orderIds];
-
         let activityLogs: any[] = [];
-        if (logRecordIds.length > 0) {
-          const { data: logs } = await supabase
-            .from("audit_logs")
-            .select("*")
-            .in("record_id", logRecordIds)
-            .order("created_at", { ascending: false })
-            .limit(200);
-
-          if (logs && logs.length > 0) {
-            const userIds = [...new Set(logs.map((l: any) => l.user_id).filter(Boolean))];
-            const { data: profiles } = await supabase.from("profiles").select("id, full_name, email").in("id", userIds);
-            const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
-            activityLogs = logs.map((l: any) => ({
-              ...l,
-              user: profileMap.get(l.user_id),
-            }));
-          }
+        try {
+          const activityResult = await projectsApi.getActivity(projectId, 100);
+          activityLogs = (activityResult.data || []).map((log: any) => ({
+            ...log,
+            id: log.id,
+            action: log.action,
+            tableName: log.tableName,
+            created_at: log.createdAt,
+            user: { full_name: log.userName || "System" },
+          }));
+        } catch {
+          activityLogs = [];
         }
 
-        // Material progress – use quotation_item_id for accuracy (same logic as useProjectProgress)
+        // Material progress – match by quotation_item_id (FK) or sku_name (fallback for manual orders)
         let materialProgress: ReportData["materialProgress"] = [];
         let overallProgress = { totalQuoted: 0, totalOrdered: 0, totalDelivered: 0, percentage: 0 };
 
         if (quotationItems.length > 0) {
-          const allOrderItems = (orders || []).flatMap((o: any) => (o.order_items || []).map((i: any) => ({ ...i, orderStatus: o.status })));
-
-          // Build maps by quotation_item_id
-          const receivedByQI: Record<string, number> = {};
-          const orderedByQI: Record<string, number> = {};
-
-          for (const item of allOrderItems) {
-            if (item.quotation_item_id) {
-              orderedByQI[item.quotation_item_id] = (orderedByQI[item.quotation_item_id] || 0) + (item.quantity_ordered || 0);
-              // Only count received from delivered/closed orders
-              if (["delivered", "closed", "fully_received", "partially_received"].includes(item.orderStatus)) {
-                receivedByQI[item.quotation_item_id] = (receivedByQI[item.quotation_item_id] || 0) + (item.quantity_received ?? 0);
-              }
-            }
-          }
+          const deliveredStatuses = ["delivered", "closed", "fully_received", "partially_received"];
+          // All order items from delivered orders (for progress)
+          const deliveredItems = (orders || [])
+            .filter((o: any) => deliveredStatuses.includes(o.status))
+            .flatMap((o: any) => o.order_items || []);
+          // All order items (for ordered qty)
+          const allOrderItems = (orders || []).flatMap((o: any) => o.order_items || []);
 
           materialProgress = quotationItems.map((qi: any) => {
-            const ordered = orderedByQI[qi.id] || 0;
-            const received = receivedByQI[qi.id] || 0;
-            const delivered = Math.min(received, qi.quantity);
+            // Match by FK first, then by SKU name (case-insensitive) for manually created orders
+            const matchItem = (item: any) =>
+              item.quotation_item_id === qi.id ||
+              (!item.quotation_item_id &&
+                (item.sku_name || '').toLowerCase() === (qi.material_name || '').toLowerCase());
+
+            const ordered = allOrderItems
+              .filter(matchItem)
+              .reduce((s: number, i: any) => s + (i.quantity_ordered || 0), 0);
+
+            // Use quantity_ordered (not quantity_received which is always 0 in DB)
+            const delivered = Math.min(
+              deliveredItems.filter(matchItem).reduce((s: number, i: any) => s + (i.quantity_ordered || 0), 0),
+              qi.quantity
+            );
+
             return {
               materialName: qi.material_name,
               unit: qi.unit,
@@ -494,7 +479,7 @@ export default function Reports() {
       if (matched.length > 0) groups.push({ label, orders: matched });
     }
     if (rejected.length > 0) {
-      groups.push({ label: "Rejected", orders: rejected.map((r: any) => ({ ...r, order_items: r.rejected_order_items, status: "rejected" })) });
+      groups.push({ label: "Rejected", orders: rejected.map((r: any) => ({ ...r, order_items: r.order_items || r.rejected_order_items, status: "rejected" })) });
     }
     return groups;
   };
@@ -700,12 +685,12 @@ export default function Reports() {
                     <ReportSection title="Project Overview" icon={Building2} defaultOpen>
                       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="space-y-3">
-                          <DetailItem icon={<CalendarIcon className="h-3.5 w-3.5" />} label="Start Date" value={formatManilaDate(rd.project?.start_date)} />
-                          <DetailItem icon={<CalendarIcon className="h-3.5 w-3.5" />} label="End Date" value={formatManilaDate(rd.project?.end_date)} />
+                          <DetailItem icon={<CalendarIcon className="h-3.5 w-3.5" />} label="Start Date" value={formatManilaDate(rd.project?.startDate)} />
+                          <DetailItem icon={<CalendarIcon className="h-3.5 w-3.5" />} label="End Date" value={formatManilaDate(rd.project?.endDate)} />
                         </div>
                         <div className="space-y-3">
-                          <DetailItem icon={<Clock className="h-3.5 w-3.5" />} label="Duration" value={getDuration(rd.project?.start_date, rd.project?.end_date)} />
-                          <DetailItem icon={<DollarSign className="h-3.5 w-3.5" />} label="Estimated Cost" value={rd.project?.estimated_cost ? `₱${Number(rd.project.estimated_cost).toLocaleString()}` : "—"} />
+                          <DetailItem icon={<Clock className="h-3.5 w-3.5" />} label="Duration" value={getDuration(rd.project?.startDate, rd.project?.endDate)} />
+                          <DetailItem icon={<DollarSign className="h-3.5 w-3.5" />} label="Estimated Cost" value={rd.project?.estimatedCost ? `₱${Number(rd.project.estimatedCost).toLocaleString()}` : "—"} />
                         </div>
                         <div className="sm:col-span-2">
                           <div className="text-xs font-medium text-muted-foreground mb-1">Description</div>
@@ -737,11 +722,11 @@ export default function Reports() {
                       <div className="grid gap-2 grid-cols-2 sm:grid-cols-4">
                         <div className="rounded border bg-card px-3 py-2 print:p-1.5">
                           <div className="text-[10px] text-muted-foreground">Start Date</div>
-                          <div className="text-xs font-semibold text-foreground">{formatManilaDate(rd.project?.start_date)}</div>
+                          <div className="text-xs font-semibold text-foreground">{formatManilaDate(rd.project?.startDate)}</div>
                         </div>
                         <div className="rounded border bg-card px-3 py-2 print:p-1.5">
                           <div className="text-[10px] text-muted-foreground">Expected Completion</div>
-                          <div className="text-xs font-semibold text-foreground">{formatManilaDate(rd.project?.end_date)}</div>
+                          <div className="text-xs font-semibold text-foreground">{formatManilaDate(rd.project?.endDate)}</div>
                         </div>
                         <div className="rounded border bg-card px-3 py-2 print:p-1.5">
                           <div className="text-[10px] text-muted-foreground">Status</div>
@@ -749,7 +734,7 @@ export default function Reports() {
                         </div>
                         <div className="rounded border bg-card px-3 py-2 print:p-1.5">
                           <div className="text-[10px] text-muted-foreground">Duration</div>
-                          <div className="text-xs font-semibold text-foreground">{getDuration(rd.project?.start_date, rd.project?.end_date)}</div>
+                          <div className="text-xs font-semibold text-foreground">{getDuration(rd.project?.startDate, rd.project?.endDate)}</div>
                         </div>
                       </div>
 
@@ -895,14 +880,18 @@ export default function Reports() {
                                               </tr>
                                             </thead>
                                             <tbody>
-                                              {items.map((item: any, i: number) => (
+                                              {items.map((item: any, i: number) => {
+                                                const isDelivered = ['delivered', 'closed', 'fully_received', 'partially_received'].includes(o.status);
+                                                const receivedQty = isDelivered ? (item.quantity_ordered || 0) : (item.quantity_received || 0);
+                                                return (
                                                 <tr key={i} className="border-t">
                                                   <td className="px-2 py-1">{item.skus?.name || item.skus?.sku_code || "—"}</td>
                                                   <td className="px-2 py-1 text-right">{item.quantity_ordered}</td>
-                                                  <td className="px-2 py-1 text-right">{item.quantity_received ?? 0}</td>
+                                                  <td className="px-2 py-1 text-right">{receivedQty}</td>
                                                   <td className="px-2 py-1 text-muted-foreground">{item.skus?.unit_of_measure || "—"}</td>
                                                 </tr>
-                                              ))}
+                                                );
+                                              })}
                                             </tbody>
                                           </table>
                                         </div>

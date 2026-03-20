@@ -19,8 +19,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { OrderDetailModal } from "@/components/orders/OrderDetailModal";
-import { supabase } from "@/integrations/supabase/client";
+import { ordersApi } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
+import type { Order as ApiOrder } from "@/lib/apiClient";
 
 interface DeliveredMaterial {
   materialName: string;
@@ -54,39 +55,17 @@ const formatManilaTime = (date: Date): string => {
   return format(manilaTime, "MMM dd, yyyy h:mm a");
 };
 
-export function DeliveredMaterialsModal({
-  open,
-  onOpenChange,
-  projectId,
-  projectName,
-}: DeliveredMaterialsModalProps) {
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"delivered" | "completed">("delivered");
-  const [searchQuery, setSearchQuery] = useState("");
+const processOrdersData = (
+  orders: ApiOrder[]
+): { materials: DeliveredMaterial[]; ordersInfo: DeliveredOrder[] } => {
+  const materialsMap: Record<string, DeliveredMaterial> = {};
 
-  // Separate state for delivered vs completed
-  const [deliveredMaterials, setDeliveredMaterials] = useState<DeliveredMaterial[]>([]);
-  const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrder[]>([]);
-  const [completedMaterials, setCompletedMaterials] = useState<DeliveredMaterial[]>([]);
-  const [completedOrders, setCompletedOrders] = useState<DeliveredOrder[]>([]);
-
-  const [isOrdersExpanded, setIsOrdersExpanded] = useState(false);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-
-  const processOrdersData = (
-    orders: any[],
-    orderItems: any[]
-  ): { materials: DeliveredMaterial[]; ordersInfo: DeliveredOrder[] } => {
-    // Build materials summary
-    const materialsMap: Record<string, DeliveredMaterial> = {};
-
-    orderItems?.forEach((item: any) => {
-      const materialName = item.sku?.name || "Unknown Material";
-      const unit = item.sku?.unit_of_measure || "pcs";
-      const qty = item.quantity_received ?? item.quantity_ordered ?? 0;
-      const order = orders.find((o) => o.id === item.order_id);
-      const deliveredAt = order?.updated_at || null;
+  orders.forEach((order) => {
+    const deliveredAt = order.updatedAt || null;
+    (order.items || []).forEach((item) => {
+      const materialName = item.skuName || "Unknown Material";
+      const unit = item.unit || "pcs";
+      const qty = item.quantityReceived || item.quantityOrdered || 0;
 
       if (!materialsMap[materialName]) {
         materialsMap[materialName] = {
@@ -99,7 +78,6 @@ export function DeliveredMaterialsModal({
 
       materialsMap[materialName].deliveredQty += qty;
 
-      // Update last delivered date if more recent
       if (
         deliveredAt &&
         (!materialsMap[materialName].lastDeliveredAt ||
@@ -108,107 +86,67 @@ export function DeliveredMaterialsModal({
         materialsMap[materialName].lastDeliveredAt = deliveredAt;
       }
     });
+  });
 
-    const materials = Object.values(materialsMap).sort((a, b) =>
-      a.materialName.localeCompare(b.materialName)
-    );
+  const materials = Object.values(materialsMap).sort((a, b) =>
+    a.materialName.localeCompare(b.materialName)
+  );
 
-    // Build orders list
-    const ordersInfo: DeliveredOrder[] = orders.map((order) => {
-      const orderItemsList = orderItems?.filter((item: any) => item.order_id === order.id) || [];
-      return {
-        id: order.id,
-        order_number: order.order_number,
-        status: order.status,
-        delivered_at: order.updated_at,
-        notes: order.notes,
-        items: orderItemsList.map((item: any) => ({
-          material_name: item.sku?.name || "Unknown Material",
-          unit: item.sku?.unit_of_measure || "pcs",
-          quantity: item.quantity_received ?? item.quantity_ordered ?? 0,
-        })),
-      };
-    });
+  const ordersInfo: DeliveredOrder[] = orders
+    .map((order) => ({
+      id: order.id,
+      order_number: order.orderNumber,
+      status: order.status,
+      delivered_at: order.updatedAt,
+      notes: order.notes ?? null,
+      items: (order.items || []).map((item) => ({
+        material_name: item.skuName || "Unknown Material",
+        unit: item.unit || "pcs",
+        quantity: item.quantityReceived || item.quantityOrdered || 0,
+      })),
+    }))
+    .filter((o) => o.items.length > 0);
 
-    return { materials, ordersInfo: ordersInfo.filter((o) => o.items.length > 0) };
-  };
+  return { materials, ordersInfo };
+};
+
+export function DeliveredMaterialsModal({
+  open,
+  onOpenChange,
+  projectId,
+  projectName,
+}: DeliveredMaterialsModalProps) {
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"delivered" | "completed">("delivered");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const [deliveredMaterials, setDeliveredMaterials] = useState<DeliveredMaterial[]>([]);
+  const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrder[]>([]);
+  const [completedMaterials, setCompletedMaterials] = useState<DeliveredMaterial[]>([]);
+  const [completedOrders, setCompletedOrders] = useState<DeliveredOrder[]>([]);
+
+  const [isOrdersExpanded, setIsOrdersExpanded] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const fetchDeliveredData = async () => {
     setLoading(true);
     try {
-      // Get delivered orders (status = 'delivered')
-      const { data: deliveredOrdersData, error: deliveredError } = await supabase
-        .from("orders")
-        .select("id, order_number, status, updated_at, notes")
-        .eq("project_id", projectId)
-        .eq("status", "delivered")
-        .order("updated_at", { ascending: false });
+      const [deliveredResult, completedResult] = await Promise.all([
+        ordersApi.getByProject(projectId, "delivered"),
+        ordersApi.getByProject(projectId, "closed"),
+      ]);
 
-      if (deliveredError) throw deliveredError;
+      const deliveredOrdersData = deliveredResult.data ?? [];
+      const completedOrdersData = completedResult.data ?? [];
 
-      // Get completed/hidden orders (status = 'closed')
-      const { data: completedOrdersData, error: completedError } = await supabase
-        .from("orders")
-        .select("id, order_number, status, updated_at, notes")
-        .eq("project_id", projectId)
-        .eq("status", "closed")
-        .order("updated_at", { ascending: false });
+      const { materials: dMats, ordersInfo: dOrders } = processOrdersData(deliveredOrdersData);
+      setDeliveredMaterials(dMats);
+      setDeliveredOrders(dOrders);
 
-      if (completedError) throw completedError;
-
-      const allOrderIds = [
-        ...(deliveredOrdersData || []).map((o) => o.id),
-        ...(completedOrdersData || []).map((o) => o.id),
-      ];
-
-      if (allOrderIds.length === 0) {
-        setDeliveredMaterials([]);
-        setDeliveredOrders([]);
-        setCompletedMaterials([]);
-        setCompletedOrders([]);
-        setLoading(false);
-        return;
-      }
-
-      // Get order items with SKU info for all orders
-      const { data: orderItems, error: itemsError } = await supabase
-        .from("order_items")
-        .select("order_id, quantity_received, quantity_ordered, sku:skus(name, unit_of_measure)")
-        .in("order_id", allOrderIds);
-
-      if (itemsError) throw itemsError;
-
-      // Process delivered orders
-      if (deliveredOrdersData && deliveredOrdersData.length > 0) {
-        const deliveredItems = orderItems?.filter((item: any) =>
-          deliveredOrdersData.some((o) => o.id === item.order_id)
-        );
-        const { materials, ordersInfo } = processOrdersData(
-          deliveredOrdersData,
-          deliveredItems || []
-        );
-        setDeliveredMaterials(materials);
-        setDeliveredOrders(ordersInfo);
-      } else {
-        setDeliveredMaterials([]);
-        setDeliveredOrders([]);
-      }
-
-      // Process completed orders
-      if (completedOrdersData && completedOrdersData.length > 0) {
-        const completedItems = orderItems?.filter((item: any) =>
-          completedOrdersData.some((o) => o.id === item.order_id)
-        );
-        const { materials, ordersInfo } = processOrdersData(
-          completedOrdersData,
-          completedItems || []
-        );
-        setCompletedMaterials(materials);
-        setCompletedOrders(ordersInfo);
-      } else {
-        setCompletedMaterials([]);
-        setCompletedOrders([]);
-      }
+      const { materials: cMats, ordersInfo: cOrders } = processOrdersData(completedOrdersData);
+      setCompletedMaterials(cMats);
+      setCompletedOrders(cOrders);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -232,7 +170,6 @@ export function DeliveredMaterialsModal({
     setSelectedOrderId(orderId);
   };
 
-  // Filter materials and orders based on search query
   const filterData = (
     materials: DeliveredMaterial[],
     orders: DeliveredOrder[]

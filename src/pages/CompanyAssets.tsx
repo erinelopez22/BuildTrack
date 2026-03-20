@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -26,63 +25,38 @@ import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
 import { formatManilaTime } from "@/lib/notificationService";
 import { Wrench, Plus, Search, Pencil, Trash2, Loader2, Package, ArrowLeftRight, Check, X, Eye, History, ClipboardList, RotateCcw } from "lucide-react";
-import type { CompanyAsset, AssetType, AssetCondition, BorrowTransaction, Project, Profile } from "@/types/database";
+import type { AssetType, AssetCondition } from "@/types/database";
 import { EquipmentHistoryTab } from "@/components/equipment/EquipmentHistoryTab";
 import { BorrowRequestsTab } from "@/components/equipment/BorrowRequestsTab";
 import { ReturnRequestsTab } from "@/components/equipment/ReturnRequestsTab";
+import { companyAssetsApi, projectsApi, type CompanyAsset as CompanyAssetDTO, type BorrowTransaction as BorrowTransactionDTO } from "@/lib/apiClient";
 
-interface BorrowWithDetails extends BorrowTransaction {
-  project?: Project;
-  borrower_profile?: Profile;
-}
-
-interface EquipmentRequest {
-  id: string;
-  project_id: string;
-  asset_id: string;
-  request_type: string;
-  requested_by: string;
-  requested_at: string;
-  quantity: number;
-  status: string;
-  approved_by: string | null;
-  approved_at: string | null;
-  rejected_by: string | null;
-  rejected_at: string | null;
-  rejection_reason: string | null;
-  notes: string | null;
-  borrow_transaction_id: string | null;
-  // Joined
-  requester_profile?: Profile;
-  project?: Project;
+interface BorrowWithDetails extends BorrowTransactionDTO {
+  // projectName and borrowedByName are already on BorrowTransactionDTO
 }
 
 export default function CompanyAssets() {
   const { user, isAdmin, isSuperAdmin, isOfficeAdmin, isProjectEngineer, isChecker } = useAuth();
   const { toast } = useToast();
-  const [assets, setAssets] = useState<CompanyAsset[]>([]);
+  const [assets, setAssets] = useState<CompanyAssetDTO[]>([]);
   const [borrowTransactions, setBorrowTransactions] = useState<BorrowWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingAsset, setEditingAsset] = useState<CompanyAsset | null>(null);
-  const [deleteAsset, setDeleteAsset] = useState<CompanyAsset | null>(null);
+  const [editingAsset, setEditingAsset] = useState<CompanyAssetDTO | null>(null);
+  const [deleteAsset, setDeleteAsset] = useState<CompanyAssetDTO | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Asset detail modal (Admin/Super Admin only)
-  const [selectedAsset, setSelectedAsset] = useState<CompanyAsset | null>(null);
-  const [assetRequests, setAssetRequests] = useState<EquipmentRequest[]>([]);
-  const [assetRequestsLoading, setAssetRequestsLoading] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<CompanyAssetDTO | null>(null);
+  const [assetBorrows, setAssetBorrows] = useState<BorrowTransactionDTO[]>([]);
+  const [assetBorrowsLoading, setAssetBorrowsLoading] = useState(false);
 
   // Return modal
   const [returnTransaction, setReturnTransaction] = useState<BorrowWithDetails | null>(null);
   const [returnQty, setReturnQty] = useState(0);
   const [returnRemarks, setReturnRemarks] = useState("");
   const [returning, setReturning] = useState(false);
-
-  // Reject dialog
-  const [rejectRequest, setRejectRequest] = useState<EquipmentRequest | null>(null);
-  const [rejectReason, setRejectReason] = useState("");
 
   // Form state
   const [form, setForm] = useState({
@@ -106,54 +80,36 @@ export default function CompanyAssets() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [assetsRes, borrowRes] = await Promise.all([
-      supabase.from("company_assets").select("*").order("asset_name"),
-      supabase
-        .from("borrow_transactions")
-        .select("*")
-        .neq("status", "Returned")
-        .order("borrowed_at", { ascending: false }),
-    ]);
-
-    setAssets((assetsRes.data || []) as CompanyAsset[]);
-
-    const transactions = (borrowRes.data || []) as BorrowTransaction[];
-    if (transactions.length > 0) {
-      const projectIds = [...new Set(transactions.map((t) => t.project_id))];
-      const userIds = [...new Set(transactions.map((t) => t.borrowed_by))];
-
-      const [projectsRes, profilesRes] = await Promise.all([
-        supabase.from("projects").select("id, name").in("id", projectIds),
-        supabase.from("profiles").select("id, full_name, email").in("id", userIds),
+    try {
+      const [assetsData, borrowsData] = await Promise.all([
+        companyAssetsApi.getAll(),
+        companyAssetsApi.getAllBorrows(),
       ]);
 
-      const projectMap = new Map((projectsRes.data || []).map((p) => [p.id, p]));
-      const profileMap = new Map((profilesRes.data || []).map((p) => [p.id, p]));
+      setAssets(assetsData.data || []);
 
-      setBorrowTransactions(
-        transactions.map((t) => ({
-          ...t,
-          project: projectMap.get(t.project_id) as Project | undefined,
-          borrower_profile: profileMap.get(t.borrowed_by) as Profile | undefined,
-        })),
+      const activeBorrows = (borrowsData.data || []).filter(
+        (t) => t.status !== "Returned",
       );
-    } else {
-      setBorrowTransactions([]);
+      setBorrowTransactions(activeBorrows);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
-
     setLoading(false);
   };
 
   const fetchProjects = async () => {
-    const { data } = await supabase
-      .from("projects")
-      .select("id, name")
-      .neq("status", "deleted")
-      .order("name");
-    const projectList = data || [];
-    setProjects(projectList);
-    if (projectList.length > 0 && !selectedProjectId) {
-      setSelectedProjectId(projectList[0].id);
+    try {
+      const res = await projectsApi.getAll();
+      const projectList = (res.data || [])
+        .filter((p) => p.status !== "deleted" && !p.isHidden)
+        .map((p) => ({ id: p.id, name: p.name }));
+      setProjects(projectList);
+      if (projectList.length > 0 && !selectedProjectId) {
+        setSelectedProjectId(projectList[0].id);
+      }
+    } catch {
+      // non-critical
     }
   };
 
@@ -162,17 +118,15 @@ export default function CompanyAssets() {
     fetchProjects();
   }, []);
 
-  const getAvailableQty = (asset: CompanyAsset): number => {
-    const borrowed = borrowTransactions
-      .filter((t) => t.asset_id === asset.id && t.status !== "Returned")
-      .reduce((sum, t) => sum + (t.borrowed_qty - t.returned_qty), 0);
-    return Math.max(0, asset.total_quantity - borrowed);
+  const getAvailableQty = (asset: CompanyAssetDTO): number => {
+    return asset.availableQuantity ?? Math.max(0, asset.totalQuantity - getBorrowedQty(asset));
   };
 
-  const getBorrowedQty = (asset: CompanyAsset): number => {
-    return borrowTransactions
-      .filter((t) => t.asset_id === asset.id && t.status !== "Returned")
-      .reduce((sum, t) => sum + (t.borrowed_qty - t.returned_qty), 0);
+  const getBorrowedQty = (asset: CompanyAssetDTO): number => {
+    return asset.borrowedQuantity ??
+      borrowTransactions
+        .filter((t) => t.assetId === asset.id && t.status !== "Returned")
+        .reduce((sum, t) => sum + (t.borrowedQty - t.returnedQty), 0);
   };
 
   const filteredAssets = useMemo(() => {
@@ -180,156 +134,50 @@ export default function CompanyAssets() {
     const q = search.toLowerCase();
     return assets.filter(
       (a) =>
-        a.asset_name.toLowerCase().includes(q) ||
-        a.asset_type.toLowerCase().includes(q) ||
-        (a.asset_code || "").toLowerCase().includes(q),
+        a.assetName.toLowerCase().includes(q) ||
+        (a.assetType || "").toLowerCase().includes(q) ||
+        (a.assetCode || "").toLowerCase().includes(q),
     );
   }, [assets, search]);
 
-  // Fetch requests for a specific asset
-  const fetchAssetRequests = async (assetId: string) => {
-    setAssetRequestsLoading(true);
-    const { data } = await supabase
-      .from("equipment_requests")
-      .select("*")
-      .eq("asset_id", assetId)
-      .order("requested_at", { ascending: false });
-
-    if (data && data.length > 0) {
-      const userIds = [...new Set(data.map((r: any) => r.requested_by).filter(Boolean))];
-      const projectIds = [...new Set(data.map((r: any) => r.project_id).filter(Boolean))];
-
-      const [profilesRes, projectsRes] = await Promise.all([
-        userIds.length > 0 ? supabase.from("profiles").select("id, full_name, email").in("id", userIds) : { data: [] },
-        projectIds.length > 0 ? supabase.from("projects").select("id, name").in("id", projectIds) : { data: [] },
-      ]);
-
-      const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]));
-      const projectMap = new Map((projectsRes.data || []).map((p: any) => [p.id, p]));
-
-      setAssetRequests(
-        data.map((r: any) => ({
-          ...r,
-          requester_profile: profileMap.get(r.requested_by),
-          project: projectMap.get(r.project_id),
-        })),
-      );
-    } else {
-      setAssetRequests([]);
+  // Fetch borrow transactions for a specific asset
+  const fetchAssetBorrows = async (assetId: string) => {
+    setAssetBorrowsLoading(true);
+    try {
+      const data = await companyAssetsApi.getBorrows(assetId);
+      setAssetBorrows(data.data || []);
+    } catch {
+      setAssetBorrows([]);
     }
-    setAssetRequestsLoading(false);
+    setAssetBorrowsLoading(false);
   };
 
-  const handleCardClick = (asset: CompanyAsset) => {
+  const handleCardClick = (asset: CompanyAssetDTO) => {
     if (!canClickCards) return;
     setSelectedAsset(asset);
-    fetchAssetRequests(asset.id);
+    fetchAssetBorrows(asset.id);
   };
 
-  const handleApproveRequest = async (request: EquipmentRequest) => {
+  const handleApproveReturn = async (txn: BorrowTransactionDTO) => {
     if (!user) return;
-
     try {
-      // Update request status
-      const { error: updateError } = await supabase
-        .from("equipment_requests")
-        .update({
-          status: "approved",
-          approved_by: user.id,
-          approved_at: new Date().toISOString(),
-        })
-        .eq("id", request.id);
+      await companyAssetsApi.returnAsset(txn.id, {
+        returnedQty: txn.borrowedQty - txn.returnedQty,
+        remarks: undefined,
+      });
 
-      if (updateError) throw updateError;
+      await logActivity({
+        action: "asset_returned",
+        tableName: "borrow_transactions",
+        recordId: txn.projectId || txn.id,
+        oldValues: null,
+        newValues: { assetId: txn.assetId, qty: txn.borrowedQty - txn.returnedQty, approvedBy: user.id },
+        userId: user.id,
+      });
 
-      // Execute the actual borrow/return
-      if (request.request_type === "borrow") {
-        const { error } = await supabase.from("borrow_transactions").insert({
-          asset_id: request.asset_id,
-          project_id: request.project_id,
-          borrowed_qty: request.quantity,
-          borrowed_by: request.requested_by,
-          borrow_requested_at: request.requested_at,
-          borrow_requested_by: request.requested_by,
-          borrow_approved_at: new Date().toISOString(),
-          borrow_approved_by: user.id,
-        });
-        if (error) throw error;
-
-        await logActivity({
-          action: "asset_borrowed",
-          tableName: "borrow_transactions",
-          recordId: request.project_id,
-          oldValues: null,
-          newValues: { asset_id: request.asset_id, qty: request.quantity, approved_by: user.id },
-          userId: user.id,
-        });
-      } else if (request.request_type === "return" && request.borrow_transaction_id) {
-        // Fetch the transaction
-        const { data: tx } = await supabase
-          .from("borrow_transactions")
-          .select("*")
-          .eq("id", request.borrow_transaction_id)
-          .single();
-
-        if (tx) {
-          const newReturnedQty = tx.returned_qty + request.quantity;
-          const newStatus = newReturnedQty >= tx.borrowed_qty ? "Returned" : "Partially Returned";
-
-          const { error } = await supabase
-            .from("borrow_transactions")
-            .update({
-              returned_qty: newReturnedQty,
-              returned_at: new Date().toISOString(),
-              return_remarks: request.notes || null,
-              status: newStatus,
-              return_approved_at: new Date().toISOString(),
-              return_approved_by: user.id,
-            })
-            .eq("id", request.borrow_transaction_id);
-
-          if (error) throw error;
-
-          await logActivity({
-            action: "asset_returned",
-            tableName: "borrow_transactions",
-            recordId: request.project_id,
-            oldValues: null,
-            newValues: { asset_id: request.asset_id, qty: request.quantity, status: newStatus, approved_by: user.id },
-            userId: user.id,
-          });
-        }
-      }
-
-      toast({ title: "Approved", description: `${request.request_type} request approved and executed.` });
+      toast({ title: "Approved", description: "Return approved and executed." });
       fetchData();
-      if (selectedAsset) fetchAssetRequests(selectedAsset.id);
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    }
-  };
-
-  const handleRejectRequest = async () => {
-    if (!user || !rejectRequest) return;
-
-    try {
-      const { error } = await supabase
-        .from("equipment_requests")
-        .update({
-          status: "rejected",
-          rejected_by: user.id,
-          rejected_at: new Date().toISOString(),
-          rejection_reason: rejectReason.trim() || null,
-        })
-        .eq("id", rejectRequest.id);
-
-      if (error) throw error;
-
-      toast({ title: "Rejected", description: `${rejectRequest.request_type} request rejected.` });
-      setRejectRequest(null);
-      setRejectReason("");
-      fetchData();
-      if (selectedAsset) fetchAssetRequests(selectedAsset.id);
+      if (selectedAsset) fetchAssetBorrows(selectedAsset.id);
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
@@ -349,15 +197,15 @@ export default function CompanyAssets() {
     setIsFormOpen(true);
   };
 
-  const openEdit = (asset: CompanyAsset) => {
+  const openEdit = (asset: CompanyAssetDTO) => {
     setEditingAsset(asset);
     setForm({
-      asset_name: asset.asset_name,
-      asset_type: asset.asset_type,
-      asset_code: asset.asset_code || "",
+      asset_name: asset.assetName,
+      asset_type: (asset.assetType as AssetType) || "Material",
+      asset_code: asset.assetCode || "",
       unit: asset.unit || "",
-      total_quantity: asset.total_quantity,
-      condition: asset.condition,
+      total_quantity: asset.totalQuantity,
+      condition: (asset.condition as AssetCondition) || "Available",
       notes: asset.notes || "",
     });
     setIsFormOpen(true);
@@ -370,54 +218,42 @@ export default function CompanyAssets() {
     }
     setSaving(true);
 
-    if (editingAsset) {
-      const borrowed = getBorrowedQty(editingAsset);
-      if (form.total_quantity < borrowed) {
-        toast({
-          title: "Error",
-          description: `Total quantity cannot be lower than currently borrowed quantity (${borrowed}).`,
-          variant: "destructive",
-        });
-        setSaving(false);
-        return;
-      }
-      const { error } = await supabase
-        .from("company_assets")
-        .update({
-          asset_name: form.asset_name.trim(),
-          asset_type: form.asset_type,
-          unit: form.unit.trim() || null,
-          total_quantity: form.total_quantity,
+    try {
+      if (editingAsset) {
+        const borrowed = getBorrowedQty(editingAsset);
+        if (form.total_quantity < borrowed) {
+          toast({
+            title: "Error",
+            description: `Total quantity cannot be lower than currently borrowed quantity (${borrowed}).`,
+            variant: "destructive",
+          });
+          setSaving(false);
+          return;
+        }
+        await companyAssetsApi.update(editingAsset.id, {
+          assetName: form.asset_name.trim(),
+          assetType: form.asset_type,
+          unit: form.unit.trim() || undefined,
+          totalQuantity: form.total_quantity,
           condition: form.condition,
-          notes: form.notes.trim() || null,
-        })
-        .eq("id", editingAsset.id);
-
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      } else {
+          notes: form.notes.trim() || undefined,
+        });
         toast({ title: "Success", description: "Asset updated" });
-        setIsFormOpen(false);
-        fetchData();
-      }
-    } else {
-      const { error } = await supabase.from("company_assets").insert({
-        asset_name: form.asset_name.trim(),
-        asset_type: form.asset_type,
-        unit: form.unit.trim() || null,
-        total_quantity: form.total_quantity,
-        condition: form.condition,
-        notes: form.notes.trim() || null,
-        created_by: user?.id,
-      });
-
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
+        await companyAssetsApi.create({
+          assetName: form.asset_name.trim(),
+          assetType: form.asset_type,
+          unit: form.unit.trim() || undefined,
+          totalQuantity: form.total_quantity,
+          condition: form.condition,
+          notes: form.notes.trim() || undefined,
+        });
         toast({ title: "Success", description: "Asset created" });
-        setIsFormOpen(false);
-        fetchData();
       }
+      setIsFormOpen(false);
+      fetchData();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
     setSaving(false);
   };
@@ -434,12 +270,12 @@ export default function CompanyAssets() {
       setDeleteAsset(null);
       return;
     }
-    const { error } = await supabase.from("company_assets").delete().eq("id", deleteAsset.id);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      await companyAssetsApi.delete(deleteAsset.id);
       toast({ title: "Success", description: "Asset deleted" });
       fetchData();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
     setDeleteAsset(null);
   };
@@ -448,29 +284,20 @@ export default function CompanyAssets() {
     if (!returnTransaction || returnQty <= 0) return;
     setReturning(true);
 
-    const maxReturnable = returnTransaction.borrowed_qty - returnTransaction.returned_qty;
+    const maxReturnable = returnTransaction.borrowedQty - returnTransaction.returnedQty;
     const actualReturn = Math.min(returnQty, maxReturnable);
-    const newReturnedQty = returnTransaction.returned_qty + actualReturn;
-    const newStatus = newReturnedQty >= returnTransaction.borrowed_qty ? "Returned" : "Partially Returned";
 
-    const { error } = await supabase
-      .from("borrow_transactions")
-      .update({
-        returned_qty: newReturnedQty,
-        returned_at: new Date().toISOString(),
-        return_remarks: returnRemarks.trim() || null,
-        status: newStatus,
-      })
-      .eq("id", returnTransaction.id);
+    try {
+      await companyAssetsApi.returnAsset(returnTransaction.id, {
+        returnedQty: actualReturn,
+        remarks: returnRemarks.trim() || undefined,
+      });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
       await logActivity({
         action: "return",
         tableName: "borrow_transactions",
         recordId: returnTransaction.id,
-        newValues: { returned_qty: actualReturn, status: newStatus },
+        newValues: { returned_qty: actualReturn },
         userId: user?.id || null,
       });
 
@@ -479,6 +306,8 @@ export default function CompanyAssets() {
       setReturnQty(0);
       setReturnRemarks("");
       fetchData();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
     setReturning(false);
   };
@@ -557,7 +386,7 @@ export default function CompanyAssets() {
           {filteredAssets.map((asset) => {
             const available = getAvailableQty(asset);
             const borrowed = getBorrowedQty(asset);
-            const assetBorrows = borrowTransactions.filter((t) => t.asset_id === asset.id && t.status !== "Returned");
+            const assetActiveBorrows = borrowTransactions.filter((t) => t.assetId === asset.id && t.status !== "Returned");
 
             return (
               <Card
@@ -570,15 +399,15 @@ export default function CompanyAssets() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-foreground truncate">{asset.asset_name}</h3>
+                        <h3 className="font-semibold text-foreground truncate">{asset.assetName}</h3>
                         {!canClickCards && <Eye className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant="secondary" className="text-xs">
-                          {asset.asset_type}
+                          {asset.assetType}
                         </Badge>
-                        {asset.asset_code && (
-                          <span className="text-xs text-muted-foreground font-mono">{asset.asset_code}</span>
+                        {asset.assetCode && (
+                          <span className="text-xs text-muted-foreground font-mono">{asset.assetCode}</span>
                         )}
                       </div>
                     </div>
@@ -601,7 +430,7 @@ export default function CompanyAssets() {
 
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div className="rounded-md bg-muted/50 p-2">
-                      <p className="text-lg font-bold text-foreground">{asset.total_quantity}</p>
+                      <p className="text-lg font-bold text-foreground">{asset.totalQuantity}</p>
                       <p className="text-[10px] text-muted-foreground">Total</p>
                     </div>
                     <div className="rounded-md bg-success/10 p-2">
@@ -617,21 +446,21 @@ export default function CompanyAssets() {
                   {asset.unit && <p className="text-xs text-muted-foreground">Unit: {asset.unit}</p>}
 
                   {/* Current borrows */}
-                  {assetBorrows.length > 0 && (
+                  {assetActiveBorrows.length > 0 && (
                     <div className="space-y-1.5 pt-2 border-t">
                       <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                         <ArrowLeftRight className="h-3 w-3" />
                         Currently Borrowed
                       </p>
-                      {assetBorrows.map((bt) => (
+                      {assetActiveBorrows.map((bt) => (
                         <div
                           key={bt.id}
                           className="flex items-center justify-between text-xs bg-muted/30 rounded px-2 py-1.5"
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium truncate">{bt.project?.name || "Unknown Project"}</p>
+                            <p className="font-medium truncate">{bt.projectName || "Unknown Project"}</p>
                             <p className="text-muted-foreground">
-                              Qty: {bt.borrowed_qty - bt.returned_qty} • {bt.borrower_profile?.full_name || "Unknown"}
+                              Qty: {bt.borrowedQty - bt.returnedQty} • {bt.borrowedByName || "Unknown"}
                             </p>
                           </div>
                           {canManage && (
@@ -642,7 +471,7 @@ export default function CompanyAssets() {
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setReturnTransaction(bt);
-                                setReturnQty(bt.borrowed_qty - bt.returned_qty);
+                                setReturnQty(bt.borrowedQty - bt.returnedQty);
                                 setReturnRemarks("");
                               }}
                             >
@@ -705,14 +534,14 @@ export default function CompanyAssets() {
           <DialogHeader className="flex-shrink-0 px-6 py-4 border-b">
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
-              {selectedAsset?.asset_name}
-              {selectedAsset?.asset_code && (
-                <span className="text-sm font-mono text-muted-foreground">{selectedAsset.asset_code}</span>
+              {selectedAsset?.assetName}
+              {selectedAsset?.assetCode && (
+                <span className="text-sm font-mono text-muted-foreground">{selectedAsset.assetCode}</span>
               )}
             </DialogTitle>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto px-6 py-4">
-            {assetRequestsLoading ? (
+            {assetBorrowsLoading ? (
               <div className="flex justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
@@ -720,15 +549,12 @@ export default function CompanyAssets() {
               <Tabs defaultValue="borrows" className="space-y-4">
                 <TabsList className="w-full">
                   <TabsTrigger value="borrows" className="flex-1">Active Borrows</TabsTrigger>
-                  <TabsTrigger value="borrow_requests" className="flex-1">Borrow Requests</TabsTrigger>
-                  <TabsTrigger value="return_requests" className="flex-1">Return Requests</TabsTrigger>
+                  <TabsTrigger value="all_borrows" className="flex-1">All Transactions</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="borrows">
                   {(() => {
-                    const activeBorrows = borrowTransactions.filter(
-                      (t) => t.asset_id === selectedAsset?.id && t.status !== "Returned",
-                    );
+                    const activeBorrows = assetBorrows.filter((t) => t.status !== "Returned");
                     return activeBorrows.length === 0 ? (
                       <p className="text-sm text-muted-foreground italic py-4">No active borrows.</p>
                     ) : (
@@ -736,72 +562,23 @@ export default function CompanyAssets() {
                         {activeBorrows.map((bt) => (
                           <div key={bt.id} className="p-3 border rounded-lg text-sm space-y-1">
                             <div className="flex justify-between">
-                              <span className="font-medium">{bt.project?.name || "Unknown"}</span>
+                              <span className="font-medium">{bt.projectName || "Unknown"}</span>
                               <Badge variant="secondary">{bt.status}</Badge>
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              Qty: {bt.borrowed_qty - bt.returned_qty} remaining •{" "}
-                              {bt.borrower_profile?.full_name || "Unknown"} •{" "}
-                              {formatManilaTime(bt.borrowed_at)}
+                              Qty: {bt.borrowedQty - bt.returnedQty} remaining •{" "}
+                              {bt.borrowedByName || "Unknown"} •{" "}
+                              {bt.borrowedAt ? formatManilaTime(bt.borrowedAt) : ""}
                             </p>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </TabsContent>
-
-                <TabsContent value="borrow_requests">
-                  {(() => {
-                    const borrowReqs = assetRequests.filter((r) => r.request_type === "borrow");
-                    return borrowReqs.length === 0 ? (
-                      <p className="text-sm text-muted-foreground italic py-4">No borrow requests.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {borrowReqs.map((req) => (
-                          <div key={req.id} className="p-3 border rounded-lg text-sm space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="font-medium">{req.project?.name || "Unknown Project"}</span>
-                                <p className="text-xs text-muted-foreground">
-                                  By {req.requester_profile?.full_name || "Unknown"} • Qty: {req.quantity} •{" "}
-                                  {formatManilaTime(req.requested_at)}
-                                </p>
-                              </div>
-                              <Badge
-                                variant={
-                                  req.status === "for_approval"
-                                    ? "default"
-                                    : req.status === "approved"
-                                      ? "secondary"
-                                      : "destructive"
-                                }
+                            {canManage && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs gap-1 text-success border-success/30"
+                                onClick={() => handleApproveReturn(bt)}
                               >
-                                {req.status === "for_approval" ? "Pending" : req.status}
-                              </Badge>
-                            </div>
-                            {req.rejection_reason && (
-                              <p className="text-xs text-destructive">Reason: {req.rejection_reason}</p>
-                            )}
-                            {req.status === "for_approval" && canManage && (
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs gap-1 text-success border-success/30"
-                                  onClick={() => handleApproveRequest(req)}
-                                >
-                                  <Check className="h-3 w-3" /> Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs gap-1 text-destructive border-destructive/30"
-                                  onClick={() => setRejectRequest(req)}
-                                >
-                                  <X className="h-3 w-3" /> Reject
-                                </Button>
-                              </div>
+                                <Check className="h-3 w-3" /> Process Return
+                              </Button>
                             )}
                           </div>
                         ))}
@@ -810,101 +587,32 @@ export default function CompanyAssets() {
                   })()}
                 </TabsContent>
 
-                <TabsContent value="return_requests">
-                  {(() => {
-                    const returnReqs = assetRequests.filter((r) => r.request_type === "return");
-                    return returnReqs.length === 0 ? (
-                      <p className="text-sm text-muted-foreground italic py-4">No return requests.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {returnReqs.map((req) => (
-                          <div key={req.id} className="p-3 border rounded-lg text-sm space-y-2">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <span className="font-medium">{req.project?.name || "Unknown Project"}</span>
-                                <p className="text-xs text-muted-foreground">
-                                  By {req.requester_profile?.full_name || "Unknown"} • Qty: {req.quantity} •{" "}
-                                  {formatManilaTime(req.requested_at)}
-                                </p>
-                                {req.notes && (
-                                  <p className="text-xs text-muted-foreground">Notes: {req.notes}</p>
-                                )}
-                              </div>
-                              <Badge
-                                variant={
-                                  req.status === "for_approval"
-                                    ? "default"
-                                    : req.status === "approved"
-                                      ? "secondary"
-                                      : "destructive"
-                                }
-                              >
-                                {req.status === "for_approval" ? "Pending" : req.status}
-                              </Badge>
-                            </div>
-                            {req.rejection_reason && (
-                              <p className="text-xs text-destructive">Reason: {req.rejection_reason}</p>
-                            )}
-                            {req.status === "for_approval" && canManage && (
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs gap-1 text-success border-success/30"
-                                  onClick={() => handleApproveRequest(req)}
-                                >
-                                  <Check className="h-3 w-3" /> Approve
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs gap-1 text-destructive border-destructive/30"
-                                  onClick={() => setRejectRequest(req)}
-                                >
-                                  <X className="h-3 w-3" /> Reject
-                                </Button>
-                              </div>
-                            )}
+                <TabsContent value="all_borrows">
+                  {assetBorrows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic py-4">No transactions.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {assetBorrows.map((bt) => (
+                        <div key={bt.id} className="p-3 border rounded-lg text-sm space-y-1">
+                          <div className="flex justify-between">
+                            <span className="font-medium">{bt.projectName || "Unknown"}</span>
+                            <Badge variant="secondary">{bt.status}</Badge>
                           </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
+                          <p className="text-xs text-muted-foreground">
+                            Borrowed: {bt.borrowedQty} • Returned: {bt.returnedQty} •{" "}
+                            {bt.borrowedByName || "Unknown"} •{" "}
+                            {bt.borrowedAt ? formatManilaTime(bt.borrowedAt) : ""}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             )}
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Reject Request Dialog */}
-      <AlertDialog open={!!rejectRequest} onOpenChange={(open) => !open && setRejectRequest(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reject Request</AlertDialogTitle>
-            <AlertDialogDescription>
-              Provide a reason for rejecting this {rejectRequest?.request_type} request.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2">
-            <Textarea
-              placeholder="Rejection reason (optional)"
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              rows={2}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setRejectReason("")}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRejectRequest}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Reject
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Create/Edit Modal */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
@@ -1034,7 +742,7 @@ export default function CompanyAssets() {
             <AlertDialogDescription>
               {deleteAsset && getBorrowedQty(deleteAsset) > 0
                 ? `Cannot delete this asset because there are still borrowed items (${getBorrowedQty(deleteAsset!)}). Please return all borrowed items before deleting.`
-                : `Are you sure you want to delete "${deleteAsset?.asset_name}"? This action cannot be undone.`}
+                : `Are you sure you want to delete "${deleteAsset?.assetName}"? This action cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1059,10 +767,10 @@ export default function CompanyAssets() {
           {returnTransaction && (
             <div className="space-y-4">
               <div className="text-sm">
-                <p className="text-muted-foreground">Borrowed: {returnTransaction.borrowed_qty}</p>
-                <p className="text-muted-foreground">Already returned: {returnTransaction.returned_qty}</p>
+                <p className="text-muted-foreground">Borrowed: {returnTransaction.borrowedQty}</p>
+                <p className="text-muted-foreground">Already returned: {returnTransaction.returnedQty}</p>
                 <p className="font-medium">
-                  Remaining: {returnTransaction.borrowed_qty - returnTransaction.returned_qty}
+                  Remaining: {returnTransaction.borrowedQty - returnTransaction.returnedQty}
                 </p>
               </div>
               <div>
@@ -1070,7 +778,7 @@ export default function CompanyAssets() {
                 <Input
                   type="number"
                   min={1}
-                  max={returnTransaction.borrowed_qty - returnTransaction.returned_qty}
+                  max={returnTransaction.borrowedQty - returnTransaction.returnedQty}
                   value={returnQty}
                   onChange={(e) => setReturnQty(parseInt(e.target.value) || 0)}
                 />

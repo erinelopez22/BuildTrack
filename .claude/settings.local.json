@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(\"/c/Program Files/dotnet/dotnet.exe\" build \"c:/Users/elopez24/Documents/stockwell-build/backend/BuildTrack.API/BuildTrack.API.csproj\" --no-restore)",
+      "Bash(cmd.exe /c \"cd C:\\\\Users\\\\elopez24\\\\Documents\\\\stockwell-build\\\\backend\\\\BuildTrack.API && dotnet build --no-restore 2>&1\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\elopez24\\\\Documents\\\\stockwell-build\\\\backend\\\\BuildTrack.API''; dotnet build --no-restore 2>&1\")",
+      "Bash(powershell.exe -Command \"Get-Command dotnet -ErrorAction SilentlyContinue; where.exe dotnet 2>&1; ls ''C:\\\\Program Files\\\\dotnet\\\\'' 2>&1 | head -5\")",
+      "Bash(powershell.exe -Command \"& ''C:\\\\Program Files\\\\dotnet\\\\dotnet.exe'' build ''C:\\\\Users\\\\elopez24\\\\Documents\\\\stockwell-build\\\\backend\\\\BuildTrack.API'' --no-restore 2>&1\")",
+      "Bash(cmd /c \"cd c:\\\\Users\\\\elopez24\\\\Documents\\\\stockwell-build\\\\backend\\\\BuildTrack.API && dotnet build --no-restore 2>&1\")",
+      "Bash(powershell -Command \"cd ''c:\\\\Users\\\\elopez24\\\\Documents\\\\stockwell-build\\\\backend\\\\BuildTrack.API''; dotnet build --no-restore 2>&1 | Select-Object -Last 20\")",
+      "Bash(powershell -Command \"& ''C:\\\\Program Files\\\\dotnet\\\\dotnet.exe'' build ''c:\\\\Users\\\\elopez24\\\\Documents\\\\stockwell-build\\\\backend\\\\BuildTrack.API'' --no-restore 2>&1 | Select-Object -Last 20\")",
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"const path = require\\(''path''\\); const fs = require\\(''fs''\\); const files = [''src/components/ui/accordion.tsx'', ''src/lib/activityLogger.ts'', ''src/services/api.ts'']; files.forEach\\(f => console.log\\(f, fs.existsSync\\(f\\) ? ''EXISTS'' : ''MISSING''\\)\\);\")",
+      "Bash(npm run:*)",
+      "Bash(\"C:\\\\Program Files\\\\dotnet\\\\dotnet.exe\" build --no-restore -q)",
+      "Bash(\"C:\\\\Program Files\\\\dotnet\\\\dotnet.exe\" build --no-restore)",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path ''$env:USERPROFILE\\\\.nuget\\\\packages\\\\bcrypt.net-next'' -Recurse -Filter ''BCrypt.Net.dll'' | Where-Object { $_.FullName -match ''net6|net7|net8|netstandard2'' } | Select-Object -First 1 -ExpandProperty FullName\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path ''C:\\\\Users\\\\elopez24\\\\.nuget\\\\packages\\\\bcrypt.net-next'' -Recurse -Filter ''BCrypt.Net.dll'' | Where-Object { $_.FullName -match ''net6|net7|net8|netstandard2'' } | Select-Object -First 1 -ExpandProperty FullName\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path ''C:\\\\Users\\\\elopez24\\\\.nuget\\\\packages'' -ErrorAction SilentlyContinue | Select-Object -First 10 -ExpandProperty Name\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path ''C:\\\\Users\\\\elopez24\\\\.nuget\\\\packages\\\\bcrypt.net-next'' -Recurse -Filter ''BCrypt.Net.dll'' | Select-Object -ExpandProperty FullName\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem -Path ''C:\\\\Users\\\\elopez24\\\\.nuget\\\\packages\\\\bcrypt.net-next'' -Recurse | Select-Object -ExpandProperty FullName\")",
+      "Bash(powershell.exe -Command \"Add-Type -Path ''C:\\\\Users\\\\elopez24\\\\.nuget\\\\packages\\\\bcrypt.net-next\\\\4.0.3\\\\lib\\\\net6.0\\\\BCrypt.Net-Next.dll''; [BCrypt.Net.BCrypt]::HashPassword\\(''Stockwell@2026'', 11\\)\")",
+      "Bash(powershell.exe -Command \"Add-Type -Path ''C:\\\\Users\\\\elopez24\\\\.nuget\\\\packages\\\\bcrypt.net-next\\\\4.0.3\\\\lib\\\\net462\\\\BCrypt.Net-Next.dll''; [BCrypt.Net.BCrypt]::HashPassword\\(''Stockwell@2026'', 11\\)\")",
+      "Bash(powershell.exe -Command \"& ''C:\\\\Program Files\\\\Microsoft SQL Server\\\\Client SDK\\\\ODBC\\\\170\\\\Tools\\\\Binn\\\\SQLCMD.EXE'' -S ''localhost\\\\SQLEXPRESS'' -E -i ''C:\\\\Users\\\\elopez24\\\\Documents\\\\stockwell-build\\\\database-scripts\\\\004_seed_demo_users.sql'' 2>&1\")"
+    ]
+  }
+}

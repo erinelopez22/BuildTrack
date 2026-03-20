@@ -4,10 +4,10 @@ import { Loader2, Package, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/common/StatusBadge";
-import { supabase } from "@/integrations/supabase/client";
+import { ordersApi } from "@/lib/apiClient";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import type { Order, OrderStatus } from "@/types/database";
+import type { OrderStatus } from "@/types/database";
 
 interface ActiveOrdersModalProps {
   open: boolean;
@@ -28,24 +28,35 @@ const ACTIVE_STATUSES: OrderStatus[] = [
   "on_hold",
 ];
 
+interface OrderRow {
+  id: string;
+  orderNumber: string;
+  status: string;
+  notes?: string;
+  createdAt: string;
+}
+
 export function ActiveOrdersModal({ open, onOpenChange, projectId, projectName }: ActiveOrdersModalProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<OrderRow[]>([]);
 
   const fetchActiveOrders = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("project_id", projectId)
-        .in("status", ACTIVE_STATUSES)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setOrders((data || []) as Order[]);
+      const result = await ordersApi.getByProject(projectId);
+      const all = result.data ?? [];
+      const active = all.filter((o) => ACTIVE_STATUSES.includes(o.status as OrderStatus));
+      setOrders(
+        active.map((o) => ({
+          id: o.id,
+          orderNumber: o.orderNumber,
+          status: o.status,
+          notes: o.notes,
+          createdAt: o.createdAt,
+        }))
+      );
     } catch (error: any) {
       toast({
         title: "Error",
@@ -96,14 +107,15 @@ export function ActiveOrdersModal({ open, onOpenChange, projectId, projectName }
               >
                 <div className="space-y-1 flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{order.order_number}</span>
+                    <span className="font-medium">{order.orderNumber}</span>
                     <StatusBadge status={order.status} />
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    Created: {format(new Date(order.created_at), "MMM dd, yyyy h:mm a")}
+                    Created: {format(new Date(order.createdAt), "MMM dd, yyyy h:mm a")}
                   </div>
-
-                  {order.notes && <p className="text-sm text-muted-foreground line-clamp-1">{order.notes}</p>}
+                  {order.notes && (
+                    <p className="text-sm text-muted-foreground line-clamp-1">{order.notes}</p>
+                  )}
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => handleViewOrder(order.id)} className="shrink-0">
                   <ExternalLink className="h-4 w-4 mr-1" />

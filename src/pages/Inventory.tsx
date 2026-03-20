@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { projectsApi } from "@/lib/apiClient";
+import type { Project } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/common/PageHeader";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -8,7 +9,6 @@ import { OrderWorkflowBoard } from "@/components/orders/OrderWorkflowBoard";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Package, Search } from "lucide-react";
-import type { Project } from "@/types/database";
 
 export default function Inventory() {
   const { isSuperAdmin } = useAuth();
@@ -19,16 +19,13 @@ export default function Inventory() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
   const fetchProjects = async () => {
-    let query = supabase.from("projects").select("*").order("name", { ascending: true });
-    query = query.neq("status", "deleted");
-    query = query.eq("is_hidden", false);
-
-    const { data, error } = await query;
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    const res = await projectsApi.getAll();
+    if (!res.success || !res.data) {
+      toast({ title: "Error", description: res.message || "Failed to load projects", variant: "destructive" });
     } else {
-      setProjects(data as Project[]);
+      // Filter out deleted and hidden projects to match previous behavior
+      const visible = res.data.filter((p) => p.status !== "deleted" && !p.isHidden);
+      setProjects(visible);
     }
     setLoading(false);
   };

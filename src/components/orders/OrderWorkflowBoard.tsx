@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { ordersApi } from "@/lib/apiClient";
+import type { Order as ApiOrder } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { OrderCard } from "./OrderCard";
 import { OrderDetailModal } from "./OrderDetailModal";
@@ -23,6 +24,35 @@ import {
 import { logActivity } from "@/lib/activityLogger";
 import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 import type { Order, Project, OrderStatus } from "@/types/database";
+
+// ── Mapping: API camelCase → local snake_case ────────────────────────────────
+
+function toLocalOrder(o: ApiOrder): Order {
+  return {
+    id: o.id,
+    project_id: o.projectId,
+    order_number: o.orderNumber,
+    order_type: o.orderType ?? "",
+    status: o.status as OrderStatus,
+    supplier_name: o.supplierName ?? null,
+    supplier_contact: o.supplierContact ?? null,
+    expected_delivery_date: o.expectedDeliveryDate ?? null,
+    notes: o.notes ?? null,
+    total_amount: o.totalAmount ?? null,
+    approved_by: o.approvedBy ?? null,
+    approved_at: o.approvedAt ?? null,
+    approved_by_name: o.approvedByName ?? null,
+    rejected_by: o.rejectedBy ?? null,
+    rejected_at: o.rejectedAt ?? null,
+    rejection_reason: o.rejectionReason ?? null,
+    previous_status: null,
+    created_at: o.createdAt,
+    updated_at: o.updatedAt,
+    created_by: o.createdBy ?? "",
+  };
+}
+
+// ── Local types ───────────────────────────────────────────────────────────────
 
 interface OrderWorkflowBoardProps {
   project: Project;
@@ -70,38 +100,47 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   const [deletingOrderId, setDeletingOrderId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Rejected orders from rejected_orders table
+  // Rejected orders
   const [rejectedOrders, setRejectedOrders] = useState<RejectedOrderRow[]>([]);
 
   const canDeleteRejected = isSuperAdmin() || isAdmin();
 
   const fetchOrders = async () => {
-    const { data, error } = await supabase
-      .from("orders")
-      .select("*")
-      .eq("project_id", project.id)
-      .not("status", "eq", "closed")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    const res = await ordersApi.getByProject(project.id);
+    if (!res.success) {
+      toast({ title: "Error", description: res.message ?? "Failed to load orders", variant: "destructive" });
     } else {
-      setOrders(data as Order[]);
+      const activeStatuses = new Set<string>([
+        "draft", "for_approval", "approved", "submitted", "ordered",
+        "preparing", "in_transit", "delivered", "partially_received",
+        "fully_received", "on_hold",
+      ]);
+      const filtered = (res.data ?? [])
+        .filter((o) => activeStatuses.has(o.status))
+        .map(toLocalOrder);
+      setOrders(filtered);
     }
     setLoading(false);
-
-    // Fetch rejected orders from rejected_orders table
     fetchRejectedOrders();
   };
 
   const fetchRejectedOrders = async () => {
-    const { data } = await supabase
-      .from("rejected_orders")
-      .select("id, order_number, supplier_name, rejection_reason, rejected_at, rejected_by, project_id")
-      .eq("project_id", project.id)
-      .order("rejected_at", { ascending: false });
-
-    setRejectedOrders((data || []) as RejectedOrderRow[]);
+    const res = await ordersApi.getAll({ status: "rejected", projectId: project.id });
+    if (res.success && res.data) {
+      setRejectedOrders(
+        res.data.map((o) => ({
+          id: o.id,
+          order_number: o.orderNumber,
+          supplier_name: o.supplierName ?? null,
+          rejection_reason: o.rejectionReason ?? null,
+          rejected_at: o.rejectedAt ?? null,
+          rejected_by: o.rejectedByName ?? null,
+          project_id: o.projectId,
+        }))
+      );
+    } else {
+      setRejectedOrders([]);
+    }
   };
 
   const handleDeleteRejectedOrder = async () => {
@@ -109,11 +148,8 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     setDeleteLoading(true);
 
     try {
-      const { error } = await supabase.rpc("delete_rejected_order", {
-        _order_id: deletingOrderId,
-      });
-
-      if (error) throw error;
+      const res = await ordersApi.delete(deletingOrderId);
+      if (!res.success) throw new Error(res.message ?? "Delete failed");
 
       await logActivity({
         action: "delete_rejected_order",
@@ -136,26 +172,6 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
   useEffect(() => {
     fetchOrders();
-
-    const channel = supabase
-      .channel("orders-changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "orders",
-          filter: `project_id=eq.${project.id}`,
-        },
-        () => {
-          fetchOrders();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [project.id]);
 
   const handleCreateOrder = async (data: {
@@ -168,84 +184,35 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
 
     setIsCreating(true);
 
-    const { data: orderData, error } = await supabase
-      .from("orders")
-      .insert({
-        project_id: project.id,
+    try {
+      // Pass materialName directly — backend auto-finds or creates the SKU
+      const orderRes = await ordersApi.create({
+        projectId: project.id,
         notes: `\n${data.notes}`,
-        supplier_name: data.supplierName?.trim() || 'Jagon',
-        created_by: user.id,
-        order_number: "",
-        status: "for_approval" as OrderStatus,
-      })
-      .select()
-      .single();
+        supplierName: data.supplierName?.trim() || "Jagon",
+        expectedDeliveryDate: data.expectedDeliveryDate?.toISOString(),
+        items: data.materials.map((m) => ({
+          materialName: m.name,
+          unit: m.unit,
+          quotationItemId: m.materialId || undefined,
+          quantityOrdered: m.quantity,
+        })),
+      });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-      setIsCreating(false);
-      return;
-    }
-
-    if (orderData) {
-      const orderItems = [];
-
-      for (const material of data.materials) {
-        let skuId: string | null = null;
-
-        const { data: existingSku } = await supabase.from("skus").select("id").eq("name", material.name).maybeSingle();
-
-        if (existingSku) {
-          skuId = existingSku.id;
-        } else {
-          const { data: newSku, error: skuError } = await supabase
-            .from("skus")
-            .insert({
-              name: material.name,
-              sku_code: "",
-              unit_of_measure: material.unit,
-              created_by: user.id,
-            })
-            .select("id")
-            .single();
-
-          if (skuError) {
-            console.error("Error creating SKU:", skuError);
-            continue;
-          }
-          skuId = newSku.id;
-        }
-
-        if (skuId) {
-          orderItems.push({
-            order_id: orderData.id,
-            sku_id: skuId,
-            quotation_item_id: material.materialId,
-            quantity_ordered: material.quantity,
-            quantity_received: 0,
-          });
-        }
+      if (!orderRes.success || !orderRes.data) {
+        toast({ title: "Error", description: orderRes.message ?? "Failed to create order", variant: "destructive" });
+        setIsCreating(false);
+        return;
       }
 
-      if (orderItems.length > 0) {
-        const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
-
-        if (itemsError) {
-          console.error("Error creating order items:", itemsError);
-          toast({
-            title: "Warning",
-            description: "Order created but some items could not be linked",
-            variant: "destructive",
-          });
-        }
-      }
+      const orderData = orderRes.data;
 
       await logActivity({
         action: "create",
         tableName: "orders",
         recordId: orderData.id,
         newValues: {
-          order_number: orderData.order_number,
+          order_number: orderData.orderNumber,
           status: "for_approval",
           materials_count: data.materials.length,
         },
@@ -255,7 +222,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       await notifyProjectMembers({
         projectId: project.id,
         title: "New Order Created",
-        message: `Order ${orderData.order_number} has been created for ${project.name} with ${data.materials.length} material(s)`,
+        message: `Order ${orderData.orderNumber} has been created for ${project.name} with ${data.materials.length} material(s)`,
         type: "order",
         referenceType: "order",
         referenceId: orderData.id,
@@ -265,6 +232,8 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       toast({ title: "Success", description: "Order created successfully" });
       setIsCreateDialogOpen(false);
       fetchOrders();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
 
     setIsCreating(false);
@@ -307,46 +276,17 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       return;
     }
 
-    const updateData: Record<string, unknown> = { status: newStatus };
-
-    if (newStatus === "approved" && order.status === "for_approval") {
-      updateData.approved_by = user.id;
-      updateData.approved_at = new Date().toISOString();
+    // For approved status, always use the dedicated approve endpoint
+    let res;
+    if (newStatus === "approved") {
+      res = await ordersApi.approve(order.id);
+    } else {
+      res = await ordersApi.updateStatus(order.id, newStatus);
     }
 
-    if (newStatus === "on_hold") {
-      updateData.previous_status = order.status;
-    }
-
-    if (order.status === "on_hold") {
-      updateData.previous_status = null;
-    }
-
-    if (newStatus === "in_transit" && !(order as any).on_transit_at) {
-      updateData.on_transit_at = new Date().toISOString();
-    }
-    if (newStatus === "delivered" && !(order as any).delivered_at) {
-      updateData.delivered_at = new Date().toISOString();
-    }
-
-    const { error } = await supabase.from("orders").update(updateData).eq("id", order.id);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (!res.success) {
+      toast({ title: "Error", description: res.message ?? "Failed to update status", variant: "destructive" });
       return;
-    }
-
-    if (newStatus === "delivered") {
-      const { data: orderItems } = await supabase
-        .from("order_items")
-        .select("id, quantity_ordered")
-        .eq("order_id", order.id);
-
-      if (orderItems) {
-        for (const item of orderItems) {
-          await supabase.from("order_items").update({ quantity_received: item.quantity_ordered }).eq("id", item.id);
-        }
-      }
     }
 
     await logActivity({
@@ -379,13 +319,8 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     setIsRejecting(true);
 
     try {
-      // Use atomic RPC to move order to rejected_orders table
-      const { error } = await supabase.rpc("reject_order", {
-        _order_id: orderToReject.id,
-        _rejection_reason: reason || null,
-      });
-
-      if (error) throw error;
+      const res = await ordersApi.reject(orderToReject.id, reason || "");
+      if (!res.success) throw new Error(res.message ?? "Reject failed");
 
       await logActivity({
         action: "reject",
@@ -428,17 +363,10 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
       ? `${orderToHold.notes}\n\n[ON-HOLD ${formatManilaTime(new Date())}]: ${reason}`
       : `[ON-HOLD ${formatManilaTime(new Date())}]: ${reason}`;
 
-    const { error } = await supabase
-      .from("orders")
-      .update({
-        status: "on_hold" as OrderStatus,
-        notes: updatedNotes,
-        previous_status: orderToHold.status,
-      })
-      .eq("id", orderToHold.id);
+    const res = await ordersApi.updateStatus(orderToHold.id, "on_hold", updatedNotes);
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (!res.success) {
+      toast({ title: "Error", description: res.message ?? "Failed to place on hold", variant: "destructive" });
     } else {
       await logActivity({
         action: "on_hold",
@@ -560,7 +488,6 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                         key={order.id}
                         order={order}
                         onClick={() => setSelectedOrderId(order.id)}
-                        onQuickAction={(action) => handleQuickAction(order, action)}
                       />
                     ))
                   )}
@@ -595,7 +522,6 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
                         key={order.id}
                         order={order}
                         onClick={() => setSelectedOrderId(order.id)}
-                        onQuickAction={(action) => handleQuickAction(order, action)}
                       />
                     ))
                   )}
@@ -606,7 +532,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
         </div>
       </div>
 
-      {/* Rejected Orders Section - from rejected_orders table */}
+      {/* Rejected Orders Section */}
       {rejectedOrders.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-sm font-medium text-muted-foreground px-1 flex items-center gap-2">

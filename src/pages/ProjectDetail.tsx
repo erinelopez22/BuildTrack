@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { projectsApi, quotationsApi, companyAssetsApi } from "@/lib/apiClient";
+import type { BorrowTransaction } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { ProjectFormModal } from "@/components/projects/ProjectFormModal";
@@ -17,7 +18,6 @@ import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -32,8 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useProjectProgress } from "@/hooks/useProjectProgress";
-import { logActivity } from "@/lib/activityLogger";
-import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
+import { formatManilaTime } from "@/lib/notificationService";
 import {
   ArrowLeft,
   Users,
@@ -52,6 +51,25 @@ import {
 } from "lucide-react";
 import type { Project, ProjectStatus, AppRole } from "@/types/database";
 import { format } from "date-fns";
+
+function toLocalProject(p: any): Project {
+  return {
+    id: p.id,
+    name: p.name,
+    code: p.code ?? null,
+    location: p.location ?? null,
+    description: p.description ?? null,
+    status: (p.status ?? "active") as ProjectStatus,
+    start_date: p.startDate ?? null,
+    end_date: p.endDate ?? null,
+    estimated_cost: p.estimatedCost ?? null,
+    is_hidden: p.isHidden ?? false,
+    project_manager_id: p.projectManagerId ?? null,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+    created_by: p.createdBy ?? null,
+  } as unknown as Project;
+}
 
 export default function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
@@ -78,91 +96,71 @@ export default function ProjectDetail() {
   const [borrowAssetId, setBorrowAssetId] = useState("");
   const [borrowQty, setBorrowQty] = useState(1);
   const [borrowLoading, setBorrowLoading] = useState(false);
-  const [borrowedItems, setBorrowedItems] = useState<any[]>([]);
+  const [borrowedItems, setBorrowedItems] = useState<BorrowTransaction[]>([]);
   const [returnQty, setReturnQty] = useState<Record<string, number>>({});
   const [returnRemarks, setReturnRemarks] = useState<Record<string, string>>({});
 
-  // Approval confirmation dialog
   const [showBorrowConfirm, setShowBorrowConfirm] = useState(false);
   const [showReturnConfirm, setShowReturnConfirm] = useState<string | null>(null);
 
-  // Pending return requests
-  const [pendingReturnRequests, setPendingReturnRequests] = useState<Record<string, boolean>>({});
+  const canBorrow = isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer();
 
   const progress = useProjectProgress(id || "", progressKey);
 
-  // Check if user can borrow
-  const canBorrow = isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer();
-
   const fetchAllProjects = async () => {
-    let query = supabase.from("projects").select("id, name, status, is_hidden").order("name", { ascending: true });
-    if (!isAdmin()) {
-      query = query.eq("is_hidden", false);
+    try {
+      const result = await projectsApi.getAll({ includeHidden: isAdmin() });
+      setAllProjects((result.data ?? []).map(toLocalProject));
+    } catch {
+      // non-critical, ignore
     }
-    const { data } = await query;
-    setAllProjects((data || []) as Project[]);
   };
 
   const fetchProjectData = async () => {
     if (!id) return;
-
-    const { data: projectData, error: projectError } = await supabase
-      .from("projects")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
-
-    if (projectError || !projectData) {
-      toast({ title: "Error", description: "Project not found", variant: "destructive" });
-      navigate("/projects");
-      return;
-    }
-
-    if (projectData.is_hidden && !isAdmin()) {
-      toast({ title: "Error", description: "Project not available", variant: "destructive" });
-      navigate("/projects");
-      return;
-    }
-
-    setProject(projectData as Project);
-
-    const { data: quotationData } = await supabase
-      .from("project_quotations")
-      .select("id")
-      .eq("project_id", id)
-      .maybeSingle();
-
-    setHasQuotation(!!quotationData);
-
-    const { data: pendingRequests } = await supabase
-      .from("quotation_change_requests")
-      .select("id")
-      .eq("project_id", id)
-      .eq("status", "pending")
-      .limit(1);
-
-    setHasPendingQuotationRequest((pendingRequests || []).length > 0);
-
-    if (user) {
-      const { data: memberData } = await supabase
-        .from("project_members")
-        .select("role")
-        .eq("project_id", id)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (memberData) {
-        setUserProjectRole(memberData.role as AppRole);
+    try {
+      const result = await projectsApi.getById(id);
+      if (!result.data) {
+        toast({ title: "Error", description: "Project not found", variant: "destructive" });
+        navigate("/projects");
+        return;
       }
-    }
 
-    setLoading(false);
+      const p = result.data;
+      if (p.isHidden && !isAdmin()) {
+        toast({ title: "Error", description: "Project not available", variant: "destructive" });
+        navigate("/projects");
+        return;
+      }
+
+      setProject(toLocalProject(p));
+
+      // Check quotation
+      const quotResult = await quotationsApi.getAll(id);
+      setHasQuotation((quotResult.data ?? []).length > 0);
+
+      // Check pending change requests
+      const crResult = await quotationsApi.getChangeRequests(id, "pending");
+      setHasPendingQuotationRequest((crResult.data ?? []).length > 0);
+
+      // Find current user's project role
+      if (user) {
+        const membersResult = await projectsApi.getMembers(id);
+        const myMembership = (membersResult.data ?? []).find((m) => m.userId === user.id);
+        if (myMembership) setUserProjectRole(myMembership.role as AppRole);
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Project not found", variant: "destructive" });
+      navigate("/projects");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchAllProjects();
     fetchProjectData();
-  }, [id, navigate, toast, user]);
+  }, [id]);
 
   const canEditQuotation =
     isAdmin() ||
@@ -178,47 +176,39 @@ export default function ProjectDetail() {
   // === BORROW FUNCTIONS ===
   const fetchBorrowData = async () => {
     if (!id) return;
+    try {
+      // Get all assets
+      const assetsResult = await companyAssetsApi.getAll();
+      const assets = assetsResult.data ?? [];
 
-    const { data: assets } = await supabase.from("company_assets").select("*").order("asset_name");
+      // Get all active borrows to calculate availability
+      const allBorrowsResult = await companyAssetsApi.getAllBorrows();
+      const allBorrows = (allBorrowsResult.data ?? []).filter(
+        (b) => b.status === "Borrowed" || b.status === "Partially Returned"
+      );
 
-    const { data: allBorrows } = await supabase
-      .from("borrow_transactions")
-      .select("asset_id, borrowed_qty, returned_qty, status")
-      .in("status", ["Borrowed", "Partially Returned"]);
+      const borrowedByAsset: Record<string, number> = {};
+      allBorrows.forEach((b) => {
+        borrowedByAsset[b.assetId] = (borrowedByAsset[b.assetId] || 0) + (b.borrowedQty - b.returnedQty);
+      });
 
-    const borrowedByAsset: Record<string, number> = {};
-    (allBorrows || []).forEach((b: any) => {
-      borrowedByAsset[b.asset_id] = (borrowedByAsset[b.asset_id] || 0) + (b.borrowed_qty - b.returned_qty);
-    });
+      setCompanyAssets(
+        assets.map((a) => ({
+          ...a,
+          available_quantity: a.totalQuantity - (borrowedByAsset[a.id] || 0),
+        }))
+      );
 
-    setCompanyAssets(
-      (assets || []).map((a: any) => ({
-        ...a,
-        available_quantity: a.total_quantity - (borrowedByAsset[a.id] || 0),
-      })),
-    );
-
-    const { data: borrows } = await supabase
-      .from("borrow_transactions")
-      .select("*, company_assets(asset_name, unit)")
-      .eq("project_id", id)
-      .in("status", ["Borrowed", "Partially Returned"])
-      .order("borrowed_at", { ascending: false });
-    setBorrowedItems(borrows || []);
-
-    // Fetch pending return requests for this project
-    const { data: pendingReturns } = await supabase
-      .from("equipment_requests")
-      .select("borrow_transaction_id")
-      .eq("project_id", id)
-      .eq("request_type", "return")
-      .eq("status", "for_approval");
-
-    const pendingMap: Record<string, boolean> = {};
-    (pendingReturns || []).forEach((r: any) => {
-      if (r.borrow_transaction_id) pendingMap[r.borrow_transaction_id] = true;
-    });
-    setPendingReturnRequests(pendingMap);
+      // Get project-specific active borrows
+      const projectBorrowsResult = await companyAssetsApi.getAllBorrows(id);
+      setBorrowedItems(
+        (projectBorrowsResult.data ?? []).filter(
+          (b) => b.status === "Borrowed" || b.status === "Partially Returned"
+        )
+      );
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
   };
 
   useEffect(() => {
@@ -233,17 +223,9 @@ export default function ProjectDetail() {
       if (!asset) throw new Error("Asset not found");
       if (borrowQty > asset.available_quantity) throw new Error("Not enough available");
 
-      const { error } = await supabase.from("equipment_requests").insert({
-        asset_id: borrowAssetId,
-        project_id: id,
-        request_type: "borrow",
-        requested_by: user.id,
-        quantity: borrowQty,
-        status: "for_approval",
-      });
-      if (error) throw error;
+      await companyAssetsApi.borrow({ assetId: borrowAssetId, projectId: id, quantity: borrowQty });
 
-      toast({ title: "Request Submitted", description: "Borrow request submitted for approval." });
+      toast({ title: "Success", description: "Borrow request submitted." });
       setBorrowAssetId("");
       setBorrowQty(1);
       setShowBorrowConfirm(false);
@@ -261,38 +243,18 @@ export default function ProjectDetail() {
     const remarks = returnRemarks[transactionId] || "";
     if (qty < 1) return;
 
-    const transaction = borrowedItems.find((b: any) => b.id === transactionId);
+    const transaction = borrowedItems.find((b) => b.id === transactionId);
     if (!transaction) return;
 
-    const maxReturnable = transaction.borrowed_qty - transaction.returned_qty;
+    const maxReturnable = transaction.borrowedQty - transaction.returnedQty;
     if (qty > maxReturnable) {
       toast({ title: "Error", description: `Max returnable: ${maxReturnable}`, variant: "destructive" });
       return;
     }
 
     try {
-      const { error } = await supabase.from("equipment_requests").insert({
-        asset_id: transaction.asset_id,
-        project_id: id,
-        request_type: "return",
-        requested_by: user.id,
-        quantity: qty,
-        borrow_transaction_id: transactionId,
-        notes: remarks || null,
-        status: "for_approval",
-      });
-      if (error) throw error;
-
-      // Update borrow_transaction with return request timestamps
-      await supabase
-        .from("borrow_transactions")
-        .update({
-          return_requested_at: new Date().toISOString(),
-          return_requested_by: user.id,
-        })
-        .eq("id", transactionId);
-
-      toast({ title: "Request Submitted", description: "Return request submitted for approval." });
+      await companyAssetsApi.returnAsset(transactionId, { returnedQty: qty, remarks });
+      toast({ title: "Success", description: "Return processed successfully." });
       setReturnQty((prev) => ({ ...prev, [transactionId]: 0 }));
       setReturnRemarks((prev) => ({ ...prev, [transactionId]: "" }));
       setShowReturnConfirm(null);
@@ -312,21 +274,15 @@ export default function ProjectDetail() {
   }) => {
     if (!project) return;
     setIsSubmitting(true);
-
     try {
-      const { error } = await supabase
-        .from("projects")
-        .update({
-          name: data.name,
-          description: data.description || null,
-          location: data.location,
-          start_date: data.start_date,
-          end_date: data.end_date,
-          status: data.status,
-        })
-        .eq("id", project.id);
-
-      if (error) throw error;
+      await projectsApi.update(project.id, {
+        name: data.name,
+        description: data.description || undefined,
+        location: data.location,
+        startDate: data.start_date,
+        endDate: data.end_date,
+        status: data.status,
+      });
       toast({ title: "Success", description: "Project updated successfully" });
       setIsEditDialogOpen(false);
       fetchProjectData();
@@ -350,11 +306,6 @@ export default function ProjectDetail() {
       return `${start} – ${end}`;
     }
     return "No dates set";
-  };
-
-  const formatDate = (date: string | null | undefined) => {
-    if (!date) return "—";
-    return format(new Date(date), "MMM dd, yyyy");
   };
 
   if (loading || !project) {
@@ -384,9 +335,7 @@ export default function ProjectDetail() {
             <SelectContent className="bg-popover z-50 max-h-64">
               {allProjects.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate">{p.name}</span>
-                  </div>
+                  <span className="truncate">{p.name}</span>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -599,7 +548,7 @@ export default function ProjectDetail() {
                         .filter((a: any) => a.available_quantity > 0)
                         .map((asset: any) => (
                           <SelectItem key={asset.id} value={asset.id}>
-                            {asset.asset_name} — Avail: {asset.available_quantity} {asset.unit || "pcs"}
+                            {asset.assetName} — Avail: {asset.available_quantity} {asset.unit || "pcs"}
                           </SelectItem>
                         ))}
                     </SelectContent>
@@ -637,29 +586,23 @@ export default function ProjectDetail() {
                 <p className="text-sm text-muted-foreground italic">No borrowed items for this project.</p>
               ) : (
                 <div className="space-y-3">
-                  {borrowedItems.map((item: any) => {
-                    const remaining = item.borrowed_qty - item.returned_qty;
-                    const hasPendingReturn = pendingReturnRequests[item.id];
+                  {borrowedItems.map((item) => {
+                    const remaining = item.borrowedQty - item.returnedQty;
                     return (
                       <div key={item.id} className="p-3 border rounded-lg bg-card space-y-2">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="font-medium">{item.company_assets?.asset_name}</p>
+                            <p className="font-medium">{item.assetName}</p>
                             <p className="text-xs text-muted-foreground">
-                              Borrowed: {item.borrowed_qty} • Returned: {item.returned_qty} • Remaining: {remaining}
+                              Borrowed: {item.borrowedQty} • Returned: {item.returnedQty} • Remaining: {remaining}
                             </p>
                           </div>
                           <Badge variant={item.status === "Borrowed" ? "default" : "secondary"}>{item.status}</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Borrowed on {formatManilaTime(item.borrowed_at)}
+                          Borrowed on {formatManilaTime(item.borrowedAt ?? item.createdAt)}
                         </p>
-                        {hasPendingReturn && (
-                          <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-900/20 px-2 py-1 rounded">
-                            Return request pending approval.
-                          </p>
-                        )}
-                        {remaining > 0 && !hasPendingReturn && (
+                        {remaining > 0 && (
                           <div className="flex gap-2 items-end">
                             <div className="flex-1">
                               <Input
@@ -678,7 +621,9 @@ export default function ProjectDetail() {
                               <Input
                                 placeholder="Remarks (optional)"
                                 value={returnRemarks[item.id] || ""}
-                                onChange={(e) => setReturnRemarks((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                                onChange={(e) =>
+                                  setReturnRemarks((prev) => ({ ...prev, [item.id]: e.target.value }))
+                                }
                                 className="h-8"
                               />
                             </div>
@@ -707,9 +652,9 @@ export default function ProjectDetail() {
       <AlertDialog open={showBorrowConfirm} onOpenChange={setShowBorrowConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Submit Borrow Request</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Borrow</AlertDialogTitle>
             <AlertDialogDescription>
-              This will be subject for approval. Only Admin can approve borrow requests.
+              This will record the borrow transaction for the selected asset.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -726,9 +671,9 @@ export default function ProjectDetail() {
       <AlertDialog open={!!showReturnConfirm} onOpenChange={(open) => !open && setShowReturnConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Submit Return Request</AlertDialogTitle>
+            <AlertDialogTitle>Confirm Return</AlertDialogTitle>
             <AlertDialogDescription>
-              This will be subject for approval. Only Admin can approve return requests.
+              This will process the return of the selected quantity.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
+import { skusApi } from '@/lib/apiClient';
+import type { SKU as ApiSKU } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -56,6 +57,10 @@ type SortDir = 'asc' | 'desc';
 type StatusFilter = 'all' | 'active' | 'inactive';
 type ModalMode = 'add' | 'edit' | 'view' | null;
 
+function toLocalSKU(s: ApiSKU): SKU {
+  return { id: s.id, sku_code: s.skuCode, name: s.name, description: s.description ?? null, unit_of_measure: s.unitOfMeasure ?? '', is_active: s.isActive, created_at: s.createdAt, updated_at: s.updatedAt ?? s.createdAt, created_by: null } as unknown as SKU;
+}
+
 export default function SKUs() {
   const { user, isAdmin } = useAuth();
   const { toast } = useToast();
@@ -83,15 +88,15 @@ export default function SKUs() {
   const [formError, setFormError] = useState('');
 
   const fetchSKUs = async () => {
-    const { data, error } = await supabase
-      .from('skus')
-      .select('*')
-      .order(sortField === 'name' ? 'name' : 'created_at', { ascending: sortDir === 'asc' });
+    const res = await skusApi.getAll({
+      sortBy: sortField === 'name' ? 'name' : 'createdAt',
+      sortOrder: sortDir,
+    });
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    if (!res.success || !res.data) {
+      toast({ title: 'Error', description: res.message || 'Failed to fetch materials', variant: 'destructive' });
     } else {
-      setSKUs(data as SKU[]);
+      setSKUs(res.data.map(toLocalSKU));
     }
     setLoading(false);
   };
@@ -185,35 +190,31 @@ export default function SKUs() {
     setSaving(true);
 
     if (modalMode === 'add') {
-      const { error } = await supabase.from('skus').insert({
+      const res = await skusApi.create({
         name: normalizedName,
-        sku_code: '',
-        unit_of_measure: unit,
-        description: formDescription.trim() || null,
-        is_active: true,
-        created_by: user?.id,
+        skuCode: '',
+        unitOfMeasure: unit,
+        description: formDescription.trim() || undefined,
+        isActive: true,
       });
 
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      if (!res.success) {
+        toast({ title: 'Error', description: res.message || 'Failed to add material', variant: 'destructive' });
       } else {
         toast({ title: 'Success', description: 'Material added successfully' });
         setModalMode(null);
         fetchSKUs();
       }
     } else if (modalMode === 'edit' && selectedSku) {
-      const { error } = await supabase
-        .from('skus')
-        .update({
-          name: normalizedName,
-          unit_of_measure: unit,
-          description: formDescription.trim() || null,
-          is_active: formStatus === 'active',
-        })
-        .eq('id', selectedSku.id);
+      const res = await skusApi.update(selectedSku.id, {
+        name: normalizedName,
+        unitOfMeasure: unit,
+        description: formDescription.trim() || undefined,
+        isActive: formStatus === 'active',
+      });
 
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      if (!res.success) {
+        toast({ title: 'Error', description: res.message || 'Failed to update material', variant: 'destructive' });
       } else {
         toast({ title: 'Success', description: 'Material updated successfully' });
         setModalMode(null);
@@ -228,29 +229,14 @@ export default function SKUs() {
     if (!skuToDelete) return;
     setDeleting(true);
 
-    // Check if SKU is referenced in order_items
-    const { data: refs } = await supabase
-      .from('order_items')
-      .select('id')
-      .eq('sku_id', skuToDelete.id)
-      .limit(1);
+    const res = await skusApi.delete(skuToDelete.id);
 
-    if (refs && refs.length > 0) {
+    if (!res.success) {
       toast({
         title: 'Cannot delete',
-        description: 'This material is referenced in existing orders. Set it to Inactive instead.',
+        description: res.message || 'This material is referenced in existing orders. Set it to Inactive instead.',
         variant: 'destructive',
       });
-      setDeleting(false);
-      setShowDeleteConfirm(false);
-      return;
-    }
-
-    // Check quotation_items too (via sku name match in case)
-    const { error } = await supabase.from('skus').delete().eq('id', skuToDelete.id);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     } else {
       toast({ title: 'Deleted', description: 'Material removed from catalogue' });
       fetchSKUs();

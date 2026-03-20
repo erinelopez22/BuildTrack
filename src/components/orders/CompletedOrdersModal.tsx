@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { ordersApi } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { logActivity } from '@/lib/activityLogger';
-import { notifyProjectMembers, formatManilaTime } from '@/lib/notificationService';
-import { OrderCard } from './OrderCard';
+import { formatManilaTime } from '@/lib/notificationService';
 import { OrderDetailModal } from './OrderDetailModal';
 import {
   Dialog,
@@ -32,9 +30,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { format } from 'date-fns';
 import { Loader2, Archive, MoreVertical, Trash2, AlertTriangle } from 'lucide-react';
-import type { Order } from '@/types/database';
+import type { Order as ApiOrder } from '@/lib/apiClient';
 
 interface CompletedOrdersModalProps {
   projectId: string;
@@ -62,51 +59,26 @@ export function CompletedOrdersModal({
   onOpenChange,
   onOrderDeleted,
 }: CompletedOrdersModalProps) {
-  const { user } = useAuth();
+  const { isAdmin } = useAuth();
   const { toast } = useToast();
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<ApiOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [orderToDelete, setOrderToDelete] = useState<Order | null>(null);
-  const [canDelete, setCanDelete] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<ApiOrder | null>(null);
 
-  // Check if user can delete orders (Admin or Super Admin only)
-  useEffect(() => {
-    const checkDeletePermission = async () => {
-      if (!user) {
-        setCanDelete(false);
-        return;
-      }
-
-      const { data: userRoles } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id);
-
-      const hasAdminRole = userRoles?.some(
-        (r) => r.role === 'admin' || r.role === 'super_admin'
-      );
-
-      setCanDelete(!!hasAdminRole);
-    };
-
-    if (open) {
-      checkDeletePermission();
-    }
-  }, [open, user]);
+  const canDelete = isAdmin();
 
   const fetchCompletedOrders = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('orders')
-      .select('*')
-      .eq('project_id', projectId)
-      .eq('status', 'closed')
-      .order('updated_at', { ascending: false });
-
-    setOrders((data as Order[]) || []);
-    setLoading(false);
+    try {
+      const result = await ordersApi.getByProject(projectId, 'closed');
+      setOrders(result.data ?? []);
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -116,9 +88,8 @@ export function CompletedOrdersModal({
   }, [open, projectId]);
 
   const handleDeleteOrder = async () => {
-    if (!user || !orderToDelete) return;
+    if (!orderToDelete) return;
 
-    // Safety check: ensure order is actually completed (closed status)
     if (orderToDelete.status !== 'closed') {
       toast({
         title: 'Error',
@@ -131,103 +102,15 @@ export function CompletedOrdersModal({
 
     setDeleting(true);
     try {
-      // Get user profile for activity log
-      const { data: userProfile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      const userName = userProfile?.full_name || 'User';
-
-      // Get user role
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      const roleName = userRole?.role || 'member';
-
-      const orderId = orderToDelete.id;
-      const orderNumber = orderToDelete.order_number;
-
-      // 1. Get delivery IDs for this order (to delete delivery_items)
-      const { data: deliveries } = await supabase
-        .from('deliveries')
-        .select('id')
-        .eq('order_id', orderId);
-
-      const deliveryIds = deliveries?.map((d) => d.id) || [];
-
-      // 2. Delete delivery_items if any deliveries exist
-      if (deliveryIds.length > 0) {
-        const { error: deleteDeliveryItemsError } = await supabase
-          .from('delivery_items')
-          .delete()
-          .in('delivery_id', deliveryIds);
-
-        if (deleteDeliveryItemsError) throw deleteDeliveryItemsError;
-      }
-
-      // 3. Delete deliveries
-      const { error: deleteDeliveriesError } = await supabase
-        .from('deliveries')
-        .delete()
-        .eq('order_id', orderId);
-
-      if (deleteDeliveriesError) throw deleteDeliveriesError;
-
-      // 4. Delete order_items
-      const { error: deleteOrderItemsError } = await supabase
-        .from('order_items')
-        .delete()
-        .eq('order_id', orderId);
-
-      if (deleteOrderItemsError) throw deleteOrderItemsError;
-
-      // 5. Delete the order itself
-      const { error: deleteOrderError } = await supabase
-        .from('orders')
-        .delete()
-        .eq('id', orderId);
-
-      if (deleteOrderError) throw deleteOrderError;
-
-      // 6. Log activity (keep audit trail)
-      await logActivity({
-        action: 'delete',
-        tableName: 'orders',
-        recordId: orderId,
-        oldValues: {
-          order_number: orderNumber,
-          status: 'closed',
-        },
-        newValues: null,
-        userId: user.id,
-      });
-
-      // 7. Notify project members
-      await notifyProjectMembers({
-        projectId,
-        title: 'Order Deleted',
-        message: `${userName} (${roleName}) permanently deleted completed order ${orderNumber} from ${projectName} on ${formatManilaTime(new Date())}`,
-        type: 'order',
-        referenceType: 'orders',
-        referenceId: orderId,
-        excludeUserId: user.id,
-      });
+      await ordersApi.delete(orderToDelete.id);
 
       toast({
         title: 'Order Deleted',
         description: 'Order deleted permanently.',
       });
 
-      // Remove from local state immediately
-      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setOrders((prev) => prev.filter((o) => o.id !== orderToDelete.id));
       setOrderToDelete(null);
-
-      // Notify parent to refresh progress calculations
       onOrderDeleted?.();
     } catch (error: any) {
       toast({
@@ -278,7 +161,7 @@ export function CompletedOrdersModal({
                             className="font-mono text-sm font-bold text-foreground cursor-pointer hover:text-primary"
                             onClick={() => setSelectedOrderId(order.id)}
                           >
-                            {order.order_number}
+                            {order.orderNumber}
                           </span>
                           <div className="flex items-center gap-2">
                             <StatusBadge status={order.status} className="text-[10px] px-1.5 py-0.5" />
@@ -315,15 +198,15 @@ export function CompletedOrdersModal({
                           className="text-xs text-muted-foreground cursor-pointer"
                           onClick={() => setSelectedOrderId(order.id)}
                         >
-                          {order.created_at ? formatManilaTime(order.created_at) : 'No date'}
+                          {order.createdAt ? formatManilaTime(order.createdAt) : 'No date'}
                         </p>
 
-                        {order.supplier_name && (
+                        {order.supplierName && (
                           <p
                             className="text-xs text-muted-foreground truncate cursor-pointer"
                             onClick={() => setSelectedOrderId(order.id)}
                           >
-                            {order.supplier_name}
+                            {order.supplierName}
                           </p>
                         )}
                       </div>
@@ -357,7 +240,7 @@ export function CompletedOrdersModal({
             <AlertDialogDescription className="space-y-2">
               <p>
                 You are about to permanently delete order{' '}
-                <span className="font-semibold">{orderToDelete?.order_number}</span>.
+                <span className="font-semibold">{orderToDelete?.orderNumber}</span>.
               </p>
               <p className="font-medium text-destructive">
                 This action cannot be undone.

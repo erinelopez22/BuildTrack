@@ -1,11 +1,23 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
-import type { Profile, UserRole, AppRole } from '@/types/database';
+import { authApi, tokenStore, type UserSession } from '@/lib/apiClient';
+import type { AppRole } from '@/types/database';
+
+// Re-export a slim Profile type from the API user session
+export type Profile = UserSession & {
+  address?: string;
+  is_active?: boolean;
+  notification_preferences?: string | null;
+  avatar_url?: string;
+  sms_opt_in?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  created_by?: string;
+};
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: UserSession | null;
+  /** @deprecated use user instead - kept for compatibility */
+  session: { user: UserSession } | null;
   profile: Profile | null;
   roles: AppRole[];
   loading: boolean;
@@ -33,129 +45,97 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [user, setUser] = useState<UserSession | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (profileData) {
-      setProfile(profileData as unknown as Profile);
-    }
-  }, []);
-
-  const fetchRoles = useCallback(async (userId: string) => {
-    const { data: rolesData } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-    
-    if (rolesData) {
-      setRoles(rolesData.map(r => r.role as AppRole));
-    }
+  const hydrateFromSession = useCallback((sessionUser: UserSession) => {
+    setUser(sessionUser);
+    setRoles((sessionUser.roles ?? []) as AppRole[]);
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (user) {
-      await Promise.all([fetchProfile(user.id), fetchRoles(user.id)]);
-    }
-  }, [user, fetchProfile, fetchRoles]);
+    const res = await authApi.me();
+    if (res.success && res.data) hydrateFromSession(res.data);
+  }, [hydrateFromSession]);
 
+  // On mount: check if we have a valid token and restore session
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          setTimeout(() => {
-            fetchProfile(session.user.id);
-            fetchRoles(session.user.id);
-          }, 0);
-        } else {
-          setProfile(null);
-          setRoles([]);
-        }
-        
-        setLoading(false);
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchProfile(session.user.id);
-        fetchRoles(session.user.id);
-      }
-      
+    const token = tokenStore.getAccess();
+    if (!token) {
       setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [fetchProfile, fetchRoles]);
-
-  const signIn = async (loginId: string, password: string) => {
-    let email = loginId;
-
-    if (!loginId.includes('@')) {
-      const { data: profileData, error: lookupError } = await supabase
-        .from('profiles')
-        .select('email')
-        .ilike('username', loginId.trim())
-        .single();
-
-      if (lookupError || !profileData) {
-        return { error: new Error('Invalid username or password') };
-      }
-      email = profileData.email;
+      return;
     }
+    authApi.me()
+      .then(res => {
+        if (res.success && res.data) hydrateFromSession(res.data);
+        else tokenStore.clear();
+      })
+      .catch(() => tokenStore.clear())
+      .finally(() => setLoading(false));
+  }, [hydrateFromSession]);
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error as Error | null };
+  const signIn = async (loginId: string, password: string): Promise<{ error: Error | null }> => {
+    const res = await authApi.login(loginId, password);
+    if (!res.success || !res.data) {
+      return { error: new Error(res.message ?? 'Invalid credentials') };
+    }
+    tokenStore.set(res.data.accessToken, res.data.refreshToken);
+    hydrateFromSession(res.data.user);
+    return { error: null };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await authApi.logout().catch(() => {});
+    tokenStore.clear();
+    setUser(null);
+    setRoles([]);
   };
+
+  // ── Role helpers (identical logic to original) ────────────────────────────
 
   const hasRole = (role: AppRole) => roles.includes(role);
   const isAdmin = () => hasRole('admin') || hasRole('super_admin');
   const isSuperAdmin = () => hasRole('super_admin');
-  const isApprover = () => hasRole('office_admin') || hasRole('admin') || hasRole('super_admin');
+  const isApprover = () =>
+    hasRole('office_admin') || hasRole('admin') || hasRole('super_admin') ||
+    hasRole('approver') || hasRole('approval_admin');
   const isOfficeAdmin = () => hasRole('office_admin');
   const isWarehouseAdmin = () => hasRole('warehouse_admin');
   const isProjectEngineer = () => hasRole('project_engineer');
   const isChecker = () => hasRole('checker');
   const isDriver = () => hasRole('driver') || hasRole('tracking_driver');
-  const isReceiver = () => hasRole('checker') || hasRole('project_engineer');
+  const isReceiver = () => hasRole('checker') || hasRole('project_engineer') || hasRole('receiver');
 
-  const canCreateOrders = () => 
+  const canCreateOrders = () =>
     hasRole('super_admin') || hasRole('admin') || hasRole('project_engineer');
-
   const canCreateProjects = () =>
-    hasRole('super_admin') || hasRole('admin') || hasRole('project_engineer');
-
-  const canApproveOrders = () => 
-    hasRole('super_admin') || hasRole('admin') || hasRole('office_admin');
-
-  const canProcessLogistics = () => 
-    hasRole('super_admin') || hasRole('admin') || hasRole('warehouse_admin');
-
-  const canReceiveOrders = () => 
-    hasRole('super_admin') || hasRole('admin') || 
-    hasRole('project_engineer') || hasRole('checker');
-
+    hasRole('super_admin') || hasRole('admin') || hasRole('project_engineer') ||
+    hasRole('project_manager');
+  const canApproveOrders = () =>
+    hasRole('super_admin') || hasRole('admin') || hasRole('office_admin') ||
+    hasRole('approver') || hasRole('approval_admin');
+  const canProcessLogistics = () =>
+    hasRole('super_admin') || hasRole('admin') || hasRole('warehouse_admin') ||
+    hasRole('logistics_admin');
+  const canReceiveOrders = () =>
+    hasRole('super_admin') || hasRole('admin') ||
+    hasRole('project_engineer') || hasRole('checker') || hasRole('receiver');
   const canManageTeam = () =>
-    hasRole('super_admin') || hasRole('admin') || hasRole('office_admin') || hasRole('project_engineer');
+    hasRole('super_admin') || hasRole('admin') || hasRole('office_admin') ||
+    hasRole('project_engineer') || hasRole('project_manager');
+
+  // Build a profile-shaped object from user session for backward compatibility
+  const profile: Profile | null = user
+    ? {
+        ...user,
+        avatar_url: user.avatarUrl,
+        sms_opt_in: user.smsOptIn,
+        is_active: user.isActive,
+      }
+    : null;
+
+  const session = user ? { user } : null;
 
   return (
     <AuthContext.Provider

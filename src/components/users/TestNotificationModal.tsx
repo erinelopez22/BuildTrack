@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { usersApi } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -37,13 +38,11 @@ import {
   User,
   Phone,
   Mail,
-  CheckCircle2,
-  XCircle,
   ChevronsUpDown,
   Check,
 } from "lucide-react";
 import { ROLE_DISPLAY_NAMES } from "@/types/database";
-import type { UserRole } from "@/types/database";
+import type { AppRole } from "@/types/database";
 import { cn } from "@/lib/utils";
 
 interface TestNotificationModalProps {
@@ -57,12 +56,7 @@ interface UserOption {
   email: string;
   phone: string | null;
   sms_opt_in: boolean;
-  roles: UserRole[];
-}
-
-interface SendResult {
-  sms?: { status: "sent" | "failed"; error?: string };
-  email?: { status: "sent" | "failed"; error?: string };
+  roles: string[];
 }
 
 const E164_REGEX = /^\+[1-9]\d{7,14}$/;
@@ -101,7 +95,6 @@ export function TestNotificationModal({ open, onOpenChange }: TestNotificationMo
 
   // State
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState<SendResult | null>(null);
 
   // Validation errors
   const [numberError, setNumberError] = useState("");
@@ -128,31 +121,25 @@ export function TestNotificationModal({ open, onOpenChange }: TestNotificationMo
     setSmsMessage("[BuildTrack] Test SMS notification. Reply STOP to opt-out.");
     setEmailSubject("BuildTrack Test Email");
     setEmailBody("This is a test email notification from BuildTrack.");
-    setResult(null);
     setNumberError("");
     setEmailError("");
   };
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
-    const [{ data: profiles }, { data: roles }] = await Promise.all([
-      supabase
-        .from("profiles")
-        .select("id, full_name, email, phone, sms_opt_in")
-        .order("full_name"),
-      supabase.from("user_roles").select("*"),
-    ]);
-    const rolesList = (roles || []) as UserRole[];
-    setUsers(
-      (profiles || []).map((p) => ({
-        id: p.id,
-        full_name: p.full_name,
-        email: p.email,
-        phone: p.phone,
-        sms_opt_in: p.sms_opt_in ?? false,
-        roles: rolesList.filter((r) => r.user_id === p.id),
-      }))
-    );
+    const res = await usersApi.getAll();
+    if (res.success && res.data) {
+      setUsers(
+        res.data.map((u: User) => ({
+          id: u.id,
+          full_name: u.fullName || null,
+          email: u.email,
+          phone: u.phone || null,
+          sms_opt_in: u.smsOptIn,
+          roles: u.roles,
+        }))
+      );
+    }
     setLoadingUsers(false);
   };
 
@@ -223,61 +210,15 @@ export function TestNotificationModal({ open, onOpenChange }: TestNotificationMo
   const handleSend = async () => {
     if (!canSend) return;
     setSending(true);
-    setResult(null);
 
-    try {
-      const payload: Record<string, unknown> =
-        recipientMode === "user"
-          ? {
-              mode: "test",
-              recipientMode: "user",
-              toUserId: selectedUserId,
-              channels: { sms: sendSms, email: sendEmail },
-              title,
-              smsMessage,
-              emailSubject,
-              emailHtml: emailBody,
-            }
-          : {
-              mode: "test",
-              recipientMode: "custom",
-              to: {
-                email: customEmail.trim() || undefined,
-                number: customNumber.trim() || undefined,
-                label: customLabel.trim() || undefined,
-              },
-              channels: { sms: sendSms, email: sendEmail },
-              title,
-              smsMessage,
-              emailSubject,
-              emailHtml: emailBody,
-            };
+    // Notification test via edge functions is not available in the REST API migration.
+    // Show an informational toast instead.
+    toast({
+      title: "Notification test not available",
+      description: "Test notification sending is not supported in the current backend configuration.",
+    });
 
-      const { data, error } = await supabase.functions.invoke(
-        "send-test-notification",
-        { body: payload }
-      );
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to send test notification.",
-          variant: "destructive",
-        });
-        setResult({
-          sms: sendSms ? { status: "failed", error: error.message } : undefined,
-          email: sendEmail ? { status: "failed", error: error.message } : undefined,
-        });
-      } else {
-        setResult(data?.results || {});
-        toast({ title: "Test sent", description: "Check results below." });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      toast({ title: "Error", description: msg, variant: "destructive" });
-    } finally {
-      setSending(false);
-    }
+    setSending(false);
   };
 
   return (
@@ -388,8 +329,8 @@ export function TestNotificationModal({ open, onOpenChange }: TestNotificationMo
                   {selectedUser.roles.length > 0 && (
                     <div className="flex flex-wrap gap-1 pt-1">
                       {selectedUser.roles.map((r) => (
-                        <Badge key={r.id} variant="outline" className="text-xs">
-                          {ROLE_DISPLAY_NAMES[r.role]}
+                        <Badge key={r} variant="outline" className="text-xs">
+                          {ROLE_DISPLAY_NAMES[r as AppRole] ?? r}
                         </Badge>
                       ))}
                     </div>
@@ -509,44 +450,12 @@ export function TestNotificationModal({ open, onOpenChange }: TestNotificationMo
             )}
           </div>
 
-          {/* Result Panel */}
-          {result && (
-            <div className="rounded-md border p-3 space-y-2 bg-muted/30">
-              <p className="text-sm font-medium">Results</p>
-              {result.sms && (
-                <div className="flex items-center gap-2 text-sm">
-                  {result.sms.status === "sent" ? (
-                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-destructive" />
-                  )}
-                  <span>SMS: {result.sms.status === "sent" ? "Sent" : "Failed"}</span>
-                  {result.sms.error && (
-                    <span className="text-xs text-destructive">
-                      — {result.sms.error}
-                    </span>
-                  )}
-                </div>
-              )}
-              {result.email && (
-                <div className="flex items-center gap-2 text-sm">
-                  {result.email.status === "sent" ? (
-                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-destructive" />
-                  )}
-                  <span>
-                    Email: {result.email.status === "sent" ? "Sent" : "Failed"}
-                  </span>
-                  {result.email.error && (
-                    <span className="text-xs text-destructive">
-                      — {result.email.error}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+          {/* Info banner: test sending not available */}
+          <div className="rounded-md border border-muted bg-muted/30 px-4 py-3">
+            <p className="text-xs text-muted-foreground">
+              Test notification sending is not available in the current configuration. Click "Send Test" to see a notification.
+            </p>
+          </div>
         </div>
 
         <DialogFooter className="pt-2">

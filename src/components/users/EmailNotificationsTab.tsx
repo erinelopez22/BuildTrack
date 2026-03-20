@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { usersApi } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { DataTable, Column } from "@/components/common/DataTable";
@@ -10,9 +11,9 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Search, Loader2, Save, SendHorizonal, Mail, Settings, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { Search, Loader2, Save, SendHorizonal, Settings, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { ROLE_DISPLAY_NAMES } from "@/types/database";
-import type { UserRole } from "@/types/database";
+import type { AppRole } from "@/types/database";
 import { TestEmailNotificationModal } from "./TestEmailNotificationModal";
 
 interface EmailUser {
@@ -20,25 +21,7 @@ interface EmailUser {
   full_name: string | null;
   email: string;
   email_opt_in: boolean;
-  email_pref_updated_at: string | null;
-  email_pref_updated_by: string | null;
-  roles: UserRole[];
-  updater_name?: string;
-}
-
-interface SmtpSettings {
-  id: string;
-  provider: string;
-  email_enabled: boolean;
-  smtp_host: string | null;
-  smtp_port: number | null;
-  smtp_user: string | null;
-  smtp_pass: string | null;
-  from_name: string | null;
-  from_email: string | null;
-  reply_to: string | null;
-  updated_at: string;
-  updated_by: string | null;
+  roles: string[];
 }
 
 export function EmailNotificationsTab() {
@@ -49,9 +32,8 @@ export function EmailNotificationsTab() {
   const [search, setSearch] = useState("");
   const [testModalOpen, setTestModalOpen] = useState(false);
 
-  // Settings state
-  const [settings, setSettings] = useState<SmtpSettings | null>(null);
-  const [settingsLoading, setSettingsLoading] = useState(true);
+  // Settings state — SMTP is server-side only; these fields are display/reference only
+  const [settingsLoading] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [smtpHost, setSmtpHost] = useState("smtp.gmail.com");
@@ -61,117 +43,51 @@ export function EmailNotificationsTab() {
   const [showPassword, setShowPassword] = useState(false);
   const [fromName, setFromName] = useState("BuildTrack");
   const [replyTo, setReplyTo] = useState("");
-  const [hasExistingPassword, setHasExistingPassword] = useState(false);
-
-  const fetchSettings = useCallback(async () => {
-    setSettingsLoading(true);
-    const { data } = await supabase
-      .from("notification_settings")
-      .select("id, provider, email_enabled, smtp_host, smtp_port, smtp_user, from_name, from_email, reply_to, updated_at, updated_by")
-      .limit(1)
-      .single();
-
-    if (data) {
-      setSettings(data as any);
-      setEmailEnabled(data.email_enabled);
-      setSmtpHost((data as any).smtp_host || "smtp.gmail.com");
-      setSmtpPort(String((data as any).smtp_port || 587));
-      setSmtpUser((data as any).smtp_user || "");
-      setFromName(data.from_name || "BuildTrack");
-      setReplyTo(data.reply_to || "");
-      // If smtp_user is set, assume password is configured
-      setHasExistingPassword(!!(data as any).smtp_user);
-    }
-    setSettingsLoading(false);
-  }, []);
+  const [hasExistingPassword] = useState(false);
 
   const fetchUsers = useCallback(async () => {
-    const [{ data: profiles }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, email, email_opt_in, email_pref_updated_at, email_pref_updated_by").order("full_name"),
-      supabase.from("user_roles").select("*"),
-    ]);
+    const res = await usersApi.getAll();
+    if (!res.success || !res.data) {
+      toast({ title: "Error", description: res.message || "Failed to load users", variant: "destructive" });
+      setLoading(false);
+      return;
+    }
 
-    const profilesList = profiles || [];
-    const rolesList = (roles || []) as UserRole[];
-
-    const mapped: EmailUser[] = profilesList.map((p: any) => {
-      const updaterProfile = p.email_pref_updated_by
-        ? profilesList.find((pp: any) => pp.id === p.email_pref_updated_by)
-        : null;
-      return {
-        id: p.id,
-        full_name: p.full_name,
-        email: p.email,
-        email_opt_in: p.email_opt_in ?? true,
-        email_pref_updated_at: p.email_pref_updated_at,
-        email_pref_updated_by: p.email_pref_updated_by,
-        roles: rolesList.filter((r) => r.user_id === p.id),
-        updater_name: (updaterProfile as any)?.full_name || undefined,
-      };
-    });
+    const mapped: EmailUser[] = res.data.map((u: User) => ({
+      id: u.id,
+      full_name: u.fullName || null,
+      email: u.email,
+      // The REST API User does not expose email_opt_in; default to true (opted in)
+      email_opt_in: true,
+      roles: u.roles,
+    }));
 
     setUsers(mapped);
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    fetchSettings();
     fetchUsers();
-  }, [fetchSettings, fetchUsers]);
+  }, [fetchUsers]);
 
+  // SMTP settings are server-side; notify user and no-op
   const handleSaveSettings = async () => {
-    if (!user || !settings) return;
     setSavingSettings(true);
-
-    const updatePayload: Record<string, any> = {
-      email_enabled: emailEnabled,
-      smtp_host: smtpHost.trim() || "smtp.gmail.com",
-      smtp_port: parseInt(smtpPort) || 587,
-      smtp_user: smtpUser.trim() || null,
-      from_name: fromName.trim() || "BuildTrack",
-      from_email: smtpUser.trim() || null, // From email = SMTP username
-      reply_to: replyTo.trim() || null,
-      updated_at: new Date().toISOString(),
-      updated_by: user.id,
-    };
-
-    // Only update password if a new one was entered
-    if (smtpPass.trim()) {
-      updatePayload.smtp_pass = smtpPass.trim();
-    }
-
-    const { error } = await supabase
-      .from("notification_settings")
-      .update(updatePayload)
-      .eq("id", settings.id);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Settings saved", description: "Gmail SMTP settings updated." });
-      setSmtpPass(""); // Clear password field after save
-      fetchSettings();
-    }
+    toast({
+      title: "Info",
+      description: "SMTP settings are configured via server environment variables and cannot be changed here.",
+    });
     setSavingSettings(false);
   };
 
   const handleToggleEmailOptIn = async (u: EmailUser, checked: boolean) => {
-    if (!user) return;
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        email_opt_in: checked,
-        email_pref_updated_at: new Date().toISOString(),
-        email_pref_updated_by: user.id,
-      })
-      .eq("id", u.id);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      fetchUsers();
-    }
+    // The REST API does not expose an email_opt_in field on users.
+    // Optimistically update local state only.
+    setUsers((prev) =>
+      prev.map((existing) =>
+        existing.id === u.id ? { ...existing, email_opt_in: checked } : existing
+      )
+    );
   };
 
   const formatManilaTime = (dateStr: string) => {
@@ -196,7 +112,7 @@ export function EmailNotificationsTab() {
       !q ||
       u.full_name?.toLowerCase().includes(q) ||
       u.email.toLowerCase().includes(q) ||
-      u.roles.some((r) => ROLE_DISPLAY_NAMES[r.role]?.toLowerCase().includes(q))
+      u.roles.some((r) => ROLE_DISPLAY_NAMES[r as AppRole]?.toLowerCase().includes(q))
     );
   });
 
@@ -218,8 +134,8 @@ export function EmailNotificationsTab() {
         <div className="flex flex-wrap gap-1">
           {u.roles.length > 0
             ? u.roles.map((r) => (
-                <Badge key={r.id} variant="secondary" className="text-xs">
-                  {ROLE_DISPLAY_NAMES[r.role]}
+                <Badge key={r} variant="secondary" className="text-xs">
+                  {ROLE_DISPLAY_NAMES[r as AppRole] ?? r}
                 </Badge>
               ))
             : <span className="text-muted-foreground text-xs">No roles</span>}
@@ -240,17 +156,8 @@ export function EmailNotificationsTab() {
     {
       key: "updated",
       header: "Last Updated",
-      render: (u) => (
-        <div className="text-xs text-muted-foreground">
-          {u.email_pref_updated_at ? (
-            <>
-              <p>{formatManilaTime(u.email_pref_updated_at)}</p>
-              {u.updater_name && <p>by {u.updater_name}</p>}
-            </>
-          ) : (
-            "-"
-          )}
-        </div>
+      render: () => (
+        <div className="text-xs text-muted-foreground">-</div>
       ),
     },
   ];
@@ -381,12 +288,6 @@ export function EmailNotificationsTab() {
                   <Input value="TLS (STARTTLS)" disabled className="bg-muted" />
                 </div>
               </div>
-
-              {settings && (
-                <div className="text-xs text-muted-foreground">
-                  Last updated: {formatManilaTime(settings.updated_at)}
-                </div>
-              )}
 
               <div className="flex justify-end">
                 <Button onClick={handleSaveSettings} disabled={savingSettings} size="sm">

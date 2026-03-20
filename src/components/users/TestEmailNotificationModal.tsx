@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { usersApi } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -41,7 +41,7 @@ import {
   Check,
 } from "lucide-react";
 import { ROLE_DISPLAY_NAMES } from "@/types/database";
-import type { UserRole } from "@/types/database";
+import type { AppRole } from "@/types/database";
 import { cn } from "@/lib/utils";
 
 interface TestEmailNotificationModalProps {
@@ -53,7 +53,7 @@ interface UserOption {
   id: string;
   full_name: string | null;
   email: string;
-  roles: UserRole[];
+  roles: AppRole[];
 }
 
 interface SendResult {
@@ -104,20 +104,21 @@ export function TestEmailNotificationModal({ open, onOpenChange }: TestEmailNoti
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
-    const [{ data: profiles }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, email").order("full_name"),
-      supabase.from("user_roles").select("*"),
-    ]);
-    const rolesList = (roles || []) as UserRole[];
-    setUsers(
-      (profiles || []).map((p) => ({
-        id: p.id,
-        full_name: p.full_name,
-        email: p.email,
-        roles: rolesList.filter((r) => r.user_id === p.id),
-      }))
-    );
-    setLoadingUsers(false);
+    try {
+      const result = await usersApi.getAll();
+      setUsers(
+        (result.data ?? []).map((u) => ({
+          id: u.id,
+          full_name: u.fullName ?? null,
+          email: u.email,
+          roles: u.roles as AppRole[],
+        }))
+      );
+    } catch {
+      setUsers([]);
+    } finally {
+      setLoadingUsers(false);
+    }
   };
 
   const validateCustomEmail = (v: string) => {
@@ -166,33 +167,9 @@ export function TestEmailNotificationModal({ open, onOpenChange }: TestEmailNoti
         message: emailBody,
       };
 
-      const { data, error } = await supabase.functions.invoke(
-        "send-email-notification",
-        { body: payload }
-      );
-
-      if (error) {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to send test notification.",
-          variant: "destructive",
-        });
-        setResult({
-          email: { status: "failed", error: error.message },
-        });
-      } else if (data?.error) {
-        toast({
-          title: "Error",
-          description: data.error,
-          variant: "destructive",
-        });
-        setResult({
-          email: { status: "failed", error: data.error },
-        });
-      } else {
-        setResult(data?.results || {});
-        toast({ title: "Test sent", description: "Check results below." });
-      }
+      // Email sending via edge functions is not available in the REST API backend.
+      toast({ title: "Not available", description: "Email test notifications require SMTP configuration on the backend.", variant: "destructive" });
+      setResult({ email: { status: "failed", error: "Email sending not configured." } });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       toast({ title: "Error", description: msg, variant: "destructive" });
@@ -294,8 +271,8 @@ export function TestEmailNotificationModal({ open, onOpenChange }: TestEmailNoti
                   {selectedUser.roles.length > 0 && (
                     <div className="flex flex-wrap gap-1 pt-1">
                       {selectedUser.roles.map((r) => (
-                        <Badge key={r.id} variant="outline" className="text-xs">
-                          {ROLE_DISPLAY_NAMES[r.role]}
+                        <Badge key={r} variant="outline" className="text-xs">
+                          {ROLE_DISPLAY_NAMES[r]}
                         </Badge>
                       ))}
                     </div>

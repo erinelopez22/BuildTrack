@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { supabase } from '@/integrations/supabase/client';
+import { quotationsApi, ordersApi } from '@/lib/apiClient';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -114,14 +114,10 @@ export function CreateOrderModal({
   const fetchQuotationMaterials = async () => {
     setLoadingQuotation(true);
     try {
-      // Get quotation for this project
-      const { data: quotation } = await supabase
-        .from('project_quotations')
-        .select('id')
-        .eq('project_id', projectId)
-        .maybeSingle();
+      const quotResult = await quotationsApi.getAll(projectId);
+      const quotations = quotResult.data ?? [];
 
-      if (!quotation) {
+      if (quotations.length === 0) {
         setHasQuotation(false);
         setQuotationMaterials([]);
         setAlreadyOrderedQty({});
@@ -129,46 +125,33 @@ export function CreateOrderModal({
         return;
       }
 
-      // Fetch quotation items
-      const { data: items } = await supabase
-        .from('quotation_items')
-        .select('id, material_name, unit, quantity')
-        .eq('quotation_id', quotation.id)
-        .order('material_name');
+      const quotation = quotations[0];
+      const items = (quotation.items ?? []).map((i) => ({
+        id: i.id,
+        material_name: i.materialName,
+        unit: i.unit ?? '',
+        quantity: i.quantity,
+      }));
 
       setHasQuotation(true);
-      setQuotationMaterials(items || []);
+      setQuotationMaterials(items);
 
-      // Fetch already ordered quantities for each quotation item
-      // Sum quantity_ordered from all order_items where order is not cancelled/deleted
-      const { data: orderItems } = await supabase
-        .from('order_items')
-        .select(`
-          quotation_item_id,
-          quantity_ordered,
-          orders!inner(
-            id,
-            project_id,
-            status
-          )
-        `)
-        .eq('orders.project_id', projectId)
-        .not('orders.status', 'eq', 'cancelled');
+      // Calculate already ordered quantities from existing project orders
+      const ordersResult = await ordersApi.getByProject(projectId);
+      const activeOrders = (ordersResult.data ?? []).filter((o) => o.status !== 'cancelled');
 
-      // Calculate already ordered quantities per quotation item
       const orderedQtyMap: AlreadyOrderedQty = {};
-      if (orderItems) {
-        for (const item of orderItems) {
-          if (item.quotation_item_id) {
-            orderedQtyMap[item.quotation_item_id] = 
-              (orderedQtyMap[item.quotation_item_id] || 0) + item.quantity_ordered;
+      for (const order of activeOrders) {
+        for (const item of order.items ?? []) {
+          if (item.quotationItemId) {
+            orderedQtyMap[item.quotationItemId] =
+              (orderedQtyMap[item.quotationItemId] || 0) + item.quantityOrdered;
           }
         }
       }
       setAlreadyOrderedQty(orderedQtyMap);
-      
-      // Initialize with one empty row if we have materials
-      if (items && items.length > 0) {
+
+      if (items.length > 0) {
         setMaterials([{ id: crypto.randomUUID(), materialId: '', materialName: '', unit: '', quantity: 1 }]);
       }
     } catch (error) {

@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Calendar, MapPin, MoreVertical, Pencil, Trash2, RotateCcw, EyeOff, Eye } from 'lucide-react';
 import { format } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
+import { projectsApi } from '@/lib/apiClient';
 import type { Project } from '@/types/database';
 
 interface ProjectCardProps {
@@ -43,15 +43,15 @@ interface ProjectProgress {
   hasQuotation: boolean;
 }
 
-export function ProjectCard({ 
-  project, 
-  onEdit, 
-  onDelete, 
-  onRestore, 
+export function ProjectCard({
+  project,
+  onEdit,
+  onDelete,
+  onRestore,
   onHide,
   onUnhide,
-  onClick, 
-  canEdit, 
+  onClick,
+  canEdit,
   canRestore,
   canHide,
 }: ProjectCardProps) {
@@ -61,63 +61,15 @@ export function ProjectCard({
   useEffect(() => {
     const fetchProgress = async () => {
       try {
-        const { data: quotation } = await supabase
-          .from('project_quotations')
-          .select('id')
-          .eq('project_id', project.id)
-          .maybeSingle();
+        const result = await projectsApi.getProgress(project.id);
+        const data = result.data;
 
-        if (!quotation) {
+        if (!data) {
           setProgress({ percentage: 0, hasQuotation: false });
           return;
         }
 
-        const { data: quotationItems } = await supabase
-          .from('quotation_items')
-          .select('id, material_name, quantity')
-          .eq('quotation_id', quotation.id);
-
-        if (!quotationItems || quotationItems.length === 0) {
-          setProgress({ percentage: 0, hasQuotation: true });
-          return;
-        }
-
-        const totalQuoted = quotationItems.reduce((sum, item) => sum + item.quantity, 0);
-
-        const { data: orders } = await supabase
-          .from('orders')
-          .select('id')
-          .eq('project_id', project.id)
-          .in('status', ['delivered', 'closed']);
-
-        if (!orders || orders.length === 0) {
-          setProgress({ percentage: 0, hasQuotation: true });
-          return;
-        }
-
-        const { data: orderItems } = await supabase
-          .from('order_items')
-          .select('quotation_item_id, quantity_received')
-          .in('order_id', orders.map(o => o.id))
-          .not('quotation_item_id', 'is', null);
-
-        const receivedByQuotationItemId: Record<string, number> = {};
-        orderItems?.forEach((item: any) => {
-          if (item.quotation_item_id) {
-            const qty = item.quantity_received ?? 0;
-            receivedByQuotationItemId[item.quotation_item_id] = 
-              (receivedByQuotationItemId[item.quotation_item_id] || 0) + qty;
-          }
-        });
-
-        let totalReceived = 0;
-        quotationItems.forEach((qItem) => {
-          const received = receivedByQuotationItemId[qItem.id] || 0;
-          totalReceived += Math.min(received, qItem.quantity);
-        });
-
-        const percentage = totalQuoted > 0 ? Math.min(100, (totalReceived / totalQuoted) * 100) : 0;
-        setProgress({ percentage, hasQuotation: true });
+        setProgress({ percentage: data.overallProgress, hasQuotation: data.hasQuotation });
       } catch (error) {
         console.error('Error fetching project progress:', error);
       }
@@ -175,7 +127,7 @@ export function ProjectCard({
                 )}
               </div>
             </div>
-            
+
             {showMenu && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

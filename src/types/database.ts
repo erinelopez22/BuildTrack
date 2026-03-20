@@ -233,6 +233,7 @@ export interface Order {
   total_amount: number | null;
   approved_by: string | null;
   approved_at: string | null;
+  approved_by_name?: string | null;
   rejected_by: string | null;
   rejected_at: string | null;
   rejection_reason: string | null;

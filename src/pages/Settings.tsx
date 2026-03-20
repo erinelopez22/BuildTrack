@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -11,8 +10,8 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { Settings as SettingsIcon, Shield, MessageSquare, Loader2 } from 'lucide-react';
-import type { SMSSettings, AppRole } from '@/types/database';
+import { Shield, MessageSquare } from 'lucide-react';
+import type { AppRole } from '@/types/database';
 
 import { ROLE_DISPLAY_NAMES } from '@/types/database';
 
@@ -27,9 +26,6 @@ const eventLabels: Record<string, string> = {
 export default function Settings() {
   const { isAdmin } = useAuth();
   const { toast } = useToast();
-  const [settings, setSettings] = useState<SMSSettings | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     twilio_account_sid: '',
     twilio_auth_token: '',
@@ -42,65 +38,13 @@ export default function Settings() {
     },
   });
 
-  const fetchSettings = async () => {
-    const { data, error } = await supabase
-      .from('sms_settings')
-      .select('*')
-      .limit(1)
-      .single();
-
-    if (data) {
-      setSettings(data as SMSSettings);
-      setFormData({
-        twilio_account_sid: data.twilio_account_sid || '',
-        twilio_auth_token: data.twilio_auth_token || '',
-        twilio_sender_number: data.twilio_sender_number || '',
-        is_enabled: data.is_enabled || false,
-        event_rules: (data.event_rules as SMSSettings['event_rules']) || formData.event_rules,
-      });
-    }
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (isAdmin()) {
-      fetchSettings();
-    } else {
-      setLoading(false);
-    }
-  }, [isAdmin]);
-
-  const handleSave = async () => {
-    setSaving(true);
-
-    const payload = {
-      twilio_account_sid: formData.twilio_account_sid || null,
-      twilio_auth_token: formData.twilio_auth_token || null,
-      twilio_sender_number: formData.twilio_sender_number || null,
-      is_enabled: formData.is_enabled,
-      event_rules: formData.event_rules,
-    };
-
-    let error;
-    if (settings) {
-      const result = await supabase
-        .from('sms_settings')
-        .update(payload)
-        .eq('id', settings.id);
-      error = result.error;
-    } else {
-      const result = await supabase.from('sms_settings').insert(payload);
-      error = result.error;
-    }
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      toast({ title: 'Success', description: 'Settings saved successfully' });
-      fetchSettings();
-    }
-
-    setSaving(false);
+  // SMS settings are configured server-side via environment variables.
+  // This form is display-only and changes here have no backend effect.
+  const handleSave = () => {
+    toast({
+      title: 'Info',
+      description: 'SMS settings are configured via server environment variables and cannot be changed here.',
+    });
   };
 
   const toggleEventRole = (event: keyof typeof formData.event_rules, role: AppRole) => {
@@ -133,14 +77,6 @@ export default function Settings() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-accent" />
-      </div>
-    );
-  }
-
   return (
     <div className="animate-fade-in space-y-6">
       <PageHeader
@@ -161,7 +97,7 @@ export default function Settings() {
             <CardHeader>
               <CardTitle>Twilio Configuration</CardTitle>
               <CardDescription>
-                Configure your Twilio credentials for SMS notifications
+                Twilio credentials are configured via server environment variables. The fields below are for reference only.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -177,6 +113,7 @@ export default function Settings() {
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, is_enabled: checked })
                   }
+                  disabled
                 />
               </div>
 
@@ -188,7 +125,8 @@ export default function Settings() {
                   onChange={(e) =>
                     setFormData({ ...formData, twilio_account_sid: e.target.value })
                   }
-                  placeholder="AC..."
+                  placeholder="Configured via environment variable"
+                  disabled
                 />
               </div>
 
@@ -200,7 +138,8 @@ export default function Settings() {
                   onChange={(e) =>
                     setFormData({ ...formData, twilio_auth_token: e.target.value })
                   }
-                  placeholder="••••••••"
+                  placeholder="Configured via environment variable"
+                  disabled
                 />
               </div>
 
@@ -211,7 +150,8 @@ export default function Settings() {
                   onChange={(e) =>
                     setFormData({ ...formData, twilio_sender_number: e.target.value })
                   }
-                  placeholder="+1234567890"
+                  placeholder="Configured via environment variable"
+                  disabled
                 />
               </div>
             </CardContent>
@@ -255,15 +195,8 @@ export default function Settings() {
           </Card>
 
           <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                'Save Settings'
-              )}
+            <Button onClick={handleSave}>
+              Save Settings
             </Button>
           </div>
         </TabsContent>

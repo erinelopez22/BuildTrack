@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { projectsApi, usersApi } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,9 +28,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Loader2, UserPlus } from 'lucide-react';
-import { logActivity } from '@/lib/activityLogger';
-import { notifyProjectMembers } from '@/lib/notificationService';
-import type { ProjectMember, Profile, AppRole } from '@/types/database';
+import type { AppRole } from '@/types/database';
 import { ROLE_DISPLAY_NAMES } from '@/types/database';
 
 interface ProjectTeamTabProps {
@@ -38,7 +36,6 @@ interface ProjectTeamTabProps {
   projectName: string;
 }
 
-// Only these roles can be assigned in team tab
 const teamRoleOptions: { value: AppRole; label: string }[] = [
   { value: 'project_engineer', label: 'Project Engineer' },
   { value: 'checker', label: 'Checker' },
@@ -50,49 +47,35 @@ const teamRoleOptions: { value: AppRole; label: string }[] = [
 export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) {
   const { user, isAdmin, canManageTeam } = useAuth();
   const { toast } = useToast();
-  const [members, setMembers] = useState<(ProjectMember & { profile: Profile })[]>([]);
-  const [availableUsers, setAvailableUsers] = useState<Profile[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
-  const [memberToRemove, setMemberToRemove] = useState<(ProjectMember & { profile: Profile }) | null>(null);
+  const [memberToRemove, setMemberToRemove] = useState<any | null>(null);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedRole, setSelectedRole] = useState<AppRole>('viewer');
   const [isAdding, setIsAdding] = useState(false);
 
   const fetchMembers = async () => {
-    const { data: membersData } = await supabase
-      .from('project_members')
-      .select('*')
-      .eq('project_id', projectId);
-
-    if (membersData && membersData.length > 0) {
-      const userIds = membersData.map(m => m.user_id);
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('*')
-        .in('id', userIds);
-
-      const membersWithProfiles = membersData.map(member => ({
-        ...member,
-        profile: (profilesData || []).find(p => p.id === member.user_id) || {} as Profile,
-      }));
-      setMembers(membersWithProfiles as (ProjectMember & { profile: Profile })[]);
-    } else {
-      setMembers([]);
+    try {
+      const result = await projectsApi.getMembers(projectId);
+      setMembers(result.data ?? []);
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchAvailableUsers = async () => {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('is_active', true);
-
-    const memberIds = members.map(m => m.user_id);
-    const available = (profiles || []).filter(p => !memberIds.includes(p.id));
-    setAvailableUsers(available as unknown as Profile[]);
+    try {
+      const result = await usersApi.getAll();
+      const memberIds = members.map((m) => m.userId);
+      setAvailableUsers((result.data ?? []).filter((u) => !memberIds.includes(u.id)));
+    } catch {
+      setAvailableUsers([]);
+    }
   };
 
   useEffect(() => {
@@ -100,90 +83,39 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
   }, [projectId]);
 
   useEffect(() => {
-    if (isAddDialogOpen) {
-      fetchAvailableUsers();
-    }
+    if (isAddDialogOpen) fetchAvailableUsers();
   }, [isAddDialogOpen, members]);
 
   const handleAddMember = async () => {
     if (!selectedUserId || !user) return;
     setIsAdding(true);
-
-    const { error } = await supabase.rpc('add_project_member', {
-      p_project_id: projectId,
-      p_user_id: selectedUserId,
-      p_role: selectedRole,
-    });
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      await logActivity({
-        action: 'add',
-        tableName: 'project_members',
-        recordId: projectId,
-        newValues: { user_id: selectedUserId, role: selectedRole },
-        userId: user.id,
-      });
-
-      const addedUser = availableUsers.find(u => u.id === selectedUserId);
-      
-      await notifyProjectMembers({
-        projectId,
-        title: 'New Team Member',
-        message: `${addedUser?.full_name || 'A new member'} has been added to ${projectName}`,
-        type: 'team',
-        referenceType: 'project',
-        referenceId: projectId,
-        excludeUserId: user.id,
-      });
-
+    try {
+      await projectsApi.addMember(projectId, { userId: selectedUserId, role: selectedRole });
       toast({ title: 'Success', description: 'Team member added' });
       setIsAddDialogOpen(false);
       setSelectedUserId('');
       setSelectedRole('viewer');
       fetchMembers();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsAdding(false);
     }
-
-    setIsAdding(false);
   };
 
   const handleRemoveMember = async () => {
     if (!memberToRemove || !user) return;
     setIsRemoving(true);
-
-    const { error } = await supabase
-      .from('project_members')
-      .delete()
-      .eq('id', memberToRemove.id);
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      await logActivity({
-        action: 'remove',
-        tableName: 'project_members',
-        recordId: projectId,
-        oldValues: { user_id: memberToRemove.user_id, role: memberToRemove.role },
-        userId: user.id,
-      });
-
-      await notifyProjectMembers({
-        projectId,
-        title: 'Team Member Removed',
-        message: `${memberToRemove.profile?.full_name || 'A team member'} has been removed from ${projectName}`,
-        type: 'team',
-        referenceType: 'project',
-        referenceId: projectId,
-        excludeUserId: user.id,
-      });
-
+    try {
+      await projectsApi.removeMember(projectId, memberToRemove.userId);
       toast({ title: 'Success', description: 'Team member removed' });
       setMemberToRemove(null);
       fetchMembers();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsRemoving(false);
     }
-
-    setIsRemoving(false);
   };
 
   const canManage = canManageTeam();
@@ -217,16 +149,12 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    {member.profile?.full_name?.charAt(0) ||
-                      member.profile?.email?.charAt(0) ||
-                      'U'}
+                    {member.userFullName?.charAt(0) || member.userEmail?.charAt(0) || 'U'}
                   </div>
                   <div>
-                    <p className="font-medium">
-                      {member.profile?.full_name || 'Unknown User'}
-                    </p>
+                    <p className="font-medium">{member.userFullName || 'Unknown User'}</p>
                     <p className="text-xs text-muted-foreground">
-                      {ROLE_DISPLAY_NAMES[member.role] || member.role}
+                      {ROLE_DISPLAY_NAMES[member.role as AppRole] || member.role}
                     </p>
                   </div>
                 </div>
@@ -269,9 +197,9 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
                       No available users
                     </SelectItem>
                   ) : (
-                    availableUsers.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        {user.full_name || user.email}
+                    availableUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.fullName || u.email}
                       </SelectItem>
                     ))
                   )}
@@ -313,8 +241,7 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
           <AlertDialogHeader>
             <AlertDialogTitle>Remove Team Member?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove {memberToRemove?.profile?.full_name || 'this user'} from the project.
-              They will no longer receive notifications or have access to project data.
+              This will remove {memberToRemove?.userFullName || 'this user'} from {projectName}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

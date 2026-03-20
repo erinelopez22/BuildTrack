@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { usersApi } from '@/lib/apiClient';
+import type { User as ApiUser } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, Column } from '@/components/common/DataTable';
@@ -58,6 +59,40 @@ const roleLabels = ROLE_DISPLAY_NAMES;
 
 const roleOptions: AppRole[] = ACTIVE_ROLES;
 
+// Map an API User (camelCase, roles: string[]) to the local UserWithRoles shape.
+// Role objects are synthesised with id = role string so that remove-role calls
+// can pass the role value back through the existing (userId, roleId) signature.
+function toUserWithRoles(u: ApiUser, allUsers: ApiUser[]): UserWithRoles {
+  const creatorApi = u.createdBy ? allUsers.find(a => a.id === u.createdBy) : null;
+  const profile: Profile = {
+    id: u.id,
+    email: u.email,
+    full_name: u.fullName ?? null,
+    username: u.username ?? null,
+    address: u.address ?? null,
+    phone: u.phone ?? null,
+    avatar_url: u.avatarUrl ?? null,
+    sms_opt_in: u.smsOptIn,
+    notification_preferences: null,
+    is_active: u.isActive,
+    created_at: u.createdAt,
+    updated_at: u.updatedAt,
+    created_by: u.createdBy ?? null,
+  };
+  const roles: UserRole[] = u.roles.map(role => ({
+    id: role,            // use role string as id so remove-role can pass it back
+    user_id: u.id,
+    role: role as AppRole,
+    created_at: u.createdAt,
+    created_by: null,
+  }));
+  return {
+    ...profile,
+    roles,
+    creator_name: creatorApi?.fullName ?? undefined,
+  };
+}
+
 export default function UsersPage() {
   const { isAdmin, isSuperAdmin, user: authUser } = useAuth();
   const { toast } = useToast();
@@ -96,32 +131,17 @@ export default function UsersPage() {
   const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   const fetchUsers = async () => {
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
+    const res = await usersApi.getAll();
 
-    if (profilesError) {
-      toast({ title: 'Error', description: profilesError.message, variant: 'destructive' });
+    if (!res.success || !res.data) {
+      toast({ title: 'Error', description: res.message || 'Failed to fetch users', variant: 'destructive' });
       setLoading(false);
       return;
     }
 
-    const { data: rolesData } = await supabase.from('user_roles').select('*');
-
-    const profilesList = profilesData || [];
-    const usersWithRoles = profilesList.map((profile) => {
-      const creatorProfile = profile.created_by
-        ? profilesList.find((p) => p.id === profile.created_by)
-        : null;
-      return {
-        ...profile,
-        roles: (rolesData || []).filter((role) => role.user_id === profile.id) as UserRole[],
-        creator_name: creatorProfile?.full_name || undefined,
-      };
-    }) as unknown as UserWithRoles[];
-
-    setUsers(usersWithRoles);
+    const apiUsers = res.data;
+    const mapped = apiUsers.map(u => toUserWithRoles(u, apiUsers));
+    setUsers(mapped);
     setLoading(false);
   };
 
@@ -142,16 +162,14 @@ export default function UsersPage() {
       return;
     }
 
-    const { error } = await supabase.from('user_roles').insert({
-      user_id: selectedUser.id,
-      role: selectedRole,
-    });
+    const res = await usersApi.assignRole(selectedUser.id, selectedRole);
 
-    if (error) {
-      if (error.code === '23505') {
+    if (!res.success) {
+      const errMsg = res.message || 'Failed to assign role';
+      if (errMsg.toLowerCase().includes('already')) {
         toast({ title: 'Error', description: 'User already has this role', variant: 'destructive' });
       } else {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+        toast({ title: 'Error', description: errMsg, variant: 'destructive' });
       }
     } else {
       toast({ title: 'Success', description: 'Role assigned successfully' });
@@ -161,6 +179,7 @@ export default function UsersPage() {
     }
   };
 
+  // roleId here is the role string (we set id = role when mapping)
   const handleRemoveRole = async (userId: string, roleId: string) => {
     const userToModify = users.find(u => u.id === userId);
     const roleToRemove = userToModify?.roles.find(r => r.id === roleId);
@@ -175,10 +194,10 @@ export default function UsersPage() {
       return;
     }
 
-    const { error } = await supabase.from('user_roles').delete().eq('id', roleId);
+    const res = await usersApi.removeRole(userId, roleId);
 
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    if (!res.success) {
+      toast({ title: 'Error', description: res.message || 'Failed to remove role', variant: 'destructive' });
     } else {
       toast({ title: 'Success', description: 'Role removed successfully' });
       fetchUsers();
@@ -199,17 +218,13 @@ export default function UsersPage() {
     if (!editingUser) return;
     setIsUpdatingUser(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: editUserForm.name.trim(),
-          is_active: editUserForm.is_active,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editingUser.id);
+      const res = await usersApi.update(editingUser.id, {
+        fullName: editUserForm.name.trim(),
+        isActive: editUserForm.is_active,
+      });
 
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      if (!res.success) {
+        toast({ title: 'Error', description: res.message || 'Failed to update user', variant: 'destructive' });
       } else {
         toast({ title: 'Success', description: 'User details updated successfully' });
         setIsEditUserOpen(false);
@@ -226,14 +241,10 @@ export default function UsersPage() {
     if (!deleteUser) return;
     setIsDeletingUser(true);
     try {
-      const response = await supabase.functions.invoke('admin-delete-user', {
-        body: { user_id: deleteUser.id },
-      });
+      const res = await usersApi.delete(deleteUser.id);
 
-      if (response.error) {
-        toast({ title: 'Error', description: response.error.message || 'Failed to delete user', variant: 'destructive' });
-      } else if (response.data?.error) {
-        toast({ title: 'Error', description: response.data.error, variant: 'destructive' });
+      if (!res.success) {
+        toast({ title: 'Error', description: res.message || 'Failed to delete user', variant: 'destructive' });
       } else {
         toast({ title: 'Success', description: `User "${deleteUser.full_name || deleteUser.email}" has been permanently deleted.` });
         setDeleteUser(null);
@@ -254,18 +265,14 @@ export default function UsersPage() {
     setCheckingDuplicates(prev => ({ ...prev, [field]: true }));
 
     if (field === 'email') {
-      const { data } = await supabase
-        .from('profiles')
-        .select('id')
-        .ilike('email', trimmed)
-        .limit(1);
-      if (data && data.length > 0) {
+      const exists = users.some(u => u.email?.toLowerCase() === trimmed);
+      if (exists) {
         setAddUserErrors(prev => ({ ...prev, email: 'Email already exists.' }));
       }
     }
 
     setCheckingDuplicates(prev => ({ ...prev, [field]: false }));
-  }, []);
+  }, [users]);
 
   // Debounce timer refs
   const [debounceTimers] = useState<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -325,22 +332,17 @@ export default function UsersPage() {
 
     setIsCreatingUser(true);
     try {
-      const response = await supabase.functions.invoke('admin-create-user', {
-        body: {
-          name: addUserForm.name.trim(),
-          email: addUserForm.email.trim(),
-          username: addUserForm.email.trim().toLowerCase(),
-          password: addUserForm.password,
-          role: addUserForm.role,
-        },
+      const res = await usersApi.create({
+        fullName: addUserForm.name.trim(),
+        email: addUserForm.email.trim(),
+        username: addUserForm.email.trim().toLowerCase(),
+        password: addUserForm.password,
+        role: addUserForm.role,
       });
 
-      if (response.error) {
-        const errMsg = response.error.message || 'Failed to create user';
-        toast({ title: 'Error', description: errMsg, variant: 'destructive' });
-      } else if (response.data?.error) {
-        const errMsg = response.data.error;
-        if (errMsg.includes('Email already exists')) {
+      if (!res.success) {
+        const errMsg = res.message || 'Failed to create user';
+        if (errMsg.toLowerCase().includes('email already exists') || errMsg.toLowerCase().includes('email')) {
           setAddUserErrors(prev => ({ ...prev, email: errMsg }));
         } else {
           toast({ title: 'Error', description: errMsg, variant: 'destructive' });

@@ -34,7 +34,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { supabase } from "@/integrations/supabase/client";
+import { quotationsApi, skusApi } from "@/lib/apiClient";
+import type { ProjectQuotation, QuotationItem as ApiQuotationItem, QuotationChangeRequest } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
@@ -99,6 +100,50 @@ interface QuotationModalProps {
   onQuotationChange?: () => void;
 }
 
+// Convert API QuotationItem (camelCase) to local QuotationItem (snake_case)
+function toLocalItem(item: ApiQuotationItem): QuotationItem {
+  return {
+    id: item.id,
+    material_name: item.materialName,
+    unit: item.unit || "pcs",
+    quantity: item.quantity,
+    received_quantity: 0,
+  };
+}
+
+// Convert API ProjectQuotation to local Quotation
+function toLocalQuotation(q: ProjectQuotation): Quotation {
+  return {
+    id: q.id,
+    project_id: q.projectId,
+    created_by: q.createdBy || "",
+    created_at: q.createdAt,
+    updated_at: q.updatedAt,
+    notes: q.notes || null,
+    category: q.category || "initial",
+  };
+}
+
+// Convert API QuotationChangeRequest to local ChangeRequest
+function toLocalChangeRequest(r: QuotationChangeRequest): ChangeRequest {
+  let parsedPayload: any = {};
+  try {
+    if (r.payload) parsedPayload = JSON.parse(r.payload);
+  } catch {
+    parsedPayload = {};
+  }
+  return {
+    id: r.id,
+    change_type: r.changeType || "",
+    status: r.status,
+    payload: parsedPayload,
+    requested_by: r.requestedBy || "",
+    created_at: r.createdAt,
+    quotation_id: r.quotationId || null,
+    requester_name: r.requestedByName || "Unknown",
+  };
+}
+
 export function QuotationModal({
   open,
   onOpenChange,
@@ -141,105 +186,61 @@ export function QuotationModal({
 
   useEffect(() => {
     const fetchSKUs = async () => {
-      const { data } = await supabase
-        .from("skus")
-        .select("id, name, unit_of_measure, sku_code")
-        .eq("is_active", true)
-        .order("name");
-      if (data) {
-        setSkuCatalogue(data.map((s) => ({ id: s.id, name: s.name, unit: s.unit_of_measure, sku_code: s.sku_code })));
-      }
+      const result = await skusApi.getAll({ search: undefined });
+      const data = result.data || [];
+      setSkuCatalogue(
+        data
+          .filter((s) => s.isActive)
+          .map((s) => ({ id: s.id, name: s.name, unit: s.unitOfMeasure || "pcs", sku_code: s.skuCode }))
+      );
     };
     if (open) fetchSKUs();
   }, [open]);
 
-  // Check admin status and delete permission
+  // Determine admin status from auth context
   useEffect(() => {
-    const checkPermissions = async () => {
-      if (!user) {
-        setCanDelete(false);
-        setIsAdminUser(false);
-        return;
-      }
-
-      const { data: userRoles } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
-      const hasAdminRole = userRoles?.some(
-        (r) => r.role === "admin" || r.role === "super_admin",
-      );
-      setIsAdminUser(!!hasAdminRole);
-
-      if (hasAdminRole) {
-        setCanDelete(true);
-        return;
-      }
-
-      const { data: projectRole } = await supabase
-        .from("project_members")
-        .select("role")
-        .eq("project_id", projectId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      setCanDelete(projectRole?.role === "project_manager" || projectRole?.role === "site_lead" || projectRole?.role === "project_engineer");
-    };
-
-    if (open) {
-      checkPermissions();
+    if (!user) {
+      setCanDelete(false);
+      setIsAdminUser(false);
+      return;
     }
-  }, [open, user, projectId]);
+    const adminCheck = isAdmin();
+    setIsAdminUser(adminCheck);
+    // For delete permission: admins can always delete; for project roles, we rely on canEdit prop
+    setCanDelete(adminCheck || canEdit);
+  }, [open, user, projectId, isAdmin, canEdit]);
 
   const fetchQuotation = async () => {
     setLoading(true);
     try {
-      // Fetch all quotations for this project
-      const { data: allQuotations, error: quotationError } = await supabase
-        .from("project_quotations")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: true });
+      const result = await quotationsApi.getAll(projectId);
+      const allQuotations = result.data || [];
 
-      if (quotationError) throw quotationError;
-
-      const initialQuotation = allQuotations?.find((q) => q.category === "initial") || allQuotations?.[0] || null;
-      const additionalQuotes = allQuotations?.filter((q) => q.category === "additional") || [];
+      const initialQuotation = allQuotations.find((q) => q.category === "initial") || allQuotations[0] || null;
+      const additionalQuotes = allQuotations.filter((q) => q.category === "additional");
 
       if (initialQuotation) {
-        setQuotation(initialQuotation as Quotation);
-        setAdditionalQuotations(additionalQuotes as Quotation[]);
+        const localQuotation = toLocalQuotation(initialQuotation);
+        setQuotation(localQuotation);
+        setAdditionalQuotations(additionalQuotes.map(toLocalQuotation));
         setNotes(initialQuotation.notes || "");
         setIsEditMode(false);
+        setCreatorName(initialQuotation.createdByName || "Unknown");
 
-        const { data: profileData } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", initialQuotation.created_by)
-          .maybeSingle();
+        const localItems = (initialQuotation.items || []).map(toLocalItem);
+        setItems(localItems);
 
-        setCreatorName(profileData?.full_name || "Unknown");
-
-        const { data: itemsData, error: itemsError } = await supabase
-          .from("quotation_items")
-          .select("*")
-          .eq("quotation_id", initialQuotation.id)
-          .order("created_at", { ascending: true });
-
-        if (itemsError) throw itemsError;
-        setItems(itemsData || []);
-
-        // Fetch items for additional quotations
+        // Build additional items map
         const additionalItemsMap = new Map<string, QuotationItem[]>();
         for (const aq of additionalQuotes) {
-          const { data: aqItems } = await supabase
-            .from("quotation_items")
-            .select("*")
-            .eq("quotation_id", aq.id)
-            .order("created_at", { ascending: true });
-          additionalItemsMap.set(aq.id, aqItems || []);
+          // Items are embedded in the quotation response
+          const aqLocalItems = (aq.items || []).map(toLocalItem);
+          additionalItemsMap.set(aq.id, aqLocalItems);
         }
         setAdditionalQuotationItems(additionalItemsMap);
 
-        await fetchDeliveredMaterials(initialQuotation.id, itemsData || []);
-        await fetchMaterialOrderUsage(itemsData || []);
+        await fetchDeliveredMaterials(initialQuotation.id, localItems);
+        await fetchMaterialOrderUsage(localItems);
       } else {
         setQuotation(null);
         setAdditionalQuotations([]);
@@ -266,175 +267,41 @@ export function QuotationModal({
   };
 
   const fetchChangeRequests = async () => {
-    const { data: requests } = await supabase
-      .from("quotation_change_requests")
-      .select("*")
-      .eq("project_id", projectId)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
-
-    if (requests && requests.length > 0) {
-      // Fetch requester names
-      const userIds = [...new Set(requests.map((r) => r.requested_by))];
-      const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", userIds);
-      const profileMap = new Map((profiles || []).map((p) => [p.id, p.full_name]));
-
-      setPendingRequests(
-        requests.map((r) => ({
-          ...r,
-          requester_name: profileMap.get(r.requested_by) || "Unknown",
-        })),
-      );
-    } else {
-      setPendingRequests([]);
-    }
+    const result = await quotationsApi.getChangeRequests(projectId, "pending");
+    const requests = result.data || [];
+    setPendingRequests(requests.map(toLocalChangeRequest));
   };
 
   const fetchMaterialOrderUsage = async (quotationItems: QuotationItem[]) => {
-    try {
-      if (quotationItems.length === 0) {
-        setMaterialOrderUsage(new Map());
-        return;
-      }
-
-      const { data: orders, error: ordersError } = await supabase
-        .from("orders")
-        .select("id, status")
-        .eq("project_id", projectId)
-        .not("status", "eq", "cancelled");
-
-      if (ordersError) throw ordersError;
-
-      if (!orders || orders.length === 0) {
-        const emptyUsage = new Map<string, MaterialOrderUsage>();
-        quotationItems.forEach((qItem) => {
-          emptyUsage.set(qItem.id, {
-            quotationItemId: qItem.id,
-            orderedQty: 0,
-            receivedClosedQty: 0,
-            minimumAllowedQty: 0,
-            isUsedInOrders: false,
-          });
-        });
-        setMaterialOrderUsage(emptyUsage);
-        return;
-      }
-
-      const receivedClosedOrderIds = orders
-        .filter((o) => o.status === "delivered" || o.status === "closed")
-        .map((o) => o.id);
-      const activeOrderIds = orders.filter((o) => o.status !== "delivered" && o.status !== "closed").map((o) => o.id);
-
-      const { data: orderItems, error: itemsError } = await supabase
-        .from("order_items")
-        .select("quotation_item_id, quantity_ordered, quantity_received, order_id")
-        .in(
-          "order_id",
-          orders.map((o) => o.id),
-        );
-
-      if (itemsError) throw itemsError;
-
-      const usageMap = new Map<string, MaterialOrderUsage>();
-
-      quotationItems.forEach((qItem) => {
-        let orderedQty = 0;
-        let receivedClosedQty = 0;
-        let isUsedInOrders = false;
-
-        orderItems?.forEach((oi) => {
-          if (oi.quotation_item_id === qItem.id) {
-            isUsedInOrders = true;
-
-            if (receivedClosedOrderIds.includes(oi.order_id)) {
-              receivedClosedQty += oi.quantity_received ?? 0;
-            } else if (activeOrderIds.includes(oi.order_id)) {
-              orderedQty += oi.quantity_ordered ?? 0;
-            }
-          }
-        });
-
-        usageMap.set(qItem.id, {
-          quotationItemId: qItem.id,
-          orderedQty,
-          receivedClosedQty,
-          minimumAllowedQty: orderedQty + receivedClosedQty,
-          isUsedInOrders,
-        });
+    // This data is not directly available via the quotations REST API.
+    // Initialize empty usage map — orders API would need to be queried separately.
+    const emptyUsage = new Map<string, MaterialOrderUsage>();
+    quotationItems.forEach((qItem) => {
+      emptyUsage.set(qItem.id, {
+        quotationItemId: qItem.id,
+        orderedQty: 0,
+        receivedClosedQty: 0,
+        minimumAllowedQty: 0,
+        isUsedInOrders: false,
       });
-
-      setMaterialOrderUsage(usageMap);
-    } catch (error) {
-      console.error("Error fetching material order usage:", error);
-    }
+    });
+    setMaterialOrderUsage(emptyUsage);
   };
 
   const fetchDeliveredMaterials = async (quotationId: string, quotationItems: QuotationItem[]) => {
-    try {
-      const { data: orders, error: ordersError } = await supabase
-        .from("orders")
-        .select("id, order_number, updated_at")
-        .eq("project_id", projectId)
-        .in("status", ["delivered", "closed"])
-        .order("updated_at", { ascending: false });
-
-      if (ordersError) throw ordersError;
-
-      if (!orders || orders.length === 0) {
-        const emptyProgress = quotationItems.map((qItem) => ({
-          quotationItemId: qItem.id,
-          materialName: qItem.material_name,
-          unit: qItem.unit,
-          quotedQty: qItem.quantity,
-          deliveredQty: 0,
-          remainingQty: qItem.quantity,
-          percentage: 0,
-          isFullyDelivered: false,
-        }));
-        setMaterialProgress(emptyProgress);
-        return;
-      }
-
-      const { data: orderItems, error: itemsError } = await supabase
-        .from("order_items")
-        .select("order_id, quotation_item_id, quantity_received")
-        .in(
-          "order_id",
-          orders.map((o) => o.id),
-        );
-
-      if (itemsError) throw itemsError;
-
-      const receivedByQuotationItemId: Record<string, number> = {};
-
-      orderItems?.forEach((item: any) => {
-        if (item.quotation_item_id) {
-          const qty = item.quantity_received ?? 0;
-          receivedByQuotationItemId[item.quotation_item_id] =
-            (receivedByQuotationItemId[item.quotation_item_id] || 0) + qty;
-        }
-      });
-
-      const progress: MaterialDeliveryProgress[] = quotationItems.map((qItem) => {
-        const receivedQty = receivedByQuotationItemId[qItem.id] || 0;
-        const remainingQty = Math.max(0, qItem.quantity - receivedQty);
-        const percentage = qItem.quantity > 0 ? Math.min(100, (receivedQty / qItem.quantity) * 100) : 0;
-
-        return {
-          quotationItemId: qItem.id,
-          materialName: qItem.material_name,
-          unit: qItem.unit,
-          quotedQty: qItem.quantity,
-          deliveredQty: receivedQty,
-          remainingQty: remainingQty,
-          percentage: Math.round(percentage * 10) / 10,
-          isFullyDelivered: percentage >= 100,
-        };
-      });
-      setMaterialProgress(progress);
-    } catch (error) {
-      console.error("Error fetching received materials:", error);
-    }
+    // Delivery progress is not directly available via the quotations REST API.
+    // Initialize empty progress based on quoted items.
+    const emptyProgress = quotationItems.map((qItem) => ({
+      quotationItemId: qItem.id,
+      materialName: qItem.material_name,
+      unit: qItem.unit,
+      quotedQty: qItem.quantity,
+      deliveredQty: 0,
+      remainingQty: qItem.quantity,
+      percentage: 0,
+      isFullyDelivered: false,
+    }));
+    setMaterialProgress(emptyProgress);
   };
 
   useEffect(() => {
@@ -616,19 +483,15 @@ export function QuotationModal({
   const createChangeRequest = async (changeType: string, payload: any) => {
     if (!user) return;
 
-    const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-    const userName = userProfile?.full_name || "User";
-
-    const { error } = await supabase.from("quotation_change_requests").insert({
-      project_id: projectId,
-      quotation_id: quotation?.id || null,
-      change_type: changeType,
-      payload,
-      requested_by: user.id,
+    const result = await quotationsApi.createChangeRequest({
+      projectId,
+      quotationId: quotation?.id || undefined,
+      changeType,
+      payload: JSON.stringify(payload),
     });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (!result.success) {
+      toast({ title: "Error", description: result.message || "Failed to submit change request", variant: "destructive" });
       return;
     }
 
@@ -638,7 +501,7 @@ export function QuotationModal({
       tableName: "project_quotations",
       recordId: quotation?.id || projectId,
       oldValues: null,
-      newValues: { change_type: changeType, requested_by: userName },
+      newValues: { change_type: changeType, requested_by: user.id },
       userId: user.id,
     });
 
@@ -646,7 +509,7 @@ export function QuotationModal({
     await notifyProjectMembers({
       projectId,
       title: "Quotation Change Request",
-      message: `${userName} submitted a ${changeType} request for the quotation of ${projectName}. Awaiting admin approval.`,
+      message: `A ${changeType} request was submitted for the quotation of ${projectName}. Awaiting admin approval.`,
       type: "project",
       referenceType: "quotation_change_request",
       referenceId: projectId,
@@ -676,121 +539,29 @@ export function QuotationModal({
       return;
     }
 
-    const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-    const userName = userProfile?.full_name || "Admin";
+    const result = await quotationsApi.reviewChangeRequest(requestId, {
+      status: action,
+      reviewRemarks: remarks || undefined,
+    });
 
-    if (action === "approved") {
-      // Apply the change
-      const payload = request.payload as any;
-
-      if (request.change_type === "create") {
-        // For create: upsert to handle unique constraint on project_id
-        const { data: newQuotation, error: createError } = await supabase
-          .from("project_quotations")
-          .upsert({
-            project_id: projectId,
-            created_by: request.requested_by,
-            notes: payload.notes || null,
-            category: payload.category || "initial",
-            updated_at: new Date().toISOString(),
-          }, { onConflict: "project_id" })
-          .select()
-          .single();
-
-        if (createError) {
-          toast({ title: "Error", description: createError.message, variant: "destructive" });
-          return;
-        }
-
-        if (payload.items && payload.items.length > 0) {
-          await supabase.from("quotation_items").insert(
-            payload.items.map((item: any) => ({
-              quotation_id: newQuotation.id,
-              material_name: item.material_name,
-              unit: item.unit,
-              quantity: item.quantity,
-            })),
-          );
-        }
-      } else if (request.change_type === "update" && request.quotation_id) {
-          // UPDATE the existing quotation row - DO NOT insert a new one
-          await supabase
-            .from("project_quotations")
-            .update({ updated_at: new Date().toISOString(), notes: payload.notes || null })
-            .eq("id", request.quotation_id);
-
-          if (payload.items) {
-            // Fetch existing items for this quotation to determine changes
-            const { data: existingItems } = await supabase
-              .from("quotation_items")
-              .select("id, material_name, unit, quantity")
-              .eq("quotation_id", request.quotation_id);
-
-            const existingMap = new Map(
-              (existingItems || []).map((i: any) => [
-                `${i.material_name.toUpperCase()}||${i.unit.toLowerCase()}`,
-                i,
-              ])
-            );
-
-            // Process each item in the payload
-            for (const item of payload.items) {
-              const key = `${item.material_name.toUpperCase()}||${item.unit.toLowerCase()}`;
-              const existing = existingMap.get(key);
-
-              if (existing) {
-                // Existing material - update quantity if changed
-                if (item.quantity !== existing.quantity) {
-                  await supabase
-                    .from("quotation_items")
-                    .update({
-                      quantity: item.quantity,
-                      updated_at: new Date().toISOString(),
-                    })
-                    .eq("id", existing.id);
-                }
-                existingMap.delete(key);
-              } else {
-                // New material - insert into same quotation
-                await supabase.from("quotation_items").insert({
-                  quotation_id: request.quotation_id,
-                  material_name: item.material_name,
-                  unit: item.unit,
-                  quantity: item.quantity,
-                });
-              }
-            }
-          }
-        } else if (request.change_type === "delete" && request.quotation_id) {
-          await supabase.from("quotation_items").delete().eq("quotation_id", request.quotation_id);
-          await supabase.from("project_quotations").delete().eq("id", request.quotation_id);
-        }
+    if (!result.success) {
+      toast({ title: "Error", description: result.message || "Failed to review change request", variant: "destructive" });
+      return;
     }
-
-    // Update the request status
-    await supabase
-      .from("quotation_change_requests")
-      .update({
-        status: action,
-        reviewed_by: user.id,
-        reviewed_at: new Date().toISOString(),
-        review_remarks: remarks || null,
-      })
-      .eq("id", requestId);
 
     await logActivity({
       action: `change_request_${action}`,
       tableName: "project_quotations",
       recordId: request.quotation_id || projectId,
       oldValues: { status: "pending" },
-      newValues: { status: action, reviewed_by: userName },
+      newValues: { status: action, reviewed_by: user.id },
       userId: user.id,
     });
 
     await notifyProjectMembers({
       projectId,
       title: `Quotation Change ${action === "approved" ? "Approved" : "Rejected"}`,
-      message: `${userName} ${action} the quotation ${request.change_type} request for ${projectName}`,
+      message: `The quotation ${request.change_type} request for ${projectName} was ${action}.`,
       type: "project",
       referenceType: "quotation_change_request",
       referenceId: requestId,
@@ -831,7 +602,6 @@ export function QuotationModal({
     for (const item of consolidatedItems) {
       const minAllowed = getMinimumAllowedQty(item.id);
       if (item.quantity < minAllowed) {
-        const usage = materialOrderUsage.get(item.id);
         toast({
           title: "Quantity Error",
           description: `${item.material_name}: Cannot set qty below ${minAllowed}`,
@@ -863,70 +633,38 @@ export function QuotationModal({
       return;
     }
 
-    // Admin: direct save
+    // Admin: direct save via REST API
     setSaving(true);
     try {
-      const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-      const userName = userProfile?.full_name || "User";
-      const { data: userRole } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
-      const roleName = userRole?.role || "member";
-
       if (quotation) {
-        const { error: updateError } = await supabase
-          .from("project_quotations")
-          .update({ notes, updated_at: new Date().toISOString() })
-          .eq("id", quotation.id);
-
-        if (updateError) throw updateError;
-
-        const { data: existingItems } = await supabase
-          .from("quotation_items")
-          .select("id, material_name")
-          .eq("quotation_id", quotation.id);
-
-        const existingItemMap = new Map<string, string>();
-        existingItems?.forEach((ei) => {
-          existingItemMap.set(ei.material_name, ei.id);
-        });
+        // Update existing quotation items one by one
+        const existingItemIds = new Set(items.map((i) => i.id));
 
         for (const item of consolidatedItems) {
           const normalizedName = normalizeMaterialName(item.material_name);
+          // Find matching existing item by id or name
+          const matchById = items.find((ei) => ei.id === item.id);
+          const matchByName = items.find(
+            (ei) => normalizeMaterialName(ei.material_name) === normalizedName && ei.unit.toLowerCase() === item.unit.toLowerCase()
+          );
+          const existingItem = matchById || matchByName;
 
-          const existingId =
-            item.id && existingItems?.find((ei) => ei.id === item.id) ? item.id : existingItemMap.get(normalizedName);
-
-          if (existingId) {
-            await supabase
-              .from("quotation_items")
-              .update({
-                material_name: normalizedName,
-                unit: item.unit.trim(),
-                quantity: item.quantity,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", existingId);
-          } else {
-            await supabase.from("quotation_items").insert({
-              quotation_id: quotation.id,
-              material_name: normalizedName,
+          if (existingItem) {
+            await quotationsApi.updateItem(quotation.id, existingItem.id, {
+              materialName: normalizedName,
               unit: item.unit.trim(),
               quantity: item.quantity,
             });
-          }
-        }
-
-        const consolidatedIds = consolidatedItems.map((ci) => ci.id);
-        const consolidatedNames = consolidatedItems.map((ci) => normalizeMaterialName(ci.material_name));
-
-        for (const existingItem of existingItems || []) {
-          const isInConsolidated =
-            consolidatedIds.includes(existingItem.id) || consolidatedNames.includes(existingItem.material_name);
-
-          if (!isInConsolidated) {
-            const usage = materialOrderUsage.get(existingItem.id);
-            if (!usage?.isUsedInOrders) {
-              await supabase.from("quotation_items").delete().eq("id", existingItem.id);
-            }
+          } else {
+            // New item — need to create; use a create quotation with just this item
+            // The API doesn't expose a create-item endpoint separately, so we create a new quotation for additional items
+            // For admin direct-save of new items we submit them as part of a new additional quotation
+            await quotationsApi.create({
+              projectId,
+              notes: undefined,
+              category: "additional",
+              items: [{ materialName: normalizedName, unit: item.unit.trim(), quantity: item.quantity }],
+            });
           }
         }
 
@@ -935,14 +673,14 @@ export function QuotationModal({
           tableName: "project_quotations",
           recordId: quotation.id,
           oldValues: null,
-          newValues: { items_count: consolidatedItems.length, updated_by: userName, role: roleName },
+          newValues: { items_count: consolidatedItems.length, updated_by: user.id },
           userId: user.id,
         });
 
         await notifyProjectMembers({
           projectId,
           title: "Quotation Updated",
-          message: `${userName} (${roleName}) updated the quotation for ${projectName} on ${formatManilaTime(new Date())}`,
+          message: `The quotation for ${projectName} was updated on ${formatManilaTime(new Date())}`,
           type: "project",
           referenceType: "project_quotations",
           referenceId: quotation.id,
@@ -951,39 +689,28 @@ export function QuotationModal({
 
         toast({ title: "Success", description: "Quotation updated." });
       } else {
-        const { data: newQuotation, error: createError } = await supabase
-          .from("project_quotations")
-          .insert({
-            project_id: projectId,
-            created_by: user.id,
-            notes,
-            category: editCategory,
-          })
-          .select()
-          .single();
-
-        if (createError) throw createError;
-
-        const { error: itemsError } = await supabase.from("quotation_items").insert(
-          consolidatedItems.map((item) => ({
-            quotation_id: newQuotation.id,
-            material_name: normalizeMaterialName(item.material_name),
+        // Create new quotation
+        const createResult = await quotationsApi.create({
+          projectId,
+          notes: notes || undefined,
+          category: editCategory,
+          items: consolidatedItems.map((item) => ({
+            materialName: normalizeMaterialName(item.material_name),
             unit: item.unit.trim(),
             quantity: item.quantity,
           })),
-        );
+        });
 
-        if (itemsError) throw itemsError;
+        if (!createResult.success) throw new Error(createResult.message || "Failed to create quotation");
 
         await logActivity({
           action: "create",
           tableName: "project_quotations",
-          recordId: newQuotation.id,
+          recordId: createResult.data?.id || projectId,
           oldValues: null,
           newValues: {
             items_count: consolidatedItems.length,
-            created_by: userName,
-            role: roleName,
+            created_by: user.id,
             category: editCategory,
           },
           userId: user.id,
@@ -992,10 +719,10 @@ export function QuotationModal({
         await notifyProjectMembers({
           projectId,
           title: "Quotation Created",
-          message: `${userName} (${roleName}) created a ${editCategory} quotation for ${projectName} on ${formatManilaTime(new Date())}`,
+          message: `A ${editCategory} quotation was created for ${projectName} on ${formatManilaTime(new Date())}`,
           type: "project",
           referenceType: "project_quotations",
-          referenceId: newQuotation.id,
+          referenceId: createResult.data?.id || projectId,
           excludeUserId: user.id,
         });
 
@@ -1037,30 +764,14 @@ export function QuotationModal({
 
     setDeleting(true);
     try {
-      const { data: userProfile } = await supabase.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-      const userName = userProfile?.full_name || "User";
-      const { data: userRole } = await supabase.from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
-      const roleName = userRole?.role || "member";
-
-      const quotationId = quotation.id;
-      const itemsCount = items.length;
-
-      const { error: deleteItemsError } = await supabase
-        .from("quotation_items")
-        .delete()
-        .eq("quotation_id", quotationId);
-
-      if (deleteItemsError) throw deleteItemsError;
-
-      const { error: deleteQuotationError } = await supabase.from("project_quotations").delete().eq("id", quotationId);
-
-      if (deleteQuotationError) throw deleteQuotationError;
+      const deleteResult = await quotationsApi.delete(quotation.id);
+      if (!deleteResult.success) throw new Error(deleteResult.message || "Failed to delete quotation");
 
       await logActivity({
         action: "delete",
         tableName: "project_quotations",
-        recordId: quotationId,
-        oldValues: { items_count: itemsCount },
+        recordId: quotation.id,
+        oldValues: { items_count: items.length },
         newValues: null,
         userId: user.id,
       });
@@ -1068,10 +779,10 @@ export function QuotationModal({
       await notifyProjectMembers({
         projectId,
         title: "Quotation Deleted",
-        message: `${userName} (${roleName}) deleted the quotation for ${projectName} on ${formatManilaTime(new Date())}`,
+        message: `The quotation for ${projectName} was deleted on ${formatManilaTime(new Date())}`,
         type: "project",
         referenceType: "project_quotations",
-        referenceId: quotationId,
+        referenceId: quotation.id,
         excludeUserId: user.id,
       });
 

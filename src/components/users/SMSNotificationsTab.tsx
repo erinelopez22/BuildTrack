@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { usersApi } from "@/lib/apiClient";
+import type { User } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { DataTable, Column } from "@/components/common/DataTable";
@@ -9,9 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Search, Phone, Loader2, Save, Trash2, SendHorizonal } from "lucide-react";
+import { Search, Phone, Loader2, Save, Trash2 } from "lucide-react";
 import { ROLE_DISPLAY_NAMES } from "@/types/database";
-import type { AppRole, UserRole } from "@/types/database";
+import type { AppRole } from "@/types/database";
 import { TestNotificationModal } from "./TestNotificationModal";
 
 interface SMSUser {
@@ -20,10 +21,7 @@ interface SMSUser {
   email: string;
   phone: string | null;
   sms_opt_in: boolean;
-  mobile_updated_at: string | null;
-  mobile_updated_by: string | null;
-  roles: UserRole[];
-  updater_name?: string;
+  roles: string[];
 }
 
 const E164_REGEX = /^\+[1-9]\d{7,14}$/;
@@ -42,30 +40,21 @@ export function SMSNotificationsTab() {
   const [testModalOpen, setTestModalOpen] = useState(false);
 
   const fetchUsers = useCallback(async () => {
-    const [{ data: profiles }, { data: roles }] = await Promise.all([
-      supabase.from("profiles").select("id, full_name, email, phone, sms_opt_in, mobile_updated_at, mobile_updated_by").order("full_name"),
-      supabase.from("user_roles").select("*"),
-    ]);
+    const res = await usersApi.getAll();
+    if (!res.success || !res.data) {
+      toast({ title: "Error", description: res.message || "Failed to load users", variant: "destructive" });
+      setLoading(false);
+      return;
+    }
 
-    const profilesList = profiles || [];
-    const rolesList = (roles || []) as UserRole[];
-
-    const mapped: SMSUser[] = profilesList.map((p) => {
-      const updaterProfile = p.mobile_updated_by
-        ? profilesList.find((pp) => pp.id === p.mobile_updated_by)
-        : null;
-      return {
-        id: p.id,
-        full_name: p.full_name,
-        email: p.email,
-        phone: p.phone,
-        sms_opt_in: p.sms_opt_in ?? false,
-        mobile_updated_at: p.mobile_updated_at,
-        mobile_updated_by: p.mobile_updated_by,
-        roles: rolesList.filter((r) => r.user_id === p.id),
-        updater_name: updaterProfile?.full_name || undefined,
-      };
-    });
+    const mapped: SMSUser[] = res.data.map((u: User) => ({
+      id: u.id,
+      full_name: u.fullName || null,
+      email: u.email,
+      phone: u.phone || null,
+      sms_opt_in: u.smsOptIn,
+      roles: u.roles,
+    }));
 
     setUsers(mapped);
     setLoading(false);
@@ -105,18 +94,13 @@ export function SMSNotificationsTab() {
     }
 
     setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        phone: trimmedPhone || null,
-        sms_opt_in: trimmedPhone ? editSmsOptIn : false,
-        mobile_updated_at: new Date().toISOString(),
-        mobile_updated_by: user.id,
-      })
-      .eq("id", editingUser.id);
+    const res = await usersApi.update(editingUser.id, {
+      phone: trimmedPhone || undefined,
+      smsOptIn: trimmedPhone ? editSmsOptIn : false,
+    });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (!res.success) {
+      toast({ title: "Error", description: res.message || "Failed to update SMS settings", variant: "destructive" });
     } else {
       toast({ title: "Success", description: "SMS settings updated." });
       setEditingUser(null);
@@ -129,18 +113,13 @@ export function SMSNotificationsTab() {
     if (!editingUser || !user) return;
     setSaving(true);
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        phone: null,
-        sms_opt_in: false,
-        mobile_updated_at: new Date().toISOString(),
-        mobile_updated_by: user.id,
-      })
-      .eq("id", editingUser.id);
+    const res = await usersApi.update(editingUser.id, {
+      phone: undefined,
+      smsOptIn: false,
+    });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (!res.success) {
+      toast({ title: "Error", description: res.message || "Failed to unassign mobile number", variant: "destructive" });
     } else {
       toast({ title: "Success", description: "Mobile number unassigned." });
       setEditingUser(null);
@@ -156,17 +135,10 @@ export function SMSNotificationsTab() {
       return;
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        sms_opt_in: checked,
-        mobile_updated_at: new Date().toISOString(),
-        mobile_updated_by: user.id,
-      })
-      .eq("id", u.id);
+    const res = await usersApi.update(u.id, { smsOptIn: checked });
 
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (!res.success) {
+      toast({ title: "Error", description: res.message || "Failed to update SMS opt-in", variant: "destructive" });
     } else {
       fetchUsers();
     }
@@ -195,7 +167,7 @@ export function SMSNotificationsTab() {
       u.full_name?.toLowerCase().includes(q) ||
       u.email.toLowerCase().includes(q) ||
       u.phone?.includes(q) ||
-      u.roles.some((r) => ROLE_DISPLAY_NAMES[r.role]?.toLowerCase().includes(q))
+      u.roles.some((r) => ROLE_DISPLAY_NAMES[r as AppRole]?.toLowerCase().includes(q))
     );
   });
 
@@ -217,8 +189,8 @@ export function SMSNotificationsTab() {
         <div className="flex flex-wrap gap-1">
           {u.roles.length > 0
             ? u.roles.map((r) => (
-                <Badge key={r.id} variant="secondary" className="text-xs">
-                  {ROLE_DISPLAY_NAMES[r.role]}
+                <Badge key={r} variant="secondary" className="text-xs">
+                  {ROLE_DISPLAY_NAMES[r as AppRole] ?? r}
                 </Badge>
               ))
             : <span className="text-muted-foreground text-xs">No roles</span>}
@@ -249,17 +221,8 @@ export function SMSNotificationsTab() {
     {
       key: "updated",
       header: "Last Updated",
-      render: (u) => (
-        <div className="text-xs text-muted-foreground">
-          {u.mobile_updated_at ? (
-            <>
-              <p>{formatManilaTime(u.mobile_updated_at)}</p>
-              {u.updater_name && <p>by {u.updater_name}</p>}
-            </>
-          ) : (
-            "-"
-          )}
-        </div>
+      render: () => (
+        <div className="text-xs text-muted-foreground">-</div>
       ),
     },
     {

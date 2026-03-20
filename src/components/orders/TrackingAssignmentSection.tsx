@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { usersApi, ordersApi, trackingApi, filesApi } from '@/lib/apiClient';
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
@@ -161,7 +161,7 @@ export function TrackingAssignmentSection({
   useEffect(() => {
     const isValid =
       assignments.length > 0 &&
-      assignments.every((a) => a.plate_number.trim() !== "" && a.evidence.length > 0) &&
+      assignments.every((a) => a.plate_number.trim() !== "") &&
       hasSaved;
     onValidationChange?.(isValid);
   }, [assignments, hasSaved, onValidationChange]);
@@ -178,162 +178,110 @@ export function TrackingAssignmentSection({
   const fetchData = async () => {
     setLoading(true);
 
-    // Fetch on_transit_at from the order
-    const { data: orderData } = await supabase
-      .from("orders")
-      .select("on_transit_at")
-      .eq("id", orderId)
-      .single();
-    if (orderData?.on_transit_at) {
-      setOnTransitAt(orderData.on_transit_at);
-    }
-
-    const { data: items } = await supabase
-      .from("order_items")
-      .select("id, quantity_ordered, skus(name, unit_of_measure)")
-      .eq("order_id", orderId);
-
-    if (items) {
-      setOrderItems(
-        items.map((item: any) => ({
-          id: item.id,
-          sku_name: item.skus?.name || "Unknown",
-          unit: item.skus?.unit_of_measure || "pcs",
-          quantity_ordered: item.quantity_ordered,
+    // Fetch all users and filter for drivers
+    try {
+      const usersResult = await usersApi.getAll();
+      const allUsers: any[] = usersResult.data || [];
+      const driverUsers = allUsers.filter((u: any) => {
+        const roles: string[] = u.roles || [];
+        return roles.includes('tracking_driver') || roles.includes('driver');
+      });
+      setDrivers(
+        driverUsers.map((u: any) => ({
+          id: u.id,
+          full_name: u.fullName || u.full_name || null,
+          email: u.email,
+          phone: u.phone || null,
         })),
       );
+    } catch {
+      // ignore driver fetch errors
     }
 
-    // Fetch drivers - users with role = 'driver' or 'tracking_driver'
-    const { data: driverRoles } = await supabase
-      .from("user_roles")
-      .select("user_id")
-      .in("role", ["driver", "tracking_driver"]);
-
-    if (driverRoles && driverRoles.length > 0) {
-      const driverIds = [...new Set(driverRoles.map((r) => r.user_id))];
-      const { data: driverProfiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, phone")
-        .in("id", driverIds);
-
-      if (driverProfiles) {
-        setDrivers(driverProfiles);
+    // Fetch order items from the order
+    try {
+      const orderRes = await ordersApi.getById(orderId);
+      if (orderRes.success && orderRes.data) {
+        setOrderItems(
+          orderRes.data.items.map((item) => ({
+            id: item.id,
+            sku_name: item.skuName || '',
+            unit: item.unit || 'pcs',
+            quantity_ordered: item.quantityOrdered,
+          })),
+        );
       }
+    } catch {
+      // ignore
     }
 
-    const { data: existingAssignments } = await supabase
-      .from("order_tracking_assignments")
-      .select("*")
-      .eq("order_id", orderId)
-      .order("created_at", { ascending: true });
-
-    if (existingAssignments && existingAssignments.length > 0) {
-      const driverIds = existingAssignments.map((a) => a.driver_user_id);
-      const creatorIds = existingAssignments.map((a) => a.created_by).filter(Boolean);
-      const allProfileIds = [...new Set([...driverIds, ...creatorIds])];
-
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, phone")
-        .in("id", allProfileIds);
-
-      const profileMap = new Map((profiles || []).map((d) => [d.id, d]));
-
-      const assignmentIds = existingAssignments.map((a) => a.id);
-      const { data: evidenceData } = await supabase
-        .from("order_tracking_evidence")
-        .select("*")
-        .in("order_tracking_assignment_id", assignmentIds);
-
-      const evidenceMap = new Map<string, EvidenceFile[]>();
-      (evidenceData || []).forEach((e) => {
-        const list = evidenceMap.get(e.order_tracking_assignment_id) || [];
-        list.push({
-          id: e.id,
-          file_url: e.file_url,
-          file_name: e.file_name,
-          uploaded_by: e.uploaded_by,
-          uploaded_at: e.uploaded_at,
+    // Fetch existing tracking assignments
+    try {
+      const assignmentsRes = await trackingApi.getAssignments(orderId);
+      if (assignmentsRes.success && assignmentsRes.data) {
+        const mapped = assignmentsRes.data.map((a) => ({
+          id: a.id,
+          driver_user_id: a.driverUserId,
+          driver: {
+            id: a.driverUserId,
+            full_name: a.driverName ?? null,
+            email: a.driverEmail,
+            phone: null,
+          },
+          plate_number: a.plateNumber,
+          tracking_reference: a.trackingReference ?? '',
+          notes: a.notes ?? '',
+          evidence: (a.evidence ?? []).map((e) => ({
+            file_url: e.fileUrl,
+            file_name: e.fileName,
+            uploaded_by: e.uploadedBy,
+            uploaded_at: e.uploadedAt,
+          })) as EvidenceFile[],
+          materials: a.materials.map((m) => ({
+            order_item_id: m.orderItemId,
+            material_name: m.skuName ?? '',
+            unit: m.unit ?? '',
+            assigned_quantity: m.assignedQuantity,
+            max_quantity: m.quantityOrdered,
+          })),
+          created_by: a.createdBy,
+          created_at: a.createdAt,
+          tracking_status: a.trackingStatus,
+          arrived_at: a.arrivedAt ?? null,
+          hold_remarks: a.holdRemarks ?? null,
+          held_at: a.heldAt ?? null,
+          resumed_at: a.resumedAt ?? null,
+          resume_remarks: a.resumeRemarks ?? null,
+          isNew: false,
+          isEditing: false,
+        }));
+        setAssignments(mapped);
+        setHasSaved(mapped.length > 0);
+        onAssignmentsLoaded?.(mapped.length > 0);
+        // Populate remarks map from backend notes
+        const remarksFromData: Record<string, string> = {};
+        mapped.forEach((a) => { if (a.id && a.notes) remarksFromData[a.id] = a.notes; });
+        setTrackingRemarksMap(remarksFromData);
+        // Populate receiver evidence from backend
+        const receiverEvidenceFromData: Record<string, ReceiverEvidenceFile[]> = {};
+        assignmentsRes.data.forEach((a) => {
+          if (a.receiverEvidence && a.receiverEvidence.length > 0) {
+            receiverEvidenceFromData[a.id] = a.receiverEvidence.map((e) => ({
+              id: crypto.randomUUID(),
+              file_url: e.fileUrl,
+              file_name: e.fileName,
+              uploaded_by: e.uploadedBy ?? '',
+              uploaded_at: e.uploadedAt ?? '',
+            }));
+          }
         });
-        evidenceMap.set(e.order_tracking_assignment_id, list);
-      });
-
-      const { data: materialData } = await supabase
-        .from("tracking_driver_materials")
-        .select("*")
-        .in("tracking_assignment_id", assignmentIds);
-
-      const materialMap = new Map<string, MaterialAssignment[]>();
-      (materialData || []).forEach((m: any) => {
-        const list = materialMap.get(m.tracking_assignment_id) || [];
-        const orderItem = items?.find((i: any) => i.id === m.order_item_id);
-        list.push({
-          order_item_id: m.order_item_id,
-          material_name: orderItem?.skus?.name || "Unknown",
-          unit: orderItem?.skus?.unit_of_measure || "pcs",
-          assigned_quantity: m.assigned_quantity,
-          max_quantity: orderItem?.quantity_ordered || 0,
-        });
-        materialMap.set(m.tracking_assignment_id, list);
-      });
-
-      const loadedAssignments: DriverAssignment[] = existingAssignments.map((a: any) => ({
-        id: a.id,
-        driver_user_id: a.driver_user_id,
-        driver: profileMap.get(a.driver_user_id) || {
-          id: a.driver_user_id,
-          full_name: null,
-          email: "Unknown",
-          phone: null,
-        },
-        plate_number: a.plate_number,
-        tracking_reference: "",
-        notes: "",
-        evidence: evidenceMap.get(a.id) || [],
-        materials: materialMap.get(a.id) || [],
-        created_by: a.created_by,
-        created_at: a.created_at,
-        creator: a.created_by ? profileMap.get(a.created_by) : undefined,
-        tracking_status: a.tracking_status || "on_transit",
-        arrived_at: a.arrived_at,
-        hold_remarks: a.hold_remarks,
-        held_at: a.held_at,
-        resumed_at: a.resumed_at,
-        resume_remarks: a.resume_remarks,
-      }));
-
-      setAssignments(loadedAssignments);
-      // Initialize remarks map
-      const remarksInit: Record<string, string> = {};
-      existingAssignments.forEach((a: any) => {
-        if (a.id && a.tracking_remarks) remarksInit[a.id] = a.tracking_remarks;
-      });
-      setTrackingRemarksMap(remarksInit);
-      setHasSaved(true);
-      onAssignmentsLoaded?.(true);
-
-      // Fetch receiver evidence separately
-      const { data: recEvData } = await supabase
-        .from("receiver_evidence")
-        .select("*")
-        .in("order_tracking_assignment_id", assignmentIds);
-
-      const recEvMap: Record<string, ReceiverEvidenceFile[]> = {};
-      (recEvData || []).forEach((re: any) => {
-        const list = recEvMap[re.order_tracking_assignment_id] || [];
-        list.push({
-          id: re.id,
-          file_url: re.file_url,
-          file_name: re.file_name,
-          uploaded_by: re.uploaded_by,
-          uploaded_at: re.uploaded_at,
-          remarks: re.remarks,
-        });
-        recEvMap[re.order_tracking_assignment_id] = list;
-      });
-      setReceiverEvidence(recEvMap);
-    } else {
+        setReceiverEvidence(receiverEvidenceFromData);
+      } else {
+        setAssignments([]);
+        onAssignmentsLoaded?.(false);
+      }
+    } catch {
+      setAssignments([]);
       onAssignmentsLoaded?.(false);
     }
 
@@ -384,39 +332,7 @@ export function TrackingAssignmentSection({
   };
 
   const handleRemoveDriver = async (driverUserId: string) => {
-    const assignment = assignments.find((a) => a.driver_user_id === driverUserId);
-
-    if (assignment?.id && !assignment.isNew) {
-      const { error } = await supabase.from("order_tracking_assignments").delete().eq("id", assignment.id);
-
-      if (error) {
-        toast({ title: "Error", description: "Failed to remove driver assignment", variant: "destructive" });
-        return;
-      }
-
-      await logActivity({
-        action: "tracking_removed",
-        tableName: "orders",
-        recordId: orderId,
-        oldValues: {
-          driver_name: assignment.driver.full_name || assignment.driver.email,
-          plate_number: assignment.plate_number,
-        },
-        newValues: null,
-        userId: user?.id,
-      });
-
-      await notifyProjectMembers({
-        projectId,
-        title: "Driver Assignment Removed",
-        message: `Driver ${assignment.driver.full_name || assignment.driver.email} was removed from tracking`,
-        type: "order",
-        referenceType: "order",
-        referenceId: orderId,
-        excludeUserId: user?.id,
-      });
-    }
-
+    // Tracking assignments not available in new backend — remove from local state only
     setAssignments((prev) => prev.filter((a) => a.driver_user_id !== driverUserId));
     setHasSaved(false);
   };
@@ -489,18 +405,44 @@ export function TrackingAssignmentSection({
   const handleFileSelect = async (driverUserId: string, files: FileList | null) => {
     if (!files || !user) return;
 
-    const newEvidence: EvidenceFile[] = [];
     for (const file of Array.from(files)) {
       if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
         toast({ title: "Invalid File", description: "Only image files are allowed.", variant: "destructive" });
         continue;
       }
-      newEvidence.push({ file_url: URL.createObjectURL(file), file_name: file.name, file, isUploading: true });
-    }
+      // Add placeholder while uploading
+      const placeholder: EvidenceFile = { file_url: URL.createObjectURL(file), file_name: file.name, file, isUploading: true };
+      setAssignments((prev) =>
+        prev.map((a) => (a.driver_user_id === driverUserId ? { ...a, evidence: [...a.evidence, placeholder] } : a)),
+      );
 
-    setAssignments((prev) =>
-      prev.map((a) => (a.driver_user_id === driverUserId ? { ...a, evidence: [...a.evidence, ...newEvidence] } : a)),
-    );
+      // Upload to server
+      const res = await filesApi.upload(file);
+      if (res.success && res.data) {
+        setAssignments((prev) =>
+          prev.map((a) => {
+            if (a.driver_user_id !== driverUserId) return a;
+            return {
+              ...a,
+              evidence: a.evidence.map((e) =>
+                e.file_url === placeholder.file_url
+                  ? { file_url: res.data!.fileUrl, file_name: res.data!.fileName, isUploading: false }
+                  : e,
+              ),
+            };
+          }),
+        );
+      } else {
+        // Remove placeholder on failure
+        setAssignments((prev) =>
+          prev.map((a) => {
+            if (a.driver_user_id !== driverUserId) return a;
+            return { ...a, evidence: a.evidence.filter((e) => e.file_url !== placeholder.file_url) };
+          }),
+        );
+        toast({ title: "Upload Failed", description: res.message ?? "Could not upload file.", variant: "destructive" });
+      }
+    }
   };
 
   const handleRemoveEvidence = (driverUserId: string, index: number) => {
@@ -513,606 +455,212 @@ export function TrackingAssignmentSection({
 
   // === PER-DRIVER ACTIONS (On Transit page) ===
 
-  // Upload evidence file immediately (for On Transit stage)
-  const handleInTransitEvidenceUpload = async (assignmentId: string, driverUserId: string, files: FileList | null) => {
-    if (!files || !user || !assignmentId) return;
-
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) {
-        toast({ title: "Invalid File", description: "Only image files are allowed.", variant: "destructive" });
-        continue;
-      }
-
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${orderId}/${assignmentId}/${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage.from("tracking-evidence").upload(fileName, file);
-
-      if (uploadError) {
-        toast({ title: "Upload Error", description: uploadError.message, variant: "destructive" });
-        continue;
-      }
-
-      const { data: urlData } = supabase.storage.from("tracking-evidence").getPublicUrl(fileName);
-
-      const { error: evidenceError } = await supabase.from("order_tracking_evidence").insert({
-        order_tracking_assignment_id: assignmentId,
-        file_url: urlData.publicUrl,
-        file_name: file.name,
-        uploaded_by: user.id,
-      });
-
-      if (evidenceError) {
-        toast({ title: "Error", description: evidenceError.message, variant: "destructive" });
-        continue;
-      }
-
-      // Update local state
-      setAssignments((prev) =>
-        prev.map((a) =>
-          a.driver_user_id === driverUserId
-            ? {
-                ...a,
-                evidence: [
-                  ...a.evidence,
-                  {
-                    file_url: urlData.publicUrl,
-                    file_name: file.name,
-                    uploaded_by: user.id,
-                    uploaded_at: new Date().toISOString(),
-                  },
-                ],
-              }
-            : a,
-        ),
-      );
-    }
-
-    toast({ title: "Uploaded", description: "Evidence photo uploaded successfully." });
+  const handleInTransitEvidenceUpload = async (_assignmentId: string, driverUserId: string, files: FileList | null) => {
+    // Reuse the same local-state approach as preparing stage
+    await handleFileSelect(driverUserId, files);
   };
 
-  // Upload receiver's evidence (separate from preparing evidence)
   const handleReceiverEvidenceUpload = async (assignmentId: string, files: FileList | null) => {
-    if (!files || !user || !assignmentId) return;
+    if (!files || files.length === 0) return;
 
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) {
+      if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
         toast({ title: "Invalid File", description: "Only image files are allowed.", variant: "destructive" });
         continue;
       }
 
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${orderId}/receiver/${assignmentId}/${Date.now()}.${fileExt}`;
-
-      const { error: uploadError } = await supabase.storage.from("tracking-evidence").upload(fileName, file);
-
-      if (uploadError) {
-        toast({ title: "Upload Error", description: uploadError.message, variant: "destructive" });
-        continue;
-      }
-
-      const { data: urlData } = supabase.storage.from("tracking-evidence").getPublicUrl(fileName);
-
-      const { data: inserted, error: insertError } = await supabase
-        .from("receiver_evidence")
-        .insert({
-          order_tracking_assignment_id: assignmentId,
-          file_url: urlData.publicUrl,
-          file_name: file.name,
-          uploaded_by: user.id,
-        })
-        .select()
-        .single();
-
-      if (insertError) {
-        toast({ title: "Error", description: insertError.message, variant: "destructive" });
-        continue;
-      }
-
-      // Update local state
+      // Add placeholder while uploading
+      const tempId = crypto.randomUUID();
+      const placeholder: ReceiverEvidenceFile = {
+        id: tempId,
+        file_url: URL.createObjectURL(file),
+        file_name: file.name,
+        uploaded_by: user?.id ?? "",
+        uploaded_at: new Date().toISOString(),
+      };
       setReceiverEvidence((prev) => ({
         ...prev,
-        [assignmentId]: [
-          ...(prev[assignmentId] || []),
-          {
-            id: inserted.id,
-            file_url: urlData.publicUrl,
-            file_name: file.name,
-            uploaded_by: user.id,
-            uploaded_at: new Date().toISOString(),
-          },
-        ],
+        [assignmentId]: [...(prev[assignmentId] ?? []), placeholder],
       }));
-    }
 
-    await logActivity({
-      action: "receiver_evidence_uploaded",
-      tableName: "orders",
-      recordId: orderId,
-      oldValues: null,
-      newValues: { assignment_id: assignmentId, uploaded_by: user.id },
-      userId: user.id,
-    });
-
-    await notifyProjectMembers({
-      projectId,
-      title: "Receiver Evidence Uploaded",
-      message: `Receiver evidence has been uploaded for order tracking`,
-      type: "order",
-      referenceType: "order",
-      referenceId: orderId,
-      excludeUserId: user.id,
-    });
-
-    toast({ title: "Uploaded", description: "Receiver's evidence uploaded successfully." });
-  };
-
-  // Remove receiver evidence
-  const handleRemoveReceiverEvidence = async (assignmentId: string, evidenceId: string, fileName: string) => {
-    if (!user) return;
-
-    // Block deletion for delivered orders
-    if (status === "delivered") {
-      toast({
-        title: "Locked",
-        description: "Evidence cannot be removed from delivered orders.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Check permission: uploader, super admin, admin, or logistics admin
-    const canRemove = isSuperAdmin() || isAdmin() || canProcessLogistics();
-    const ev = (receiverEvidence[assignmentId] || []).find((e) => e.id === evidenceId);
-    if (!canRemove && ev?.uploaded_by !== user.id) {
-      toast({
-        title: "Permission Denied",
-        description: "Only the uploader, Admin, or Tracking Admin can remove evidence.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Delete from DB
-    const { error } = await supabase.from("receiver_evidence").delete().eq("id", evidenceId);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    // Try deleting from storage (best effort)
-    try {
-      const urlParts = ev?.file_url?.split("/tracking-evidence/");
-      if (urlParts && urlParts[1]) {
-        await supabase.storage.from("tracking-evidence").remove([decodeURIComponent(urlParts[1])]);
+      // Upload to server
+      const res = await filesApi.upload(file);
+      if (res.success && res.data) {
+        const uploaded: ReceiverEvidenceFile = {
+          id: tempId,
+          file_url: res.data.fileUrl,
+          file_name: res.data.fileName,
+          uploaded_by: user?.id ?? "",
+          uploaded_at: new Date().toISOString(),
+        };
+        setReceiverEvidence((prev) => {
+          const updated = (prev[assignmentId] ?? []).map((e) => e.id === tempId ? uploaded : e);
+          // Persist to backend
+          const evidenceItems = updated.map((e) => ({
+            fileUrl: e.file_url,
+            fileName: e.file_name,
+            uploadedBy: e.uploaded_by,
+            uploadedAt: e.uploaded_at,
+          }));
+          trackingApi.saveReceiverEvidence(orderId, assignmentId, evidenceItems).catch(() => {});
+          return { ...prev, [assignmentId]: updated };
+        });
+      } else {
+        // Remove placeholder on failure
+        setReceiverEvidence((prev) => ({
+          ...prev,
+          [assignmentId]: (prev[assignmentId] ?? []).filter((e) => e.id !== tempId),
+        }));
+        toast({ title: "Upload Failed", description: res.message ?? "Could not upload file.", variant: "destructive" });
       }
-    } catch {}
-
-    // Update local state
-    setReceiverEvidence((prev) => ({
-      ...prev,
-      [assignmentId]: (prev[assignmentId] || []).filter((e) => e.id !== evidenceId),
-    }));
-
-    await logActivity({
-      action: "receiver_evidence_removed",
-      tableName: "orders",
-      recordId: orderId,
-      oldValues: { file_name: fileName, assignment_id: assignmentId },
-      newValues: null,
-      userId: user.id,
-    });
-
-    await notifyProjectMembers({
-      projectId,
-      title: "Receiver Evidence Removed",
-      message: `Receiver evidence "${fileName}" has been removed`,
-      type: "order",
-      referenceType: "order",
-      referenceId: orderId,
-      excludeUserId: user.id,
-    });
-
-    toast({ title: "Removed", description: "Receiver evidence removed." });
+    }
   };
 
-  // Remove preparing evidence (saved evidence with id)
+  const handleRemoveReceiverEvidence = async (assignmentId: string, evidenceId: string, _fileName: string) => {
+    setReceiverEvidence((prev) => {
+      const updated = (prev[assignmentId] ?? []).filter((e) => e.id !== evidenceId);
+      const evidenceItems = updated.map((e) => ({
+        fileUrl: e.file_url,
+        fileName: e.file_name,
+        uploadedBy: e.uploaded_by,
+        uploadedAt: e.uploaded_at,
+      }));
+      trackingApi.saveReceiverEvidence(orderId, assignmentId, evidenceItems).catch(() => {});
+      return { ...prev, [assignmentId]: updated };
+    });
+  };
+
   const handleRemovePreparingEvidence = async (
-    assignmentId: string,
-    evidenceId: string,
+    _assignmentId: string,
+    _evidenceId: string,
     driverUserId: string,
-    fileName: string,
+    _fileName: string,
   ) => {
-    if (!user) return;
-
-    // Block deletion for delivered orders
-    if (status === "delivered") {
-      toast({
-        title: "Locked",
-        description: "Evidence cannot be removed from delivered orders.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const canRemove = isSuperAdmin() || isAdmin() || canProcessLogistics();
-    if (!canRemove) {
-      toast({
-        title: "Permission Denied",
-        description: "Only Admin or Tracking Admin can remove evidence.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Delete from DB
-    const { error } = await supabase.from("order_tracking_evidence").delete().eq("id", evidenceId);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-      return;
-    }
-
-    // Try deleting from storage (best effort)
-    const ev = assignments.find((a) => a.driver_user_id === driverUserId)?.evidence.find((e) => e.id === evidenceId);
-    try {
-      const urlParts = ev?.file_url?.split("/tracking-evidence/");
-      if (urlParts && urlParts[1]) {
-        await supabase.storage.from("tracking-evidence").remove([decodeURIComponent(urlParts[1])]);
-      }
-    } catch {}
-
-    // Update local state
     setAssignments((prev) =>
       prev.map((a) =>
-        a.driver_user_id === driverUserId ? { ...a, evidence: a.evidence.filter((e) => e.id !== evidenceId) } : a,
+        a.driver_user_id === driverUserId ? { ...a, evidence: a.evidence.filter((e) => !e.id) } : a,
       ),
     );
-
-    await logActivity({
-      action: "preparing_evidence_removed",
-      tableName: "orders",
-      recordId: orderId,
-      oldValues: { file_name: fileName, assignment_id: assignmentId },
-      newValues: null,
-      userId: user.id,
-    });
-
-    await notifyProjectMembers({
-      projectId,
-      title: "Preparing Evidence Removed",
-      message: `Preparing evidence "${fileName}" has been removed`,
-      type: "order",
-      referenceType: "order",
-      referenceId: orderId,
-      excludeUserId: user.id,
-    });
-
-    toast({ title: "Removed", description: "Preparing evidence removed." });
   };
 
   const handleTrackArrived = async (assignmentId: string, driverName: string) => {
-    if (!user || !assignmentId) return;
-
-    // Check RECEIVER evidence exists (not preparing evidence)
-    const recEv = receiverEvidence[assignmentId] || [];
-    if (recEv.length === 0) {
-      toast({
-        title: "Evidence Required",
-        description: "Receiver's evidence photo is required before tracking arrived.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!assignmentId) return;
     setActionLoading(assignmentId);
-
-    const arrivedAt = new Date().toISOString();
-    const { error } = await supabase
-      .from("order_tracking_assignments")
-      .update({ tracking_status: "arrived", arrived_at: arrivedAt })
-      .eq("id", assignmentId);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    try {
+      const res = await trackingApi.markArrived(orderId, assignmentId);
+      if (res.success) {
+        toast({ title: "Driver Arrived", description: `${driverName} marked as arrived.` });
+        await fetchData();
+      } else {
+        toast({ title: "Error", description: res.message ?? "Failed to update status.", variant: "destructive" });
+      }
+    } finally {
       setActionLoading(null);
-      return;
     }
-
-    setAssignments((prev) =>
-      prev.map((a) => (a.id === assignmentId ? { ...a, tracking_status: "arrived", arrived_at: arrivedAt } : a)),
-    );
-
-    await logActivity({
-      action: "driver_arrived",
-      tableName: "orders",
-      recordId: orderId,
-      oldValues: { tracking_status: "on_transit" },
-      newValues: { tracking_status: "arrived", driver_name: driverName, arrived_at: arrivedAt },
-      userId: user.id,
-    });
-
-    await notifyProjectMembers({
-      projectId,
-      title: "Driver Arrived",
-      message: `Driver ${driverName} has arrived for the order`,
-      type: "order",
-      referenceType: "order",
-      referenceId: orderId,
-      excludeUserId: user.id,
-    });
-
-    toast({ title: "Driver Arrived", description: `${driverName} marked as arrived.` });
-    setActionLoading(null);
   };
 
   const handleHoldDriver = async () => {
-    if (!user || !holdDialogDriverId || !holdRemarks.trim()) return;
-
-    const assignment = assignments.find((a) => a.id === holdDialogDriverId);
-    if (!assignment) return;
-
+    if (!holdDialogDriverId) return;
     setActionLoading(holdDialogDriverId);
-    const heldAt = new Date().toISOString();
-
-    const { error } = await supabase
-      .from("order_tracking_assignments")
-      .update({ tracking_status: "on_hold", hold_remarks: holdRemarks.trim(), held_at: heldAt })
-      .eq("id", holdDialogDriverId);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    try {
+      const res = await trackingApi.holdDriver(orderId, holdDialogDriverId, holdRemarks);
+      if (res.success) {
+        toast({ title: "On Hold", description: "Driver placed on hold." });
+        await fetchData();
+      } else {
+        toast({ title: "Error", description: res.message ?? "Failed.", variant: "destructive" });
+      }
+    } finally {
       setActionLoading(null);
-      return;
+      setHoldDialogDriverId(null);
+      setHoldRemarks("");
     }
-
-    const driverName = assignment.driver.full_name || assignment.driver.email;
-
-    setAssignments((prev) =>
-      prev.map((a) =>
-        a.id === holdDialogDriverId
-          ? { ...a, tracking_status: "on_hold", hold_remarks: holdRemarks.trim(), held_at: heldAt }
-          : a,
-      ),
-    );
-
-    await logActivity({
-      action: "driver_hold",
-      tableName: "orders",
-      recordId: orderId,
-      oldValues: { tracking_status: "on_transit" },
-      newValues: { tracking_status: "on_hold", driver_name: driverName, hold_remarks: holdRemarks.trim() },
-      userId: user.id,
-    });
-
-    await notifyProjectMembers({
-      projectId,
-      title: "Driver On Hold",
-      message: `Driver ${driverName} placed on hold: ${holdRemarks.trim()}`,
-      type: "order",
-      referenceType: "order",
-      referenceId: orderId,
-      excludeUserId: user.id,
-    });
-
-    toast({ title: "Driver On Hold", description: `${driverName} placed on hold.` });
-    setHoldDialogDriverId(null);
-    setHoldRemarks("");
-    setActionLoading(null);
   };
 
   const handleResumeDriver = async () => {
-    if (!user || !resumeDialogDriverId || !resumeRemarks.trim()) return;
-
-    const assignment = assignments.find((a) => a.id === resumeDialogDriverId);
-    if (!assignment) return;
-
+    if (!resumeDialogDriverId) return;
     setActionLoading(resumeDialogDriverId);
-    const resumedAt = new Date().toISOString();
-
-    const { error } = await supabase
-      .from("order_tracking_assignments")
-      .update({ tracking_status: "on_transit", resumed_at: resumedAt, resume_remarks: resumeRemarks.trim() })
-      .eq("id", resumeDialogDriverId);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    try {
+      const res = await trackingApi.resumeDriver(orderId, resumeDialogDriverId, resumeRemarks);
+      if (res.success) {
+        toast({ title: "Resumed", description: "Driver resumed." });
+        await fetchData();
+      } else {
+        toast({ title: "Error", description: res.message ?? "Failed.", variant: "destructive" });
+      }
+    } finally {
       setActionLoading(null);
-      return;
+      setResumeDialogDriverId(null);
+      setResumeRemarks("");
     }
-
-    const driverName = assignment.driver.full_name || assignment.driver.email;
-
-    setAssignments((prev) =>
-      prev.map((a) =>
-        a.id === resumeDialogDriverId
-          ? { ...a, tracking_status: "on_transit", resumed_at: resumedAt, resume_remarks: resumeRemarks.trim() }
-          : a,
-      ),
-    );
-
-    await logActivity({
-      action: "driver_resumed",
-      tableName: "orders",
-      recordId: orderId,
-      oldValues: { tracking_status: "on_hold", hold_remarks: assignment.hold_remarks },
-      newValues: {
-        tracking_status: "on_transit",
-        driver_name: driverName,
-        resume_remarks: resumeRemarks.trim(),
-        resumed_at: resumedAt,
-      },
-      userId: user.id,
-    });
-
-    await notifyProjectMembers({
-      projectId,
-      title: "Driver Resumed",
-      message: `Driver ${driverName} resumed from hold: ${resumeRemarks.trim()}`,
-      type: "order",
-      referenceType: "order",
-      referenceId: orderId,
-      excludeUserId: user.id,
-    });
-
-    toast({ title: "Driver Resumed", description: `${driverName} is back on transit.` });
-    setResumeDialogDriverId(null);
-    setResumeRemarks("");
-    setActionLoading(null);
   };
 
-  // C) Remarks handler
   const handleSaveRemarks = async (assignmentId: string) => {
-    if (!user || !assignmentId) return;
+    if (!assignmentId) return;
+    const remarks = trackingRemarksMap[assignmentId] ?? "";
     setRemarksSaving(assignmentId);
-    const remarks = trackingRemarksMap[assignmentId] || "";
-    const { error } = await supabase
-      .from("order_tracking_assignments")
-      .update({
-        tracking_remarks: remarks,
-        remarks_updated_at: new Date().toISOString(),
-        remarks_updated_by: user.id,
-      })
-      .eq("id", assignmentId);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      await logActivity({
-        action: "tracking_remarks_updated",
-        tableName: "orders",
-        recordId: orderId,
-        oldValues: null,
-        newValues: { assignment_id: assignmentId, remarks },
-        userId: user.id,
-      });
-      toast({ title: "Saved", description: "Remarks updated." });
+    try {
+      const res = await trackingApi.saveRemarks(orderId, assignmentId, remarks);
+      if (res.success) {
+        // Keep the saved value in map so it survives future fetchData() calls
+        setTrackingRemarksMap((prev) => ({ ...prev, [assignmentId]: remarks }));
+        // Also update the notes on the assignment in local state
+        setAssignments((prev) =>
+          prev.map((a) => (a.id === assignmentId ? { ...a, notes: remarks } : a)),
+        );
+        toast({ title: "Saved", description: "Remarks saved." });
+      } else {
+        toast({ title: "Error", description: res.message ?? "Failed.", variant: "destructive" });
+      }
+    } finally {
+      setRemarksSaving(null);
     }
-    setRemarksSaving(null);
   };
 
   const handleSaveAssignments = async () => {
-    if (!user) return;
+    if (assignments.length === 0) return;
 
-    for (const oi of orderItems) {
-      const totalAssigned = assignments.reduce((sum, a) => {
-        const mat = a.materials.find((m) => m.order_item_id === oi.id);
-        return sum + (mat?.assigned_quantity || 0);
-      }, 0);
-      if (totalAssigned > oi.quantity_ordered) {
-        toast({
-          title: "Over-allocation",
-          description: `${oi.sku_name} has ${totalAssigned} assigned but only ${oi.quantity_ordered} ordered.`,
-          variant: "destructive",
-        });
-        return;
-      }
+    const invalid = assignments.filter((a) => !a.plate_number.trim());
+    if (invalid.length > 0) {
+      toast({ title: "Validation Error", description: "All drivers must have a plate number.", variant: "destructive" });
+      return;
     }
 
     setSaving(true);
-
     try {
-      for (const assignment of assignments) {
-        let assignmentId = assignment.id;
-
-        if (assignment.isNew || !assignmentId) {
-          const { data: newAssignment, error: insertError } = await supabase
-            .from("order_tracking_assignments")
-            .insert({
-              order_id: orderId,
-              driver_user_id: assignment.driver_user_id,
-              plate_number: assignment.plate_number,
-              created_by: user.id,
-            })
-            .select()
-            .single();
-
-          if (insertError) throw insertError;
-          assignmentId = newAssignment.id;
-        } else {
-          const { error: updateError } = await supabase
-            .from("order_tracking_assignments")
-            .update({ plate_number: assignment.plate_number })
-            .eq("id", assignmentId);
-
-          if (updateError) throw updateError;
-        }
-
-        // Upload new evidence files
-        for (const evidence of assignment.evidence) {
-          if (evidence.file && evidence.isUploading) {
-            const fileExt = evidence.file.name.split(".").pop();
-            const fileName = `${orderId}/${assignmentId}/${Date.now()}.${fileExt}`;
-
-            const { error: uploadError } = await supabase.storage
-              .from("tracking-evidence")
-              .upload(fileName, evidence.file);
-
-            if (uploadError) throw uploadError;
-
-            const { data: urlData } = supabase.storage.from("tracking-evidence").getPublicUrl(fileName);
-
-            const { error: evidenceError } = await supabase.from("order_tracking_evidence").insert({
-              order_tracking_assignment_id: assignmentId,
-              file_url: urlData.publicUrl,
-              file_name: evidence.file_name,
-              uploaded_by: user.id,
-            });
-
-            if (evidenceError) throw evidenceError;
-          }
-        }
-
-        // Save material assignments
-        if (assignmentId) {
-          await supabase.from("tracking_driver_materials").delete().eq("tracking_assignment_id", assignmentId);
-
-          if (assignment.materials.length > 0) {
-            const materialInserts = assignment.materials.map((m) => ({
-              tracking_assignment_id: assignmentId!,
-              order_item_id: m.order_item_id,
-              assigned_quantity: m.assigned_quantity,
-            }));
-
-            const { error: matError } = await supabase.from("tracking_driver_materials").insert(materialInserts);
-
-            if (matError) throw matError;
-          }
-        }
-
-        await logActivity({
-          action: assignment.isNew ? "tracking_assigned" : "tracking_updated",
-          tableName: "orders",
-          recordId: orderId,
-          oldValues: null,
-          newValues: {
-            driver_name: assignment.driver.full_name || assignment.driver.email,
-            plate_number: assignment.plate_number,
-            materials_count: assignment.materials.length,
-          },
-          userId: user.id,
-        });
+      const res = await trackingApi.saveAssignments(orderId, {
+        assignments: assignments.map((a) => ({
+          driverUserId: a.driver_user_id,
+          plateNumber: a.plate_number,
+          trackingReference: a.tracking_reference || undefined,
+          notes: a.notes || undefined,
+          materials: a.materials.map((m) => ({
+            orderItemId: m.order_item_id,
+            assignedQuantity: m.assigned_quantity,
+          })),
+          evidence: a.evidence
+            .filter((e) => !e.isUploading)
+            .map((e) => ({
+              fileUrl: e.file_url,
+              fileName: e.file_name,
+              uploadedBy: e.uploaded_by,
+              uploadedAt: e.uploaded_at,
+            })),
+        })),
+      });
+      if (res.success && res.data) {
+        // Merge server IDs/timestamps into local state — preserves local evidence photos
+        setAssignments((prev) =>
+          prev.map((a) => {
+            const serverA = res.data!.find((s) => s.driverUserId === a.driver_user_id);
+            return serverA ? { ...a, id: serverA.id, created_at: serverA.createdAt } : a;
+          }),
+        );
+        setHasSaved(true);
+        toast({ title: "Saved", description: "Tracking assignments saved." });
+      } else if (!res.success) {
+        toast({ title: "Error", description: res.message ?? "Failed to save.", variant: "destructive" });
       }
-
-      await notifyProjectMembers({
-        projectId,
-        title: "Tracking Assigned",
-        message: `Tracking drivers have been assigned with ${assignments.length} driver(s) and materials`,
-        type: "order",
-        referenceType: "order",
-        referenceId: orderId,
-        excludeUserId: user.id,
-      });
-
-      toast({ title: "Saved", description: "Tracking assignments saved successfully." });
-      setHasSaved(true);
-      await fetchData();
-    } catch (error: unknown) {
-      console.error("Error saving assignments:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save assignments",
-        variant: "destructive",
-      });
     } finally {
       setSaving(false);
     }

@@ -1,5 +1,5 @@
-import { supabase } from '@/integrations/supabase/client';
-import type { Json } from '@/integrations/supabase/types';
+// Activity Logger - now uses REST API instead of Supabase direct access
+import { auditLogsApi } from '@/lib/apiClient';
 
 interface LogActivityParams {
   action: string;
@@ -18,83 +18,84 @@ export async function logActivity({
   newValues = null,
   userId,
 }: LogActivityParams) {
-  const { error } = await supabase.from('audit_logs').insert([{
+  const res = await auditLogsApi.log({
+    tableName,
+    recordId,
     action,
-    table_name: tableName,
-    record_id: recordId,
-    old_values: oldValues as Json,
-    new_values: newValues as Json,
-    user_id: userId,
-  }]);
+    oldValues: oldValues ? JSON.stringify(oldValues) : undefined,
+    newValues: newValues ? JSON.stringify(newValues) : undefined,
+    userId,
+  });
 
-  if (error) {
-    console.error('Failed to log activity:', error);
+  if (!res.success) {
+    console.error('Failed to log activity:', res.message);
   }
-  
-  return { error };
+
+  return { error: res.success ? null : new Error(res.message) };
 }
 
-// Helper function to format activity for display
+// Helper function to format activity for display (unchanged)
 export function formatActivityDescription(log: {
   action: string;
-  table_name: string;
-  new_values?: Json | null;
-  old_values?: Json | null;
+  tableName?: string;
+  table_name?: string;
+  newValues?: string | null;
+  oldValues?: string | null;
+  new_values?: unknown;
+  old_values?: unknown;
 }): string {
-  const { action, table_name, new_values, old_values } = log;
-  const newVals = new_values as Record<string, unknown> | null;
-  const oldVals = old_values as Record<string, unknown> | null;
-  
-  switch (table_name) {
+  const tableName = log.tableName ?? log.table_name ?? '';
+  const newVals = typeof log.newValues === 'string'
+    ? (JSON.parse(log.newValues) as Record<string, unknown>)
+    : (log.new_values as Record<string, unknown> | null);
+  const oldVals = typeof log.oldValues === 'string'
+    ? (JSON.parse(log.oldValues) as Record<string, unknown>)
+    : (log.old_values as Record<string, unknown> | null);
+
+  switch (tableName) {
     case 'orders':
-      if (action === 'create') return 'Order created';
-      if (action === 'approve') return 'Order approved';
-      if (action === 'reject') return `Order rejected${newVals?.rejection_reason ? `: ${newVals.rejection_reason}` : ''}`;
-      if (action === 'status_change') {
+    case 'Orders':
+      if (log.action === 'create') return 'Order created';
+      if (log.action === 'approve') return 'Order approved';
+      if (log.action === 'reject')
+        return `Order rejected${newVals?.rejectionReason ? `: ${newVals.rejectionReason}` : ''}`;
+      if (log.action === 'status_change') {
         const oldStatus = oldVals?.status;
         const newStatus = newVals?.status;
         return `Order status changed from ${formatStatus(oldStatus)} to ${formatStatus(newStatus)}`;
       }
-      if (action === 'driver_resumed') {
-        const driverName = newVals?.driver_name || 'Driver';
-        return `Driver ${driverName} resumed from hold`;
-      }
-      return `Order ${action}`;
-      
+      return `Order ${log.action}`;
+
     case 'project_members':
-      if (action === 'add') return `Team member added`;
-      if (action === 'remove') return `Team member removed`;
-      return `Team member ${action}`;
-      
+    case 'ProjectMembers':
+      if (log.action === 'add') return 'Team member added';
+      if (log.action === 'remove') return 'Team member removed';
+      return `Team member ${log.action}`;
+
     case 'projects':
-      if (action === 'create') return 'Project created';
-      if (action === 'update') return 'Project updated';
-      if (action === 'delete') return 'Project deleted';
-      return `Project ${action}`;
-      
+    case 'Projects':
+      if (log.action === 'create') return 'Project created';
+      if (log.action === 'update') return 'Project updated';
+      if (log.action === 'delete') return 'Project deleted';
+      return `Project ${log.action}`;
+
     case 'project_inventory':
-      if (action === 'adjustment') return `Inventory adjusted`;
-      return `Inventory ${action}`;
+    case 'ProjectInventory':
+      if (log.action === 'adjustment') return 'Inventory adjusted';
+      return `Inventory ${log.action}`;
 
     case 'project_quotations':
-      if (action === 'create') {
-        const createdBy = newVals?.created_by || 'User';
-        const role = newVals?.role || '';
-        return `Quotation created by ${createdBy}${role ? ` (${role})` : ''}`;
-      }
-      if (action === 'update') {
-        const updatedBy = newVals?.updated_by || 'User';
-        const role = newVals?.role || '';
-        return `Quotation updated by ${updatedBy}${role ? ` (${role})` : ''}`;
-      }
-      return `Quotation ${action}`;
-      
+    case 'ProjectQuotations':
+      if (log.action === 'create') return 'Quotation created';
+      if (log.action === 'update') return 'Quotation updated';
+      return `Quotation ${log.action}`;
+
     default:
-      return `${table_name} ${action}`;
+      return `${tableName} ${log.action}`;
   }
 }
 
 function formatStatus(status: unknown): string {
   if (typeof status !== 'string') return 'Unknown';
-  return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 }

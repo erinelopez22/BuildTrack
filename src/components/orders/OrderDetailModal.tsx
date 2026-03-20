@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { ordersApi, auditLogsApi } from "@/lib/apiClient";
+import type { Order as ApiOrder } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
@@ -46,6 +47,37 @@ import { TrackingAssignmentSection } from "./TrackingAssignmentSection";
 import { EvidenceLightbox, useLightbox } from "./EvidenceLightbox";
 import { Input } from "@/components/ui/input";
 
+// ── Mapping: API camelCase → local snake_case ────────────────────────────────
+
+function toLocalOrder(o: ApiOrder): Order & { on_transit_at?: string; delivered_at?: string } {
+  return {
+    id: o.id,
+    project_id: o.projectId,
+    order_number: o.orderNumber,
+    order_type: o.orderType ?? "",
+    status: o.status as OrderStatus,
+    supplier_name: o.supplierName ?? null,
+    supplier_contact: o.supplierContact ?? null,
+    expected_delivery_date: o.expectedDeliveryDate ?? null,
+    notes: o.notes ?? null,
+    total_amount: o.totalAmount ?? null,
+    approved_by: o.approvedBy ?? null,
+    approved_at: o.approvedAt ?? null,
+    approved_by_name: o.approvedByName ?? null,
+    rejected_by: o.rejectedBy ?? null,
+    rejected_at: o.rejectedAt ?? null,
+    rejection_reason: o.rejectionReason ?? null,
+    previous_status: null,
+    created_at: o.createdAt,
+    updated_at: o.updatedAt,
+    created_by: o.createdBy ?? "",
+    on_transit_at: o.onTransitAt,
+    delivered_at: o.deliveredAt,
+  };
+}
+
+// ── Local types ───────────────────────────────────────────────────────────────
+
 interface OrderItem {
   id: string;
   sku_id: string;
@@ -68,11 +100,12 @@ interface OrderDetailModalProps {
 export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }: OrderDetailModalProps) {
   const { user, isSuperAdmin, isAdmin, canApproveOrders, canProcessLogistics, canReceiveOrders, isWarehouseAdmin } = useAuth();
   const { toast } = useToast();
-  const [order, setOrder] = useState<Order | null>(null);
+  const [order, setOrder] = useState<(Order & { on_transit_at?: string; delivered_at?: string }) | null>(null);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
-  const [creator, setCreator] = useState<Profile | null>(null);
-  const [approver, setApprover] = useState<Profile | null>(null);
-  const [rejector, setRejector] = useState<Profile | null>(null);
+  // Creator, approver, rejector names come from API response fields
+  const [creatorName, setCreatorName] = useState<string>("");
+  const [approverName, setApproverName] = useState<string>("");
+  const [rejectorName, setRejectorName] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [isRejectedOrder, setIsRejectedOrder] = useState(false);
@@ -109,28 +142,9 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
 
   const fetchActivityLog = async () => {
     if (!orderId) return;
-    const { data } = await supabase
-      .from("audit_logs")
-      .select("*")
-      .eq("table_name", "orders")
-      .eq("record_id", orderId)
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (data) {
-      const userIds = [...new Set(data.map((l) => l.user_id).filter(Boolean))];
-      const { data: profiles } =
-        userIds.length > 0
-          ? await supabase.from("profiles").select("id, full_name, email").in("id", userIds)
-          : { data: [] };
-      const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
-
-      setActivityLogs(
-        data.map((log) => ({
-          ...log,
-          user_profile: log.user_id ? profileMap.get(log.user_id) : null,
-        })),
-      );
+    const res = await auditLogsApi.getForOrder(orderId);
+    if (res.success && res.data) {
+      setActivityLogs(res.data);
     }
   };
 
@@ -139,89 +153,34 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     setLoading(true);
     setIsRejectedOrder(false);
 
-    // Try fetching from orders table first
-    let { data: orderData } = await supabase.from("orders").select("*").eq("id", orderId).maybeSingle();
+    const res = await ordersApi.getById(orderId);
 
-    // If not found in orders, try rejected_orders table
-    let rejected = false;
-    if (!orderData) {
-      const { data: rejectedData } = await supabase.from("rejected_orders").select("*").eq("id", orderId).maybeSingle();
-      if (rejectedData) {
-        orderData = rejectedData;
-        rejected = true;
-        setIsRejectedOrder(true);
-      }
-    }
+    if (res.success && res.data) {
+      const apiOrder = res.data;
+      const rejected = apiOrder.status === "rejected";
+      setIsRejectedOrder(rejected);
 
-    if (orderData) {
-      setOrder(orderData as Order);
+      const localOrder = toLocalOrder(apiOrder);
+      setOrder(localOrder);
 
-      // Fetch order items - from rejected_order_items if rejected, otherwise order_items
-      if (rejected) {
-        const { data: items } = await supabase
-          .from("rejected_order_items" as any)
-          .select("id, sku_id, quantity_ordered, quantity_received, notes")
-          .eq("order_id", orderId);
+      // Map items from the embedded API items array
+      setOrderItems(
+        apiOrder.items.map((item) => ({
+          id: item.id,
+          sku_id: item.skuId,
+          quantity_ordered: item.quantityOrdered,
+          quantity_received: item.quantityReceived,
+          notes: item.notes ?? null,
+          sku: item.skuName
+            ? { name: item.skuName, unit_of_measure: item.unit ?? "pcs" }
+            : undefined,
+        }))
+      );
 
-        if (items && (items as any[]).length > 0) {
-          // Fetch SKU info separately
-          const skuIds = [...new Set((items as any[]).map((i: any) => i.sku_id))];
-          const { data: skus } = await supabase.from("skus").select("id, name, unit_of_measure").in("id", skuIds);
-          const skuMap = new Map((skus || []).map((s: any) => [s.id, s]));
-
-          setOrderItems(
-            (items as any[]).map((item: any) => ({
-              ...item,
-              sku: skuMap.get(item.sku_id) as { name: string; unit_of_measure: string } | undefined,
-            })),
-          );
-        } else {
-          setOrderItems([]);
-        }
-      } else {
-        const { data: items } = await supabase
-          .from("order_items")
-          .select(
-            `
-            id,
-            sku_id,
-            quantity_ordered,
-            quantity_received,
-            notes,
-            skus (
-              name,
-              unit_of_measure
-            )
-          `,
-          )
-          .eq("order_id", orderId);
-
-        if (items) {
-          setOrderItems(
-            items.map((item) => ({
-              ...item,
-              sku: item.skus as unknown as { name: string; unit_of_measure: string } | undefined,
-            })),
-          );
-        }
-      }
-
-      // Fetch profiles in parallel
-      const [creatorRes, approverRes, rejectorRes] = await Promise.all([
-        orderData.created_by
-          ? supabase.from("profiles").select("*").eq("id", orderData.created_by).maybeSingle()
-          : Promise.resolve({ data: null }),
-        orderData.approved_by
-          ? supabase.from("profiles").select("*").eq("id", orderData.approved_by).maybeSingle()
-          : Promise.resolve({ data: null }),
-        orderData.rejected_by
-          ? supabase.from("profiles").select("*").eq("id", orderData.rejected_by).maybeSingle()
-          : Promise.resolve({ data: null }),
-      ]);
-
-      setCreator(creatorRes.data as Profile);
-      setApprover(approverRes.data as Profile);
-      setRejector(rejectorRes.data as Profile);
+      // Names are embedded in the API response
+      setCreatorName(apiOrder.createdByName ?? "");
+      setApproverName(apiOrder.approvedByName ?? "");
+      setRejectorName(apiOrder.rejectedByName ?? "");
     }
 
     setLoading(false);
@@ -231,50 +190,31 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     if (!order || !user || isRejectedOrder) return;
     setActionLoading(true);
 
-    const updateData: Record<string, unknown> = {
-      status: newStatus,
-      ...additionalData,
-    };
-
-    if (newStatus === "approved" && order.status === "for_approval") {
-      updateData.approved_by = user.id;
-      updateData.approved_at = new Date().toISOString();
+    let res;
+    if (newStatus === "approved") {
+      res = await ordersApi.approve(order.id);
+    } else if (newStatus === "on_hold") {
+      const updatedNotes = (additionalData?.notes as string) ?? order.notes ?? "";
+      res = await ordersApi.updateStatus(order.id, newStatus, updatedNotes);
+    } else if (additionalData?.supplier_name) {
+      // Delivered with supplier update — update order then change status
+      const updateRes = await ordersApi.update(order.id, {
+        supplierName: additionalData.supplier_name as string,
+      });
+      if (!updateRes.success) {
+        toast({ title: "Error", description: updateRes.message ?? "Failed to update supplier", variant: "destructive" });
+        setActionLoading(false);
+        return;
+      }
+      res = await ordersApi.updateStatus(order.id, newStatus);
+    } else {
+      res = await ordersApi.updateStatus(order.id, newStatus);
     }
 
-    if (newStatus === "on_hold" && !updateData.previous_status) {
-      updateData.previous_status = order.status;
-    }
-
-    if (order.status === "on_hold") {
-      updateData.previous_status = null;
-    }
-
-    if (newStatus === "in_transit" && !(order as any).on_transit_at) {
-      updateData.on_transit_at = new Date().toISOString();
-    }
-    if (newStatus === "delivered" && !(order as any).delivered_at) {
-      updateData.delivered_at = new Date().toISOString();
-    }
-
-    const { error } = await supabase.from("orders").update(updateData).eq("id", order.id);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    if (!res.success) {
+      toast({ title: "Error", description: res.message ?? "Failed to update status", variant: "destructive" });
       setActionLoading(false);
       return;
-    }
-
-    if (newStatus === "delivered") {
-      const { data: items } = await supabase
-        .from("order_items")
-        .select("id, quantity_ordered")
-        .eq("order_id", order.id);
-
-      if (items) {
-        for (const item of items) {
-          await supabase.from("order_items").update({ quantity_received: item.quantity_ordered }).eq("id", item.id);
-        }
-      }
     }
 
     await logActivity({
@@ -313,13 +253,8 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     setActionLoading(true);
 
     try {
-      // Use atomic RPC to move order to rejected_orders table
-      const { error } = await supabase.rpc("reject_order", {
-        _order_id: order.id,
-        _rejection_reason: reason.trim(),
-      });
-
-      if (error) throw error;
+      const res = await ordersApi.reject(order.id, reason.trim());
+      if (!res.success) throw new Error(res.message ?? "Reject failed");
 
       await logActivity({
         action: "reject",
@@ -396,6 +331,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
     const canHold = hasFullAccess || (canProcessLogistics() && !isWarehouseAdmin());
 
     switch (order.status) {
+      case "draft":
       case "for_approval":
         if (hasFullAccess || canApproveOrders()) {
           actions.push(
@@ -568,9 +504,9 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                         <span className="font-medium">Reason:</span> {order.rejection_reason}
                       </p>
                     )}
-                    {rejector && order.rejected_at && (
+                    {rejectorName && order.rejected_at && (
                       <p className="text-xs text-muted-foreground pl-7">
-                        Rejected by {rejector.full_name || rejector.email} on {formatManilaTime(order.rejected_at)}
+                        Rejected by {rejectorName} on {formatManilaTime(order.rejected_at)}
                       </p>
                     )}
                   </div>
@@ -599,48 +535,47 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                         <User className="h-5 w-5 text-muted-foreground mt-0.5 flex-shrink-0" />
                         <div className="min-w-0">
                           <p className="text-sm text-muted-foreground">Created By</p>
-                          <p className="font-medium truncate">{creator?.full_name || creator?.email || "Unknown"}</p>
+                          <p className="font-medium truncate">{creatorName || "Unknown"}</p>
                           <p className="text-xs text-muted-foreground">
                             {order.created_at ? formatManilaTime(order.created_at) : "No date"}
                           </p>
                         </div>
                       </div>
 
-                      {order.status !== "for_approval" &&
-                        order.status !== "rejected" &&
-                        approver &&
-                        order.approved_at && (
+                      {["approved", "submitted", "ordered", "preparing", "in_transit", "delivered"].includes(order.status) && (
                           <div className="flex items-start gap-3">
                             <Clock className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                             <div className="min-w-0">
                               <p className="text-sm text-muted-foreground">Approved By</p>
-                              <p className="font-medium truncate">{approver.full_name || approver.email}</p>
-                              <p className="text-xs text-muted-foreground">{formatManilaTime(order.approved_at)}</p>
+                              <p className="font-medium truncate">{approverName || order.approved_by_name || "—"}</p>
+                              {order.approved_at && (
+                                <p className="text-xs text-muted-foreground">{formatManilaTime(order.approved_at)}</p>
+                              )}
                             </div>
                           </div>
                         )}
 
-                      {(order as any).on_transit_at && (
+                      {order.on_transit_at && (
                         <div className="flex items-start gap-3">
                           <Truck className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                           <div>
                             <p className="text-sm text-muted-foreground">On Transit</p>
-                            <p className="text-xs font-medium">{formatManilaTime((order as any).on_transit_at)}</p>
+                            <p className="text-xs font-medium">{formatManilaTime(order.on_transit_at)}</p>
                           </div>
                         </div>
                       )}
-                      {(order as any).delivered_at && (
+                      {order.delivered_at && (
                         <div className="flex items-start gap-3">
                           <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                           <div>
                             <p className="text-sm text-muted-foreground">Delivered</p>
-                            <p className="text-xs font-medium">{formatManilaTime((order as any).delivered_at)}</p>
+                            <p className="text-xs font-medium">{formatManilaTime(order.delivered_at)}</p>
                           </div>
                         </div>
                       )}
                     </div>
 
-                    {order.total_amount && (
+                    {order.total_amount != null && order.total_amount > 0 && (
                       <div className="flex justify-between items-center pt-2 border-t">
                         <span className="text-muted-foreground">Total Amount</span>
                         <span className="text-lg font-semibold">
@@ -742,7 +677,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                     <button className="flex items-center gap-2 w-full text-sm font-semibold py-1 hover:text-primary transition-colors">
                       {activityExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       <History className="h-4 w-4 text-muted-foreground" />
-                      Activity Log ({activityLogs.length})
+                      Activity Log{activityLogs.length > 0 ? ` (${activityLogs.length})` : ""}
                     </button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="mt-2">
@@ -751,10 +686,9 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                     ) : (
                       <div className="rounded-lg border bg-muted/30 divide-y max-h-[200px] overflow-y-auto">
                         {activityLogs.map((log) => {
-                          const profile = log.user_profile;
-                          const userName = profile?.full_name || profile?.email || "System";
-                          const newVals = log.new_values as Record<string, any> | null;
-                          const oldVals = log.old_values as Record<string, any> | null;
+                          const userName = log.userName || "System";
+                          const newVals = log.newValues ? JSON.parse(log.newValues) as Record<string, any> : null;
+                          const oldVals = log.oldValues ? JSON.parse(log.oldValues) as Record<string, any> : null;
                           let summary = log.action;
                           if (log.action === "status_change" && newVals?.status) {
                             summary = `Status changed from ${oldVals?.status || "?"} to ${newVals.status}`;
@@ -786,7 +720,7 @@ export function OrderDetailModal({ orderId, open, onOpenChange, onStatusChange }
                               <div className="flex items-center justify-between gap-2">
                                 <span className="font-medium">{userName}</span>
                                 <span className="text-muted-foreground whitespace-nowrap">
-                                  {log.created_at ? formatManilaTime(log.created_at) : ""}
+                                  {log.createdAt ? formatManilaTime(log.createdAt) : ""}
                                 </span>
                               </div>
                               <p className="text-muted-foreground mt-0.5">{summary}</p>

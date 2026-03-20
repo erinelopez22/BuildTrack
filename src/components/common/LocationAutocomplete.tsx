@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { Input } from "@/components/ui/input";
-import { supabase } from "@/integrations/supabase/client";
+import { projectsApi } from "@/lib/apiClient";
 import { MapPin, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,15 +27,19 @@ export function LocationAutocomplete({
 
   useEffect(() => {
     const fetchLocations = async () => {
-      const { data } = await supabase
-        .from("projects")
-        .select("location")
-        .not("location", "is", null)
-        .order("location");
-
-      if (data) {
-        const unique = [...new Set(data.map((p) => p.location).filter(Boolean))] as string[];
+      try {
+        const result = await projectsApi.getAll();
+        const projects = result.data ?? [];
+        const unique = [
+          ...new Set(
+            projects
+              .map((p) => p.location)
+              .filter((loc): loc is string => !!loc)
+          ),
+        ].sort();
         setAllLocations(unique);
+      } catch {
+        // silently ignore
       }
     };
     fetchLocations();

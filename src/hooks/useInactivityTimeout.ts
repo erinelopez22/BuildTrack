@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { authApi, tokenStore } from '@/lib/apiClient';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -23,7 +23,8 @@ export function useInactivityTimeout() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleTimeout = useCallback(async () => {
-    await supabase.auth.signOut();
+    await authApi.logout();
+    tokenStore.clear();
     queryClient.clear();
     toast({
       title: 'Session expired',

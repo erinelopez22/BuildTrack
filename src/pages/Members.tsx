@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { usersApi, projectsApi } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -8,9 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Users, Search, ShieldX } from 'lucide-react';
-import type { Profile, AppRole } from '@/types/database';
+import type { AppRole } from '@/types/database';
 
-interface MemberWithDetails extends Profile {
+interface MemberWithDetails {
+  id: string;
+  email: string;
+  full_name: string | null;
+  is_active: boolean;
   roles: AppRole[];
   projects: { id: string; name: string }[];
 }
@@ -30,48 +34,46 @@ export default function Members() {
       }
 
       try {
-        // Fetch all active profiles
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('is_active', true)
-          .order('full_name', { ascending: true });
+        // Fetch all users
+        const usersResult = await usersApi.getAll();
+        const users = (usersResult.data ?? []).filter((u) => u.isActive);
 
-        if (profilesError) throw profilesError;
+        // Fetch all projects and their members in parallel
+        const projectsResult = await projectsApi.getAll();
+        const projects = projectsResult.data ?? [];
 
-        // Fetch all user roles
-        const { data: userRoles, error: rolesError } = await supabase
-          .from('user_roles')
-          .select('user_id, role');
+        const membersByProject = await Promise.all(
+          projects.map(async (project) => {
+            try {
+              const result = await projectsApi.getMembers(project.id);
+              return { project, members: result.data ?? [] };
+            } catch {
+              return { project, members: [] };
+            }
+          })
+        );
 
-        if (rolesError) throw rolesError;
-
-        // Fetch all project memberships with project names
-        const { data: projectMembers, error: membersError } = await supabase
-          .from('project_members')
-          .select('user_id, project_id, projects(id, name)');
-
-        if (membersError) throw membersError;
-
-        // Build member data with roles and projects
-        const membersWithDetails: MemberWithDetails[] = (profiles || []).map((profile) => {
-          const roles = (userRoles || [])
-            .filter((r) => r.user_id === profile.id)
-            .map((r) => r.role as AppRole);
-
-          const projects = (projectMembers || [])
-            .filter((pm) => pm.user_id === profile.id)
-            .map((pm) => ({
-              id: (pm.projects as any)?.id || pm.project_id,
-              name: (pm.projects as any)?.name || 'Unknown Project',
-            }));
-
-          return {
-            ...profile,
-            roles,
-            projects,
-          } as unknown as MemberWithDetails;
+        // Build userId → projects reverse map
+        const userProjectsMap: Record<string, { id: string; name: string }[]> = {};
+        membersByProject.forEach(({ project, members }) => {
+          members.forEach((m) => {
+            if (!userProjectsMap[m.userId]) userProjectsMap[m.userId] = [];
+            userProjectsMap[m.userId].push({ id: project.id, name: project.name });
+          });
         });
+
+        const membersWithDetails: MemberWithDetails[] = users.map((u) => ({
+          id: u.id,
+          email: u.email,
+          full_name: u.fullName ?? null,
+          is_active: u.isActive,
+          roles: (u.roles ?? []) as AppRole[],
+          projects: userProjectsMap[u.id] ?? [],
+        }));
+
+        membersWithDetails.sort((a, b) =>
+          (a.full_name ?? '').localeCompare(b.full_name ?? '')
+        );
 
         setMembers(membersWithDetails);
       } catch (error: any) {

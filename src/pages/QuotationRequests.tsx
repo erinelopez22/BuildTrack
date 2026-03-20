@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { quotationsApi, projectsApi } from "@/lib/apiClient";
+import type { QuotationChangeRequest as ApiChangeRequest } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
@@ -50,6 +51,13 @@ interface QuotationRow {
   items_count: number;
 }
 
+interface QuotationItemRow {
+  id: string;
+  material_name: string;
+  unit: string;
+  quantity: number;
+}
+
 interface ChangeRequestRow {
   id: string;
   project_id: string;
@@ -66,13 +74,6 @@ interface ChangeRequestRow {
   reviewer_name: string | null;
   reviewed_at: string | null;
   review_remarks: string | null;
-}
-
-interface QuotationItemRow {
-  id: string;
-  material_name: string;
-  unit: string;
-  quantity: number;
 }
 
 export default function QuotationRequests() {
@@ -114,55 +115,29 @@ export default function QuotationRequests() {
   }, []);
 
   const fetchProjects = async () => {
-    const { data } = await supabase.from("projects").select("id, name").order("name");
-    setProjects(data || []);
+    const result = await projectsApi.getAll();
+    const data = result.data || [];
+    setProjects(data.map((p) => ({ id: p.id, name: p.name })));
   };
 
   const fetchQuotations = async () => {
     setQuotationsLoading(true);
     try {
-      const { data: quots, error } = await supabase
-        .from("project_quotations")
-        .select("*, projects(name)")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      if (!quots || quots.length === 0) {
-        setQuotations([]);
-        setQuotationsLoading(false);
-        return;
-      }
-
-      // Get creator names
-      const creatorIds = [...new Set(quots.map((q) => q.created_by))];
-      const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", creatorIds);
-      const profileMap = new Map((profiles || []).map((p) => [p.id, p.full_name || "Unknown"]));
-
-      // Get item counts
-      const quotIds = quots.map((q) => q.id);
-      const { data: itemCounts } = await supabase
-        .from("quotation_items")
-        .select("quotation_id")
-        .in("quotation_id", quotIds);
-
-      const countMap = new Map<string, number>();
-      (itemCounts || []).forEach((ic) => {
-        countMap.set(ic.quotation_id, (countMap.get(ic.quotation_id) || 0) + 1);
-      });
+      const result = await quotationsApi.getAll();
+      const data = result.data || [];
 
       setQuotations(
-        quots.map((q) => ({
+        data.map((q) => ({
           id: q.id,
-          project_id: q.project_id,
-          project_name: (q.projects as any)?.name || "Unknown",
-          created_by: q.created_by,
-          creator_name: profileMap.get(q.created_by) || "Unknown",
-          created_at: q.created_at,
-          updated_at: q.updated_at,
-          category: q.category,
-          notes: q.notes,
-          items_count: countMap.get(q.id) || 0,
+          project_id: q.projectId,
+          project_name: q.projectName || "Unknown",
+          created_by: q.createdBy || "",
+          creator_name: q.createdByName || "Unknown",
+          created_at: q.createdAt,
+          updated_at: q.updatedAt,
+          category: q.category || "initial",
+          notes: q.notes || null,
+          items_count: (q.items || []).length,
         }))
       );
     } catch (err: any) {
@@ -175,56 +150,35 @@ export default function QuotationRequests() {
   const fetchChangeRequests = async () => {
     setRequestsLoading(true);
     try {
-      let query = supabase
-        .from("quotation_change_requests")
-        .select("*, projects(name)")
-        .order("created_at", { ascending: false });
-
-      // Non-admin/non-office-admin: only own requests
-      if (!canApproveQuotations && user) {
-        query = query.eq("requested_by", user.id);
-      }
-
-      const { data: requests, error } = await query;
-      if (error) throw error;
-
-      if (!requests || requests.length === 0) {
-        setChangeRequests([]);
-        setRequestsLoading(false);
-        return;
-      }
-
-      // Get profile info
-      const userIds = [...new Set([
-        ...requests.map((r) => r.requested_by),
-        ...requests.filter((r) => r.reviewed_by).map((r) => r.reviewed_by!),
-      ])];
-      const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", userIds);
-      const profileMap = new Map((profiles || []).map((p) => [p.id, p.full_name || "Unknown"]));
-
-      // Get roles for requesters
-      const requesterIds = [...new Set(requests.map((r) => r.requested_by))];
-      const { data: roles } = await supabase.from("user_roles").select("user_id, role").in("user_id", requesterIds);
-      const roleMap = new Map((roles || []).map((r) => [r.user_id, r.role]));
+      const result = await quotationsApi.getChangeRequests();
+      const requests = result.data || [];
 
       setChangeRequests(
-        requests.map((r) => ({
-          id: r.id,
-          project_id: r.project_id,
-          project_name: (r.projects as any)?.name || "Unknown",
-          quotation_id: r.quotation_id,
-          change_type: r.change_type,
-          status: r.status,
-          payload: r.payload,
-          requested_by: r.requested_by,
-          requester_name: profileMap.get(r.requested_by) || "Unknown",
-          requester_role: roleMap.get(r.requested_by) || "member",
-          created_at: r.created_at,
-          reviewed_by: r.reviewed_by,
-          reviewer_name: r.reviewed_by ? profileMap.get(r.reviewed_by) || "Unknown" : null,
-          reviewed_at: r.reviewed_at,
-          review_remarks: r.review_remarks,
-        }))
+        requests.map((r) => {
+          let parsedPayload: any = {};
+          try {
+            if (r.payload) parsedPayload = JSON.parse(r.payload);
+          } catch {
+            parsedPayload = {};
+          }
+          return {
+            id: r.id,
+            project_id: r.projectId,
+            project_name: (r as any).projectName || "Unknown",
+            quotation_id: r.quotationId || null,
+            change_type: r.changeType || "",
+            status: r.status,
+            payload: parsedPayload,
+            requested_by: r.requestedBy || "",
+            requester_name: r.requestedByName || "Unknown",
+            requester_role: (r as any).requestedByRole || "member",
+            created_at: r.createdAt,
+            reviewed_by: r.reviewedBy || null,
+            reviewer_name: r.reviewedByName || null,
+            reviewed_at: (r as any).reviewedAt || null,
+            review_remarks: r.reviewRemarks || null,
+          };
+        })
       );
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -237,36 +191,38 @@ export default function QuotationRequests() {
     setViewQuotation(q);
     setViewLoading(true);
     try {
-      // Fetch initial quotation items
-      const { data: items } = await supabase
-        .from("quotation_items")
-        .select("*")
-        .eq("quotation_id", q.id)
-        .order("created_at", { ascending: true });
-      setViewItems(items || []);
+      // Fetch full quotation by id to get items
+      const result = await quotationsApi.getById(q.id);
+      const quotationData = result.data;
+      const initialItems: QuotationItemRow[] = (quotationData?.items || []).map((item) => ({
+        id: item.id,
+        material_name: item.materialName,
+        unit: item.unit || "pcs",
+        quantity: item.quantity,
+      }));
+      setViewItems(initialItems);
 
       // Fetch additional quotations for same project
-      const { data: additionalQuots } = await supabase
-        .from("project_quotations")
-        .select("*")
-        .eq("project_id", q.project_id)
-        .eq("category", "additional")
-        .neq("id", q.id)
-        .order("created_at", { ascending: true });
+      const allResult = await quotationsApi.getAll(q.project_id);
+      const allQuotations = allResult.data || [];
+      const additionalQuots = allQuotations.filter(
+        (aq) => aq.category === "additional" && aq.id !== q.id
+      );
 
-      const additional: { items: QuotationItemRow[]; quotation: any }[] = [];
-      for (const aq of additionalQuots || []) {
-        const { data: aqItems } = await supabase
-          .from("quotation_items")
-          .select("*")
-          .eq("quotation_id", aq.id)
-          .order("created_at", { ascending: true });
-        additional.push({ items: aqItems || [], quotation: aq });
-      }
+      const additional: { items: QuotationItemRow[]; quotation: any }[] = additionalQuots.map((aq) => ({
+        items: (aq.items || []).map((item) => ({
+          id: item.id,
+          material_name: item.materialName,
+          unit: item.unit || "pcs",
+          quantity: item.quantity,
+        })),
+        quotation: {
+          id: aq.id,
+          created_at: aq.createdAt,
+          notes: aq.notes,
+        },
+      }));
       setViewAdditionalItems(additional);
-
-      // Also fetch approved change requests to show as Updates/Added
-      // This covers quantity changes on existing initial materials
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
@@ -286,122 +242,27 @@ export default function QuotationRequests() {
     setReviewing(true);
 
     try {
-      const { data: userProfile } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("id", user.id)
-        .maybeSingle();
-      const userName = userProfile?.full_name || "Admin";
+      // The REST API backend handles applying changes when reviewing
+      const result = await quotationsApi.reviewChangeRequest(reviewingRequest.id, {
+        status: reviewAction,
+        reviewRemarks: reviewRemarks || undefined,
+      });
 
-      if (reviewAction === "approved") {
-        const payload = reviewingRequest.payload as any;
-        const quotationId = reviewingRequest.quotation_id;
-
-        if (reviewingRequest.change_type === "create") {
-          // For create: upsert to handle unique constraint on project_id
-          const { data: newQuotation, error: createError } = await supabase
-            .from("project_quotations")
-            .upsert({
-              project_id: reviewingRequest.project_id,
-              created_by: reviewingRequest.requested_by,
-              notes: payload.notes || null,
-              category: payload.category || "initial",
-              updated_at: new Date().toISOString(),
-            }, { onConflict: "project_id" })
-            .select()
-            .single();
-
-          if (createError) throw createError;
-
-          if (payload.items?.length > 0) {
-            await supabase.from("quotation_items").insert(
-              payload.items.map((item: any) => ({
-                quotation_id: newQuotation.id,
-                material_name: item.material_name,
-                unit: item.unit,
-                quantity: item.quantity,
-              }))
-            );
-          }
-        } else if (reviewingRequest.change_type === "update" && quotationId) {
-          // UPDATE the existing quotation row - DO NOT insert a new one
-          await supabase
-            .from("project_quotations")
-            .update({ updated_at: new Date().toISOString(), notes: payload.notes || null })
-            .eq("id", quotationId);
-
-          if (payload.items?.length > 0) {
-            // Fetch existing items for this quotation to determine deltas
-            const { data: existingItems } = await supabase
-              .from("quotation_items")
-              .select("id, material_name, unit, quantity")
-              .eq("quotation_id", quotationId);
-
-            const existingMap = new Map(
-              (existingItems || []).map((i) => [
-                `${i.material_name.toUpperCase()}||${i.unit.toLowerCase()}`,
-                i,
-              ])
-            );
-
-            // Process each item in the payload
-            for (const item of payload.items) {
-              const key = `${item.material_name.toUpperCase()}||${item.unit.toLowerCase()}`;
-              const existing = existingMap.get(key);
-
-              if (existing) {
-                // Existing material - update quantity if changed
-                if (item.quantity !== existing.quantity) {
-                  await supabase
-                    .from("quotation_items")
-                    .update({
-                      quantity: item.quantity,
-                      updated_at: new Date().toISOString(),
-                    })
-                    .eq("id", existing.id);
-                }
-                existingMap.delete(key); // Mark as processed
-              } else {
-                // New material - insert into same quotation
-                await supabase.from("quotation_items").insert({
-                  quotation_id: quotationId,
-                  material_name: item.material_name,
-                  unit: item.unit,
-                  quantity: item.quantity,
-                });
-              }
-            }
-          }
-        } else if (reviewingRequest.change_type === "delete" && quotationId) {
-          await supabase.from("quotation_items").delete().eq("quotation_id", quotationId);
-          await supabase.from("project_quotations").delete().eq("id", quotationId);
-        }
-      }
-
-      // Update request status
-      await supabase
-        .from("quotation_change_requests")
-        .update({
-          status: reviewAction,
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          review_remarks: reviewRemarks || null,
-        })
-        .eq("id", reviewingRequest.id);
+      if (!result.success) throw new Error(result.message || "Failed to review change request");
 
       await logActivity({
         action: `change_request_${reviewAction}`,
         tableName: "project_quotations",
         recordId: reviewingRequest.quotation_id || reviewingRequest.project_id,
         oldValues: { status: "pending" },
-        newValues: { status: reviewAction, reviewed_by: userName },
+        newValues: { status: reviewAction, reviewed_by: user.id },
         userId: user.id,
       });
 
       await notifyProjectMembers({
         projectId: reviewingRequest.project_id,
         title: `Quotation Change ${reviewAction === "approved" ? "Approved" : "Rejected"}`,
-        message: `${userName} ${reviewAction} the quotation ${reviewingRequest.change_type} request for ${reviewingRequest.project_name}`,
+        message: `The quotation ${reviewingRequest.change_type} request for ${reviewingRequest.project_name} was ${reviewAction}.`,
         type: "project",
         referenceType: "quotation_change_request",
         referenceId: reviewingRequest.id,

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { ordersApi, projectsApi } from "@/lib/apiClient";
+import type { Order as ApiOrder, Project as ApiProject } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/common/PageHeader";
 import { DataTable, Column } from "@/components/common/DataTable";
@@ -35,6 +36,53 @@ import { formatManilaTime } from "@/lib/notificationService";
 import type { Order, Project, OrderStatus, Profile } from "@/types/database";
 import { format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
+
+// ── Mapping: API camelCase → local snake_case ────────────────────────────────
+
+function toLocalOrder(o: ApiOrder): Order {
+  return {
+    id: o.id,
+    project_id: o.projectId,
+    order_number: o.orderNumber,
+    order_type: o.orderType ?? "",
+    status: o.status as OrderStatus,
+    supplier_name: o.supplierName ?? null,
+    supplier_contact: o.supplierContact ?? null,
+    expected_delivery_date: o.expectedDeliveryDate ?? null,
+    notes: o.notes ?? null,
+    total_amount: o.totalAmount ?? null,
+    approved_by: o.approvedBy ?? null,
+    approved_at: o.approvedAt ?? null,
+    rejected_by: o.rejectedBy ?? null,
+    rejected_at: o.rejectedAt ?? null,
+    rejection_reason: o.rejectionReason ?? null,
+    previous_status: null,
+    created_at: o.createdAt,
+    updated_at: o.updatedAt,
+    created_by: o.createdBy ?? "",
+  };
+}
+
+function toLocalProject(p: ApiProject): Project {
+  return {
+    id: p.id,
+    name: p.name,
+    code: p.code ?? null,
+    location: p.location ?? null,
+    description: p.description ?? null,
+    status: p.status as any,
+    start_date: p.startDate ?? null,
+    end_date: p.endDate ?? null,
+    project_manager_id: p.projectManagerId ?? null,
+    estimated_cost: p.estimatedCost ?? null,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+    created_by: p.createdBy ?? null,
+    is_hidden: p.isHidden,
+  };
+}
+
+// ── Local types ───────────────────────────────────────────────────────────────
 
 interface OrderWithProject extends Order {
   project: Project;
@@ -112,29 +160,34 @@ export default function Orders() {
   }, [statusFilter, searchParams, setSearchParams]);
 
   const fetchData = async () => {
-    const { data: ordersData } = await supabase
-      .from("orders")
-      .select("*, project:projects(*)")
-      .in("status", [
-        "for_approval",
-        "approved",
-        "submitted",
-        "preparing",
-        "in_transit",
-        "delivered",
-        "on_hold",
-        "closed",
-      ])
-      .order("created_at", { ascending: false });
+    // Fetch all active-workflow orders
+    const ordersRes = await ordersApi.getAll();
+    const activeStatuses = new Set([
+      "for_approval", "approved", "submitted", "preparing",
+      "in_transit", "delivered", "on_hold", "closed",
+    ]);
 
-    const activeProjectOrders = (ordersData || []).filter(
-      (order: any) => order.project?.status === "active" && !order.project?.is_hidden
-    );
+    // Build project map for quick lookup
+    const projectsRes = await projectsApi.getAll({ status: "active" });
+    const projectMap = new Map<string, Project>();
+    if (projectsRes.success && projectsRes.data) {
+      const localProjects = projectsRes.data.map(toLocalProject);
+      localProjects.forEach((p) => projectMap.set(p.id, p));
+      setProjects(localProjects);
+    }
 
-    setOrders(activeProjectOrders as OrderWithProject[]);
+    if (ordersRes.success && ordersRes.data) {
+      const filtered: OrderWithProject[] = ordersRes.data
+        .filter((o) => activeStatuses.has(o.status))
+        .map((o) => {
+          const local = toLocalOrder(o);
+          const project = projectMap.get(o.projectId);
+          return project ? { ...local, project } : null;
+        })
+        .filter((o): o is OrderWithProject => o !== null && !o.project.is_hidden);
 
-    const { data: projectsData } = await supabase.from("projects").select("*").eq("status", "active").eq("is_hidden", false);
-    setProjects((projectsData || []) as Project[]);
+      setOrders(filtered);
+    }
 
     setLoading(false);
     fetchRejectedOrders();
@@ -143,43 +196,25 @@ export default function Orders() {
   const fetchRejectedOrders = async () => {
     setRejectedLoading(true);
     try {
-      const { data: rejected } = await supabase
-        .from("rejected_orders")
-        .select("id, order_number, project_id, created_by, created_at, rejected_by, rejected_at, rejection_reason, notes, expected_delivery_date")
-        .order("rejected_at", { ascending: false });
-
-      if (!rejected || rejected.length === 0) {
+      const res = await ordersApi.getAll({ status: "rejected" });
+      if (!res.success || !res.data || res.data.length === 0) {
         setRejectedOrders([]);
-        setRejectedLoading(false);
         return;
       }
 
-      const projectIds = [...new Set(rejected.map((r: any) => r.project_id))];
-      const { data: projectsData } = await supabase.from("projects").select("id, name").in("id", projectIds);
-      const projectMap = new Map((projectsData || []).map((p: any) => [p.id, p.name]));
-
-      const userIds = [
-        ...new Set([
-          ...rejected.map((r: any) => r.created_by),
-          ...rejected.filter((r: any) => r.rejected_by).map((r: any) => r.rejected_by),
-        ]),
-      ];
-      const { data: profiles } = await supabase.from("profiles").select("id, full_name").in("id", userIds);
-      const profileMap = new Map((profiles || []).map((p: any) => [p.id, p.full_name || "Unknown"]));
-
       setRejectedOrders(
-        rejected.map((r: any) => ({
-          id: r.id,
-          order_number: r.order_number,
-          project_id: r.project_id,
-          project_name: projectMap.get(r.project_id) || "Unknown",
-          requested_by: profileMap.get(r.created_by) || "Unknown",
-          rejected_by: r.rejected_by ? profileMap.get(r.rejected_by) || "Unknown" : "Unknown",
-          rejected_at: r.rejected_at || r.created_at,
-          rejection_reason: r.rejection_reason,
-          notes: r.notes,
-          created_at: r.created_at,
-          expected_delivery_date: r.expected_delivery_date,
+        res.data.map((o) => ({
+          id: o.id,
+          order_number: o.orderNumber,
+          project_id: o.projectId,
+          project_name: o.projectName ?? "Unknown",
+          requested_by: o.createdByName ?? "Unknown",
+          rejected_by: o.rejectedByName ?? "Unknown",
+          rejected_at: o.rejectedAt ?? o.createdAt,
+          rejection_reason: o.rejectionReason ?? null,
+          notes: o.notes ?? null,
+          created_at: o.createdAt,
+          expected_delivery_date: o.expectedDeliveryDate ?? null,
         }))
       );
     } catch (err: any) {
@@ -193,25 +228,14 @@ export default function Orders() {
     setViewRejectedOrder(ro);
     setMaterialsLoading(true);
     try {
-      const { data: items } = await supabase
-        .from("rejected_order_items")
-        .select("quantity_ordered, sku_id")
-        .eq("order_id", ro.id);
-
-      if (items && items.length > 0) {
-        const skuIds = items.map((i: any) => i.sku_id);
-        const { data: skus } = await supabase.from("skus").select("id, name, unit_of_measure").in("id", skuIds);
-        const skuMap = new Map((skus || []).map((s: any) => [s.id, s]));
-
+      const res = await ordersApi.getById(ro.id);
+      if (res.success && res.data && res.data.items.length > 0) {
         setRejectedMaterials(
-          items.map((i: any) => {
-            const sku = skuMap.get(i.sku_id);
-            return {
-              material_name: sku?.name || "Unknown",
-              quantity: i.quantity_ordered,
-              unit: sku?.unit_of_measure || "EA",
-            };
-          })
+          res.data.items.map((i) => ({
+            material_name: i.skuName ?? "Unknown",
+            quantity: i.quantityOrdered,
+            unit: i.unit ?? "EA",
+          }))
         );
       } else {
         setRejectedMaterials([]);
@@ -228,11 +252,8 @@ export default function Orders() {
     setDeleteLoading(true);
 
     try {
-      const { error } = await supabase.rpc("delete_rejected_order", {
-        _order_id: deletingOrderId,
-      });
-
-      if (error) throw error;
+      const res = await ordersApi.delete(deletingOrderId);
+      if (!res.success) throw new Error(res.message ?? "Delete failed");
 
       await logActivity({
         action: "delete_rejected_order",

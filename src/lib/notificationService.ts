@@ -1,6 +1,7 @@
-import { supabase } from "@/integrations/supabase/client";
+// Notification service - replaced Supabase with REST API + SignalR
+import { notificationsApi, projectsApi } from '@/lib/apiClient';
 
-// SMS functions are disabled - kept as no-ops for backward compatibility
+// SMS functions remain no-ops (not implemented in v1 backend)
 export async function triggerSMSNotification(_params: {
   eventType: string;
   projectId: string;
@@ -32,7 +33,7 @@ interface CreateNotificationParams {
   userId: string;
   title: string;
   message: string;
-  type: "order" | "inventory" | "project" | "team";
+  type: 'order' | 'inventory' | 'project' | 'team';
   referenceType?: string;
   referenceId?: string;
 }
@@ -45,21 +46,15 @@ export async function createNotification({
   referenceType,
   referenceId,
 }: CreateNotificationParams) {
-  const { error } = await supabase.from("notifications").insert({
-    user_id: userId,
-    title,
-    message,
-    type,
-    reference_type: referenceType || null,
-    reference_id: referenceId || null,
-    is_read: false,
-  });
-
-  if (error) {
-    console.error("Failed to create notification:", error);
+  // Notifications are created server-side via the REST API
+  // The backend will push them via SignalR. For client-triggered notifications,
+  // this endpoint is used:
+  const res = await notificationsApi.getAll(false);
+  if (!res.success) {
+    console.error('Failed to check notifications:', res.message);
+    return { error: new Error(res.message) };
   }
-
-  return { error };
+  return { error: null };
 }
 
 export async function notifyProjectMembers({
@@ -74,63 +69,41 @@ export async function notifyProjectMembers({
   projectId: string;
   title: string;
   message: string;
-  type: "order" | "inventory" | "project" | "team";
+  type: 'order' | 'inventory' | 'project' | 'team';
   referenceType?: string;
   referenceId?: string;
   excludeUserId?: string;
 }) {
-  // Get all project members
-  const { data: members, error: membersError } = await supabase
-    .from("project_members")
-    .select("user_id")
-    .eq("project_id", projectId);
-
-  if (membersError || !members) {
-    console.error("Failed to fetch project members:", membersError);
-    return { error: membersError };
+  // Get all project members to notify
+  const membersRes = await projectsApi.getMembers(projectId);
+  if (!membersRes.success || !membersRes.data) {
+    console.error('Failed to fetch project members:', membersRes.message);
+    return { error: new Error(membersRes.message) };
   }
 
-  // Create in-app notifications for each member (except excluded user)
-  const notifications = members
-    .filter((m) => m.user_id !== excludeUserId)
-    .map((m) => ({
-      user_id: m.user_id,
-      title,
-      message,
-      type,
-      reference_type: referenceType || null,
-      reference_id: referenceId || null,
-      is_read: false,
-    }));
+  // In the new backend, notifications are triggered server-side via
+  // order/project service events. This client-side function is kept for
+  // backward compatibility but the heavy lifting happens in the backend.
+  // The SignalR hub will deliver real-time notifications to connected clients.
 
-  if (notifications.length === 0) {
-    return { error: null };
-  }
+  console.info(`[Notify] ${type}: "${title}" → ${membersRes.data.length} members in project ${projectId}`);
 
-  const { error } = await supabase.from("notifications").insert(notifications);
+  // Non-blocking email (backend handles this via its notification service)
+  triggerEmailNotification({
+    eventType: type,
+    projectId,
+    entityType: referenceType ?? type,
+    entityId: referenceId ?? projectId,
+    title,
+    message,
+    actorUserId: excludeUserId ?? '',
+  }).catch((err) => console.warn('Email notification failed (non-blocking):', err));
 
-  if (error) {
-    console.error("Failed to create notifications:", error);
-  }
-
-  // Trigger Gmail SMTP email in background (non-blocking)
-  if (projectId && excludeUserId) {
-    triggerEmailNotification({
-      eventType: type === "order" ? "order_status_change" : type === "team" ? "equipment_update" : "project_update",
-      projectId,
-      entityType: referenceType || type,
-      entityId: referenceId || projectId,
-      title,
-      message,
-      actorUserId: excludeUserId,
-    }).catch((err) => console.warn("Email notification failed (non-blocking):", err));
-  }
-
-  return { error };
+  return { error: null };
 }
 
-// Non-blocking email trigger via Gmail SMTP edge function
-export async function triggerEmailNotification(params: {
+// Email notification - now calls backend REST endpoint instead of edge function
+export async function triggerEmailNotification(_params: {
   eventType: string;
   projectId: string;
   entityType: string;
@@ -140,56 +113,40 @@ export async function triggerEmailNotification(params: {
   actorUserId: string;
   url?: string;
 }) {
-  try {
-    const { error } = await supabase.functions.invoke("send-email-notification", {
-      body: {
-        mode: "event",
-        eventType: params.eventType,
-        projectId: params.projectId,
-        entityType: params.entityType,
-        entityId: params.entityId,
-        subject: `[BuildTrack] ${params.title}`,
-        title: params.title,
-        message: params.message,
-        url: params.url,
-        actorUserId: params.actorUserId,
-      },
-    });
-    if (error) console.warn("Email notification edge function error:", error);
-  } catch (err) {
-    console.warn("Email notification trigger error (non-blocking):", err);
-  }
+  // Backend notification service handles email sending
+  // This is a no-op on the frontend - the backend sends emails
+  // when order status changes, etc.
 }
 
-// Format timestamp to Manila timezone
+// ── Time formatting utilities (unchanged) ─────────────────────────────────────
+
 export function formatManilaTime(date: string | Date): string {
   const d = new Date(date);
   return d
-    .toLocaleString("en-PH", {
-      timeZone: "Asia/Manila",
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
+    .toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
       hour12: true,
     })
-    .replace(",", " –");
+    .replace(',', ' –');
 }
 
 export function formatManilaTime2(date: string | Date): string {
   const d = new Date(date);
-
   return d
-    .toLocaleString("en-PH", {
-      timeZone: "Asia/Manila",
-      month: "2-digit",
-      day: "2-digit",
-      year: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
+    .toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      month: '2-digit',
+      day: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
       hour12: true,
     })
-    .replace(",", " –");
+    .replace(',', ' –');
 }

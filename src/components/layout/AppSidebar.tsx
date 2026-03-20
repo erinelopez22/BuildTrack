@@ -44,7 +44,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -112,15 +111,7 @@ export function AppSidebar() {
     if (resetConfirmText !== "RESET") return;
     setResetting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("reset-data", {
-        method: "POST",
-      });
-      if (error) throw error;
-      toast({
-        title: "Data reset complete",
-        description: "All application data has been cleared.",
-      });
-      queryClient.invalidateQueries();
+      toast({ title: "Not available", description: "Data reset is not available in this version." });
       setShowResetDialog(false);
       setResetConfirmText("");
     } catch (err: any) {

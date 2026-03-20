@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { projectsApi } from '@/lib/apiClient';
+import type { Project as ApiProject } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -21,10 +22,30 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, FolderKanban, Search } from 'lucide-react';
 import type { Project, ProjectStatus } from '@/types/database';
 
+// Map API project to the local Project type expected by existing components
+function toLocalProject(p: ApiProject): Project {
+  return {
+    id: p.id,
+    name: p.name,
+    code: p.code ?? null,
+    location: p.location ?? null,
+    description: p.description ?? null,
+    status: (p.status ?? 'active') as ProjectStatus,
+    start_date: p.startDate ?? null,
+    end_date: p.endDate ?? null,
+    estimated_cost: p.estimatedCost ?? null,
+    is_hidden: p.isHidden ?? false,
+    project_manager_id: p.projectManagerId ?? null,
+    created_at: p.createdAt,
+    updated_at: p.updatedAt,
+    created_by: p.createdBy ?? null,
+  } as unknown as Project;
+}
+
 export default function Projects() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isAdmin, isSuperAdmin, user, canCreateProjects } = useAuth();
+  const { isAdmin, isSuperAdmin, canCreateProjects } = useAuth();
   const { toast } = useToast();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,32 +72,20 @@ export default function Projects() {
       searchParams.set('status', statusFilter);
     }
     setSearchParams(searchParams, { replace: true });
-  }, [statusFilter, searchParams, setSearchParams]);
+  }, [statusFilter]);
 
   const fetchProjects = async () => {
-    let query = supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    // Non-super-admins never see deleted projects
-    if (!isSuperAdmin()) {
-      query = query.neq('status', 'deleted');
+    try {
+      const result = await projectsApi.getAll({
+        includeHidden: isAdmin() && showHidden,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+      });
+      setProjects((result.data ?? []).map(toLocalProject));
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to load projects', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-
-    // Hide hidden projects unless admin/super_admin with showHidden toggle
-    if (!isAdmin() || !showHidden) {
-      query = query.eq('is_hidden', false);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      toast({ title: 'Error', description: error.message, variant: 'destructive' });
-    } else {
-      setProjects(data as Project[]);
-    }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -92,36 +101,26 @@ export default function Projects() {
     status: ProjectStatus;
   }) => {
     setIsSubmitting(true);
-
     try {
       if (editingProject) {
-        const { error } = await supabase
-          .from('projects')
-          .update({
-            name: data.name,
-            description: data.description || null,
-            location: data.location,
-            start_date: data.start_date,
-            end_date: data.end_date,
-            status: data.status,
-          })
-          .eq('id', editingProject.id);
-
-        if (error) throw error;
+        await projectsApi.update(editingProject.id, {
+          name: data.name,
+          description: data.description || undefined,
+          location: data.location,
+          startDate: data.start_date,
+          endDate: data.end_date,
+          status: data.status,
+        });
         toast({ title: 'Success', description: 'Project updated successfully' });
       } else {
-        // Create new project using RPC for atomic insert + membership
-        const { data: newProjectId, error } = await supabase.rpc('create_project_with_membership', {
-          _name: data.name,
-          _description: data.description || null,
-          _location: data.location,
-          _start_date: data.start_date,
-          _end_date: data.end_date,
-          _status: data.status,
+        await projectsApi.create({
+          name: data.name,
+          description: data.description || undefined,
+          location: data.location,
+          startDate: data.start_date,
+          endDate: data.end_date,
+          status: data.status,
         });
-
-        if (error) throw error;
-
         toast({ title: 'Success', description: 'Project created successfully' });
       }
 
@@ -146,50 +145,27 @@ export default function Projects() {
 
   const handleDeleteProject = async (project: Project) => {
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({ status: 'deleted' as ProjectStatus })
-        .eq('id', project.id);
-
-      if (error) throw error;
+      await projectsApi.update(project.id, { status: 'deleted' });
       toast({ title: 'Success', description: 'Project moved to deleted' });
       fetchProjects();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete project',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: error.message || 'Failed to delete project', variant: 'destructive' });
     }
   };
 
   const handleRestoreProject = async (project: Project) => {
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({ status: 'active' as ProjectStatus })
-        .eq('id', project.id);
-
-      if (error) throw error;
+      await projectsApi.update(project.id, { status: 'active' });
       toast({ title: 'Success', description: 'Project restored successfully' });
       fetchProjects();
     } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to restore project',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: error.message || 'Failed to restore project', variant: 'destructive' });
     }
   };
 
   const handleHideProject = async (project: Project) => {
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({ is_hidden: true })
-        .eq('id', project.id);
-
-      if (error) throw error;
+      await projectsApi.update(project.id, { isHidden: true });
       toast({ title: 'Success', description: 'Project hidden' });
       fetchProjects();
     } catch (error: any) {
@@ -199,12 +175,7 @@ export default function Projects() {
 
   const handleUnhideProject = async (project: Project) => {
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({ is_hidden: false })
-        .eq('id', project.id);
-
-      if (error) throw error;
+      await projectsApi.update(project.id, { isHidden: false });
       toast({ title: 'Success', description: 'Project unhidden' });
       fetchProjects();
     } catch (error: any) {
@@ -213,9 +184,7 @@ export default function Projects() {
   };
 
   const handleCloseDialog = (open: boolean) => {
-    if (!open) {
-      setEditingProject(null);
-    }
+    if (!open) setEditingProject(null);
     setIsDialogOpen(open);
   };
 
@@ -225,9 +194,7 @@ export default function Projects() {
       p.code?.toLowerCase().includes(search.toLowerCase()) ||
       p.location?.toLowerCase().includes(search.toLowerCase()) ||
       p.description?.toLowerCase().includes(search.toLowerCase());
-
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
-
     return matchesSearch && matchesStatus;
   });
 
@@ -249,10 +216,7 @@ export default function Projects() {
           description="Create your first project to start tracking inventory and orders."
           action={
             canCreateProjects()
-              ? {
-                  label: 'Create Project',
-                  onClick: () => setIsDialogOpen(true),
-                }
+              ? { label: 'Create Project', onClick: () => setIsDialogOpen(true) }
               : undefined
           }
         />
@@ -282,7 +246,6 @@ export default function Projects() {
         }
       />
 
-      {/* Search, Filter, and Show Hidden Toggle */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -307,11 +270,7 @@ export default function Projects() {
         </Select>
         {isAdmin() && (
           <div className="flex items-center gap-2">
-            <Switch
-              id="show-hidden"
-              checked={showHidden}
-              onCheckedChange={setShowHidden}
-            />
+            <Switch id="show-hidden" checked={showHidden} onCheckedChange={setShowHidden} />
             <Label htmlFor="show-hidden" className="text-sm text-muted-foreground whitespace-nowrap">
               Show Hidden
             </Label>
