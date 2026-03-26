@@ -639,7 +639,7 @@ public class DashboardService(AppDbContext db) : IDashboardService
             })
             .ToListAsync();
 
-        var skuQuery = db.SKUs.Where(s => s.IsActive);
+        var skuQuery = db.SKUs.AsQueryable();
         if (!isSuperAdmin && companyId.HasValue)
             skuQuery = skuQuery.Where(s => s.CompanyId == companyId.Value);
         var stockItems = await skuQuery.CountAsync();
