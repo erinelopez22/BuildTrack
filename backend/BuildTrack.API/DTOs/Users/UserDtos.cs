@@ -17,6 +17,8 @@ public class UserDto
     public DateTime UpdatedAt { get; set; }
     public Guid? CreatedBy { get; set; }
     public List<string> Roles { get; set; } = [];
+    public Guid? CompanyId { get; set; }
+    public string? CompanyName { get; set; }
 }
 
 public class CreateUserRequest
@@ -35,6 +37,7 @@ public class CreateUserRequest
     public string? Address { get; set; }
     public bool SmsOptIn { get; set; } = false;
     public string? Role { get; set; }
+    public Guid? CompanyId { get; set; }
 }
 
 public class UpdateUserRequest
@@ -46,6 +49,7 @@ public class UpdateUserRequest
     public string? AvatarUrl { get; set; }
     public bool? SmsOptIn { get; set; }
     public bool? IsActive { get; set; }
+    public Guid? CompanyId { get; set; }
 }
 
 public class AssignRoleRequest

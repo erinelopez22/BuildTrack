@@ -8,11 +8,12 @@ namespace BuildTrack.API.Services.Implementations;
 
 public class AuthService(AppDbContext db, IJwtService jwtService, IConfiguration config) : IAuthService
 {
-    public async Task<AuthResponse?> LoginAsync(string loginId, string password)
+    public async Task<AuthResponse?> LoginAsync(string loginId, string password, Guid? companyId = null)
     {
         // Allow login by email or username
         var profile = await db.Profiles
             .Include(p => p.UserRoles)
+            .Include(p => p.Company)
             .FirstOrDefaultAsync(p =>
                 p.Email.ToLower() == loginId.ToLower() ||
                 (p.Username != null && p.Username.ToLower() == loginId.ToLower()));
@@ -20,7 +21,33 @@ public class AuthService(AppDbContext db, IJwtService jwtService, IConfiguration
         if (profile == null || !profile.IsActive) return null;
         if (!BCrypt.Net.BCrypt.Verify(password, profile.PasswordHash)) return null;
 
-        return await BuildAuthResponseAsync(profile);
+        var roles = profile.UserRoles.Select(r => r.Role).ToList();
+        var isSuperAdmin = roles.Contains("super_admin");
+
+        // For super_admin: companyId is optional (they can see all)
+        // For others: companyId is required and must match user's assigned company
+        if (!isSuperAdmin)
+        {
+            if (!companyId.HasValue)
+                return null; // Company required for non-super_admin
+
+            if (profile.CompanyId.HasValue && profile.CompanyId.Value != companyId.Value)
+                return null; // Company mismatch
+
+            // If user doesn't have a company assigned yet, assign them to the selected company
+            if (!profile.CompanyId.HasValue)
+            {
+                profile.CompanyId = companyId.Value;
+                profile.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+                await db.Entry(profile).Reference(p => p.Company).LoadAsync();
+            }
+        }
+
+        // Determine the effective companyId for the session
+        var effectiveCompanyId = isSuperAdmin ? companyId : profile.CompanyId;
+
+        return await BuildAuthResponseAsync(profile, effectiveCompanyId);
     }
 
     public async Task<AuthResponse?> RefreshTokenAsync(string refreshToken)
@@ -28,6 +55,8 @@ public class AuthService(AppDbContext db, IJwtService jwtService, IConfiguration
         var stored = await db.RefreshTokens
             .Include(rt => rt.User)
             .ThenInclude(u => u.UserRoles)
+            .Include(rt => rt.User)
+            .ThenInclude(u => u.Company)
             .FirstOrDefaultAsync(rt => rt.Token == refreshToken && !rt.IsRevoked);
 
         if (stored == null || stored.ExpiresAt < DateTime.UtcNow) return null;
@@ -36,7 +65,7 @@ public class AuthService(AppDbContext db, IJwtService jwtService, IConfiguration
         stored.IsRevoked = true;
         await db.SaveChangesAsync();
 
-        return await BuildAuthResponseAsync(stored.User);
+        return await BuildAuthResponseAsync(stored.User, stored.User.CompanyId);
     }
 
     public async Task LogoutAsync(Guid userId)
@@ -52,6 +81,7 @@ public class AuthService(AppDbContext db, IJwtService jwtService, IConfiguration
     {
         var profile = await db.Profiles
             .Include(p => p.UserRoles)
+            .Include(p => p.Company)
             .FirstOrDefaultAsync(p => p.Id == userId);
 
         if (profile == null) return null;
@@ -72,10 +102,10 @@ public class AuthService(AppDbContext db, IJwtService jwtService, IConfiguration
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private async Task<AuthResponse> BuildAuthResponseAsync(Profile profile)
+    private async Task<AuthResponse> BuildAuthResponseAsync(Profile profile, Guid? effectiveCompanyId = null)
     {
         var roles = profile.UserRoles.Select(r => r.Role).ToList();
-        var accessToken = jwtService.GenerateAccessToken(profile.Id, profile.Email, roles);
+        var accessToken = jwtService.GenerateAccessToken(profile.Id, profile.Email, roles, effectiveCompanyId ?? profile.CompanyId);
         var refreshTokenStr = jwtService.GenerateRefreshToken();
 
         var expirationDays = config.GetValue<int>("Jwt:RefreshTokenExpirationDays", 30);
@@ -109,6 +139,8 @@ public class AuthService(AppDbContext db, IJwtService jwtService, IConfiguration
         Phone = profile.Phone,
         SmsOptIn = profile.SmsOptIn,
         IsActive = profile.IsActive,
-        Roles = profile.UserRoles.Select(r => r.Role).ToList()
+        Roles = profile.UserRoles.Select(r => r.Role).ToList(),
+        CompanyId = profile.CompanyId,
+        CompanyName = profile.Company?.Name
     };
 }

@@ -9,9 +9,13 @@ namespace BuildTrack.API.Services.Implementations;
 public class SkuService(AppDbContext db) : ISkuService
 {
     public async Task<List<SkuDto>> GetAllAsync(
-        string? search, bool? isActive, string? category, string? sortBy, string? sortOrder)
+        string? search, bool? isActive, string? category, string? sortBy, string? sortOrder,
+        Guid? companyId = null, bool isSuperAdmin = false)
     {
         var query = db.SKUs.AsQueryable();
+
+        if (!isSuperAdmin && companyId.HasValue)
+            query = query.Where(s => s.CompanyId == companyId.Value);
 
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(s =>
@@ -45,7 +49,7 @@ public class SkuService(AppDbContext db) : ISkuService
         return sku == null ? null : Map(sku);
     }
 
-    public async Task<(SkuDto? sku, string? error)> CreateAsync(CreateSkuRequest request, Guid createdBy)
+    public async Task<(SkuDto? sku, string? error)> CreateAsync(CreateSkuRequest request, Guid createdBy, Guid? companyId = null)
     {
         if (await db.SKUs.AnyAsync(s => s.SkuCode.ToLower() == request.SkuCode.ToLower()))
             return (null, "SKU code already exists.");
@@ -61,7 +65,8 @@ public class SkuService(AppDbContext db) : ISkuService
             Specifications = request.Specifications,
             DefaultMinThreshold = request.DefaultMinThreshold,
             IsActive = request.IsActive,
-            CreatedBy = createdBy
+            CreatedBy = createdBy,
+            CompanyId = companyId
         };
         db.SKUs.Add(sku);
         await db.SaveChangesAsync();

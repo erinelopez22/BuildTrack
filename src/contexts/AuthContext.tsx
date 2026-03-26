@@ -21,7 +21,7 @@ interface AuthContextType {
   profile: Profile | null;
   roles: AppRole[];
   loading: boolean;
-  signIn: (loginId: string, password: string) => Promise<{ error: Error | null }>;
+  signIn: (loginId: string, password: string, companyId?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   hasRole: (role: AppRole) => boolean;
   isAdmin: () => boolean;
@@ -75,8 +75,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, [hydrateFromSession]);
 
-  const signIn = async (loginId: string, password: string): Promise<{ error: Error | null }> => {
-    const res = await authApi.login(loginId, password);
+  const signIn = async (loginId: string, password: string, companyId?: string): Promise<{ error: Error | null }> => {
+    const res = await authApi.login(loginId, password, companyId);
     if (!res.success || !res.data) {
       return { error: new Error(res.message ?? 'Invalid credentials') };
     }

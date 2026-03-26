@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BuildTrack - Azure Free Hosting Guide</title>
+<style>
+  @page { margin: 0.8in; size: A4; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.7; color: #1a1a2e; max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+  h1 { color: #16213e; font-size: 2.2em; border-bottom: 3px solid #0078d4; padding-bottom: 10px; }
+  h2 { color: #0078d4; font-size: 1.6em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 40px; page-break-before: always; }
+  h2:first-of-type { page-break-before: avoid; }
+  h3 { color: #1a1a2e; font-size: 1.2em; margin-top: 25px; }
+  h4 { color: #333; font-size: 1.05em; margin-top: 15px; }
+  code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #e11d48; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.82em; line-height: 1.5; page-break-inside: avoid; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.9em; page-break-inside: avoid; }
+  th { background: #0078d4; color: white; padding: 10px 12px; text-align: left; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f8fafc; }
+  .cover { text-align: center; padding: 100px 0 60px; page-break-after: always; }
+  .cover h1 { font-size: 2.8em; border: none; color: #0078d4; }
+  .cover .subtitle { font-size: 1.3em; color: #64748b; margin-top: 10px; }
+  .cover .version { font-size: 1em; color: #94a3b8; margin-top: 30px; }
+  .cover .logo { font-size: 5em; margin-bottom: 20px; }
+  .toc { page-break-after: always; }
+  .toc h2 { page-break-before: avoid; }
+  .toc ul { list-style: none; padding: 0; }
+  .toc li { padding: 6px 0; border-bottom: 1px dotted #ccc; }
+  .toc a { text-decoration: none; color: #0078d4; }
+  .note { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .tip { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .danger { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  ol.tutorial { counter-reset: step; list-style: none; padding-left: 0; }
+  ol.tutorial li { counter-increment: step; margin: 10px 0; padding: 10px 10px 10px 45px; background: #f8fafc; border-radius: 8px; position: relative; }
+  ol.tutorial li::before { content: counter(step); position: absolute; left: 10px; top: 10px; background: #0078d4; color: white; width: 26px; height: 26px; border-radius: 50%; text-align: center; line-height: 26px; font-weight: bold; font-size: 0.85em; }
+
+  /* Screen mockup */
+  .screen { border: 2px solid #cbd5e1; border-radius: 12px; overflow: hidden; margin: 20px 0; font-size: 13px; background: #fff; page-break-inside: avoid; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .screen-title { background: #1e293b; color: #94a3b8; padding: 8px 16px; font-size: 11px; display: flex; align-items: center; gap: 8px; }
+  .screen-title .dots { display: flex; gap: 5px; }
+  .screen-title .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .screen-title .dot-r { background: #ef4444; }
+  .screen-title .dot-y { background: #eab308; }
+  .screen-title .dot-g { background: #22c55e; }
+  .screen-body { padding: 20px; }
+  .screen-caption { text-align: center; font-size: 12px; color: #64748b; font-style: italic; margin: -12px 0 20px; }
+
+  /* Azure portal mockup */
+  .azure-portal { background: #f3f2f1; }
+  .azure-header { background: #0078d4; color: white; padding: 8px 16px; font-size: 12px; display: flex; align-items: center; gap: 12px; }
+  .azure-header .az-logo { font-weight: 700; font-size: 14px; }
+  .azure-header .az-search { background: rgba(255,255,255,0.2); border: none; border-radius: 4px; padding: 4px 10px; color: white; font-size: 11px; flex: 1; max-width: 400px; }
+  .azure-breadcrumb { background: white; border-bottom: 1px solid #edebe9; padding: 8px 16px; font-size: 11px; color: #0078d4; }
+  .azure-content { padding: 20px; }
+  .azure-content h3 { margin: 0 0 4px; font-size: 20px; color: #323130; font-weight: 600; }
+  .azure-content .az-desc { font-size: 12px; color: #605e5c; margin-bottom: 16px; }
+
+  /* Form elements */
+  .az-form-group { margin-bottom: 14px; }
+  .az-form-group label { display: block; font-size: 12px; font-weight: 600; color: #323130; margin-bottom: 4px; }
+  .az-form-group .required { color: #a4262c; }
+  .az-input { width: 100%; max-width: 450px; border: 1px solid #8a8886; border-radius: 2px; padding: 6px 8px; font-size: 12px; color: #323130; background: white; }
+  .az-input.filled { border-color: #0078d4; }
+  .az-input.placeholder { color: #a19f9d; }
+  .az-select { border: 1px solid #8a8886; border-radius: 2px; padding: 6px 8px; font-size: 12px; color: #323130; background: white; min-width: 300px; }
+  .az-radio { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 4px 0; }
+  .az-radio input { accent-color: #0078d4; }
+  .az-btn { display: inline-block; padding: 6px 16px; border-radius: 2px; font-size: 12px; font-weight: 600; cursor: default; border: 1px solid transparent; }
+  .az-btn-primary { background: #0078d4; color: white; }
+  .az-btn-outline { background: white; color: #323130; border-color: #8a8886; }
+  .az-btn-danger { background: #a4262c; color: white; }
+  .az-tabs { display: flex; border-bottom: 2px solid #edebe9; margin-bottom: 16px; }
+  .az-tab { padding: 8px 16px; font-size: 12px; color: #605e5c; cursor: default; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .az-tab.active { color: #0078d4; border-bottom-color: #0078d4; font-weight: 600; }
+  .az-card { background: white; border: 1px solid #edebe9; border-radius: 2px; padding: 16px; margin-bottom: 12px; }
+  .az-card h4 { margin: 0 0 8px; font-size: 14px; color: #323130; }
+  .az-badge { display: inline-block; padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 600; }
+  .az-badge-green { background: #dff6dd; color: #107c10; }
+  .az-badge-blue { background: #deecf9; color: #0078d4; }
+  .az-badge-yellow { background: #fff4ce; color: #835b00; }
+  .az-badge-free { background: #dff6dd; color: #107c10; font-size: 11px; padding: 3px 10px; }
+  .az-info { background: #f3f2f1; border-left: 3px solid #0078d4; padding: 8px 12px; margin: 10px 0; font-size: 11px; color: #323130; }
+  .az-sidebar { width: 220px; background: #faf9f8; border-right: 1px solid #edebe9; padding: 12px 0; }
+  .az-sidebar-item { padding: 6px 16px; font-size: 12px; color: #323130; display: flex; align-items: center; gap: 8px; }
+  .az-sidebar-item.active { background: #edebe9; font-weight: 600; color: #0078d4; }
+  .az-sidebar-item .icon { width: 16px; text-align: center; font-size: 14px; }
+  .az-section-header { font-size: 14px; font-weight: 600; color: #323130; padding: 8px 16px; border-bottom: 1px solid #edebe9; }
+
+  /* Terminal */
+  .terminal { background: #0c0c0c; color: #cccccc; border-radius: 10px; overflow: hidden; margin: 16px 0; font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px; page-break-inside: avoid; }
+  .terminal-header { background: #1e1e1e; padding: 8px 14px; display: flex; align-items: center; gap: 8px; }
+  .terminal-header .t-tab { background: #0c0c0c; padding: 4px 12px; border-radius: 4px 4px 0 0; font-size: 11px; color: #cccccc; }
+  .terminal-header .t-tab.active { background: #0c0c0c; color: white; }
+  .terminal-body { padding: 14px 16px; line-height: 1.6; }
+  .terminal-body .prompt { color: #22c55e; }
+  .terminal-body .cmd { color: #f8fafc; }
+  .terminal-body .output { color: #808080; }
+  .terminal-body .highlight { color: #fbbf24; }
+  .terminal-body .success { color: #4ade80; }
+  .terminal-body .error { color: #f87171; }
+  .terminal-body .comment { color: #6a737d; }
+  .terminal-body .url { color: #58a6ff; }
+
+  /* Architecture */
+  .arch-diagram { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 20px 0; }
+  .arch-box { background: white; border: 2px solid #edebe9; border-radius: 8px; padding: 14px 18px; text-align: center; min-width: 150px; }
+  .arch-box.highlight { border-color: #0078d4; background: #f0f6ff; }
+  .arch-box .icon { font-size: 26px; margin-bottom: 4px; }
+  .arch-box .label { font-size: 12px; font-weight: 700; color: #323130; }
+  .arch-box .sub { font-size: 10px; color: #605e5c; }
+  .arch-box .cost { font-size: 11px; font-weight: 700; color: #107c10; margin-top: 4px; }
+  .arch-arrow { font-size: 18px; color: #a19f9d; }
+
+  /* Step indicator */
+  .step-header { display: flex; align-items: center; gap: 12px; margin: 24px 0 12px; padding: 12px 16px; background: #deecf9; border-radius: 8px; }
+  .step-circle { width: 36px; height: 36px; background: #0078d4; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+  .step-title { font-size: 1.15em; font-weight: 700; color: #0078d4; }
+
+  /* Checklist */
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { padding: 6px 0 6px 28px; position: relative; font-size: 0.95em; }
+  .checklist li::before { content: "✓"; position: absolute; left: 4px; color: #107c10; font-weight: bold; }
+
+  /* Cost table */
+  .cost-row { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #edebe9; font-size: 13px; }
+  .cost-row:last-child { border: none; font-weight: 700; font-size: 14px; }
+  .cost-row .price { color: #107c10; font-weight: 600; }
+
+  @media print { body { padding: 0; } h2 { page-break-before: always; } .cover { padding: 180px 0 80px; } .screen { box-shadow: none; } }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div class="logo">&#9729;&#65039;</div>
+  <h1>BuildTrack Hosting Guide</h1>
+  <div class="subtitle">Free Hosting on Microsoft Azure<br>Step-by-Step Setup Guide</div>
+  <div class="version">
+    <p>Azure Static Web Apps (Frontend) + Azure App Service (Backend) + Azure SQL (Database)</p>
+    <p>Version 1.0 &mdash; March 2026</p>
+    <p style="font-size:1.2em; color:#107c10; font-weight:700;">Total Cost: $0/month (Free Tier)</p>
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ul>
+    <li><a href="#s1">1. Overview &mdash; Architecture &amp; Free Tier Limits</a></li>
+    <li><a href="#s2">2. Prerequisites</a></li>
+    <li><a href="#s3">3. Step 1: Create Azure Free Account</a></li>
+    <li><a href="#s4">4. Step 2: Create Azure SQL Database (Free Tier)</a></li>
+    <li><a href="#s5">5. Step 3: Create Azure App Service (Free Tier &mdash; Backend)</a></li>
+    <li><a href="#s6">6. Step 4: Configure Backend Settings</a></li>
+    <li><a href="#s7">7. Step 5: Deploy Backend to Azure App Service</a></li>
+    <li><a href="#s8">8. Step 6: Create Azure Static Web App (Free &mdash; Frontend)</a></li>
+    <li><a href="#s9">9. Step 7: Configure Frontend Environment Variable</a></li>
+    <li><a href="#s10">10. Step 8: Test Your Live Application</a></li>
+    <li><a href="#s11">11. Step 9: Set Up Custom Domain (Optional)</a></li>
+    <li><a href="#s12">12. Deploying Updates</a></li>
+    <li><a href="#s13">13. Monitoring &amp; Logs</a></li>
+    <li><a href="#s14">14. Troubleshooting</a></li>
+    <li><a href="#s15">15. Quick Reference Card</a></li>
+  </ul>
+</div>
+
+<!-- SECTION 1 -->
+<h2 id="s1">1. Overview &mdash; Architecture &amp; Free Tier</h2>
+
+<p>We will host all 3 components of BuildTrack on <strong>Microsoft Azure's free tier</strong>:</p>
+
+<div class="arch-diagram">
+  <div class="arch-box">
+    <div class="icon">&#128100;</div>
+    <div class="label">Users</div>
+    <div class="sub">Browser / Mobile</div>
+  </div>
+  <div class="arch-arrow">&#8594;</div>
+  <div class="arch-box highlight">
+    <div class="icon">&#9889;</div>
+    <div class="label">Frontend</div>
+    <div class="sub">Azure Static Web Apps</div>
+    <div class="cost">FREE</div>
+  </div>
+  <div class="arch-arrow">&#8594;</div>
+  <div class="arch-box highlight">
+    <div class="icon">&#9881;</div>
+    <div class="label">Backend API</div>
+    <div class="sub">Azure App Service (F1)</div>
+    <div class="cost">FREE</div>
+  </div>
+  <div class="arch-arrow">&#8594;</div>
+  <div class="arch-box highlight">
+    <div class="icon">&#128451;</div>
+    <div class="label">Database</div>
+    <div class="sub">Azure SQL (Free Offer)</div>
+    <div class="cost">FREE</div>
+  </div>
+</div>
+<div class="screen-caption">Figure 1.1 &mdash; All three components hosted on Azure free tier</div>
+
+<h3>Azure Free Tier Limits</h3>
+<table>
+  <tr><th>Service</th><th>Free Tier</th><th>Limits</th><th>Enough for BuildTrack?</th></tr>
+  <tr><td>Azure Static Web Apps</td><td>Free plan</td><td>100GB bandwidth/mo, 2 custom domains</td><td>Yes &#10003;</td></tr>
+  <tr><td>Azure App Service</td><td>F1 (Free)</td><td>60 CPU min/day, 1GB RAM, 1GB storage</td><td>Yes (small team) &#10003;</td></tr>
+  <tr><td>Azure SQL Database</td><td>Free offer (32GB)</td><td>32GB storage, 100K vCore seconds/mo</td><td>Yes &#10003;</td></tr>
+</table>
+
+<div class="warning">
+  <strong>Free tier trade-offs:</strong>
+  <ul style="margin:4px 0;">
+    <li><strong>App Service F1</strong>: The app may sleep after ~20 minutes of inactivity. First request after sleep takes ~15-30 seconds (cold start).</li>
+    <li><strong>No custom domain on App Service F1</strong> (only on Static Web Apps). Backend will be at <code>yourapp.azurewebsites.net</code>.</li>
+    <li><strong>No Always-On</strong>: App turns off when idle to save resources.</li>
+  </ul>
+  <p>For a small team (&lt;10 users), this works perfectly fine!</p>
+</div>
+
+<div style="background:white; border:1px solid #edebe9; border-radius:8px; padding:16px; margin:16px 0;">
+  <div style="font-size:14px; font-weight:600; margin-bottom:8px; color:#323130;">Monthly Cost Breakdown</div>
+  <div class="cost-row"><span>Azure Static Web Apps (Frontend)</span><span class="price">$0.00</span></div>
+  <div class="cost-row"><span>Azure App Service F1 (Backend)</span><span class="price">$0.00</span></div>
+  <div class="cost-row"><span>Azure SQL Database (Free Offer)</span><span class="price">$0.00</span></div>
+  <div class="cost-row"><span>SSL Certificate (auto-included)</span><span class="price">$0.00</span></div>
+  <div class="cost-row" style="background:#f0fdf4; border-radius:4px;"><span>TOTAL</span><span class="price" style="font-size:16px;">$0.00/month</span></div>
+</div>
+
+<!-- SECTION 2 -->
+<h2 id="s2">2. Prerequisites</h2>
+
+<ul class="checklist">
+  <li>A Microsoft/Outlook account (or create one at outlook.com)</li>
+  <li>A credit/debit card (Azure requires it for verification &mdash; <strong>you won't be charged</strong> on free tier)</li>
+  <li>A GitHub account with your BuildTrack repo pushed</li>
+  <li>Node.js installed on your PC (you already have this)</li>
+  <li>.NET 8 SDK installed on your PC (you already have this)</li>
+  <li>Git installed on your PC</li>
+</ul>
+
+<h3>Your GitHub Repository Should Look Like:</h3>
+<table>
+  <tr><th>Setting</th><th>Value</th></tr>
+  <tr><td>GitHub Username</td><td><code>erinelopez22</code></td></tr>
+  <tr><td>Repository</td><td><code>stockwell-build</code></td></tr>
+  <tr><td>Branch</td><td><code>buildTrack_UsingDotNet</code></td></tr>
+  <tr><td>Frontend location</td><td><code>/</code> (root)</td></tr>
+  <tr><td>Backend location</td><td><code>/backend/BuildTrack.API/</code></td></tr>
+</table>
+
+<!-- SECTION 3 -->
+<h2 id="s3">3. Step 1: Create Azure Free Account</h2>
+
+<div class="step-header">
+  <div class="step-circle">1</div>
+  <div class="step-title">Sign Up for Azure (Free $200 Credit + Always-Free Services)</div>
+</div>
+
+<ol class="tutorial">
+  <li>Go to <strong><code>https://azure.microsoft.com/free</code></strong></li>
+  <li>Click <strong>"Start Free"</strong></li>
+  <li>Sign in with your Microsoft account (or create one)</li>
+  <li>Fill in your details: name, phone number, address</li>
+  <li>Enter credit/debit card (verification only &mdash; <strong>not charged</strong>)</li>
+  <li>Agree to terms and click <strong>"Sign Up"</strong></li>
+  <li>You'll get: <strong>$200 free credit for 30 days</strong> + <strong>always-free services forever</strong></li>
+</ol>
+
+<!-- Azure signup mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>azure.microsoft.com/free</div>
+  <div class="screen-body" style="background:linear-gradient(135deg, #0078d4 0%, #00bcf2 100%); text-align:center; padding:40px; color:white;">
+    <div style="font-size:28px; font-weight:700; margin-bottom:8px;">Start building on Azure for free</div>
+    <div style="font-size:14px; margin-bottom:20px; opacity:0.9;">Get $200 credit for 30 days + always-free services</div>
+    <div style="display:flex; justify-content:center; gap:20px; margin-bottom:24px;">
+      <div style="background:rgba(255,255,255,0.15); border-radius:8px; padding:16px 20px;">
+        <div style="font-size:24px; font-weight:700;">$200</div>
+        <div style="font-size:11px; opacity:0.8;">Free credit for 30 days</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.15); border-radius:8px; padding:16px 20px;">
+        <div style="font-size:24px; font-weight:700;">55+</div>
+        <div style="font-size:11px; opacity:0.8;">Always-free services</div>
+      </div>
+    </div>
+    <div class="az-btn" style="background:white; color:#0078d4; font-size:14px; padding:10px 30px;">Start Free &#8594;</div>
+  </div>
+</div>
+<div class="screen-caption">Figure 3.1 &mdash; Azure free account signup page</div>
+
+<div class="note">
+  <strong>After 30 days:</strong> Your $200 credit expires, but the <strong>always-free services</strong> (App Service F1, Static Web Apps Free, SQL Database Free) continue forever at no cost. You'll never be auto-charged unless you manually upgrade.
+</div>
+
+<!-- SECTION 4 -->
+<h2 id="s4">4. Step 2: Create Azure SQL Database</h2>
+
+<div class="step-header">
+  <div class="step-circle">2</div>
+  <div class="step-title">Create a Free Azure SQL Database for Your Data</div>
+</div>
+
+<ol class="tutorial">
+  <li>Go to <strong>Azure Portal</strong>: <code>https://portal.azure.com</code></li>
+  <li>Click <strong>"+ Create a resource"</strong> (top left)</li>
+  <li>Search for <strong>"SQL Database"</strong> and click <strong>"Create"</strong></li>
+</ol>
+
+<h3>2a: Basics Tab</h3>
+
+<!-- Azure SQL creation mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Azure Portal &mdash; Create SQL Database</div>
+  <div class="azure-portal">
+    <div class="azure-header">
+      <span class="az-logo">Microsoft Azure</span>
+      <input class="az-search" placeholder="&#128269; Search resources, services, docs..." />
+    </div>
+    <div class="azure-breadcrumb">Home &gt; SQL databases &gt; <strong>Create SQL Database</strong></div>
+    <div class="azure-content">
+      <h3>Create SQL Database</h3>
+      <div class="az-tabs">
+        <div class="az-tab active">Basics</div>
+        <div class="az-tab">Networking</div>
+        <div class="az-tab">Security</div>
+        <div class="az-tab">Additional settings</div>
+        <div class="az-tab">Tags</div>
+        <div class="az-tab">Review + create</div>
+      </div>
+
+      <div class="az-form-group">
+        <label>Subscription <span class="required">*</span></label>
+        <select class="az-select"><option>Azure subscription 1</option></select>
+      </div>
+
+      <div class="az-form-group">
+        <label>Resource group <span class="required">*</span></label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <select class="az-select"><option>Create new</option></select>
+        </div>
+        <div class="az-info">&#9432; Create a new resource group: <strong>BuildTrack-RG</strong></div>
+      </div>
+
+      <div class="az-form-group">
+        <label>Database name <span class="required">*</span></label>
+        <input class="az-input filled" value="BuildTrackDB" />
+      </div>
+
+      <div class="az-form-group">
+        <label>Server <span class="required">*</span></label>
+        <div class="az-info">&#9432; Click <strong>"Create new"</strong> to create a new SQL server</div>
+      </div>
+
+      <div class="az-form-group">
+        <label>Want to use SQL elastic pool?</label>
+        <div class="az-radio"><input type="radio" checked> <span>No</span></div>
+      </div>
+
+      <div class="az-form-group">
+        <label>Workload environment</label>
+        <div class="az-radio"><input type="radio" checked> <span>Development</span></div>
+      </div>
+
+      <div class="az-form-group" style="background:#f0fdf4; padding:12px; border-radius:6px; border:2px solid #107c10;">
+        <label style="color:#107c10;">&#10003; Apply free Azure SQL Database offer</label>
+        <div class="az-radio"><input type="radio" checked> <span style="color:#107c10; font-weight:600;">Yes &mdash; Apply the free offer (32GB, 100K vCore seconds/month)</span></div>
+        <div class="az-radio"><input type="radio"> <span>No</span></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 4.1 &mdash; Create SQL Database with the Free offer enabled</div>
+
+<h3>Fill in these values:</h3>
+<table>
+  <tr><th>Field</th><th>Value</th><th>Notes</th></tr>
+  <tr><td>Subscription</td><td>Your subscription</td><td>Auto-selected</td></tr>
+  <tr><td>Resource group</td><td><code>BuildTrack-RG</code></td><td>Click "Create new", type the name</td></tr>
+  <tr><td>Database name</td><td><code>BuildTrackDB</code></td><td></td></tr>
+  <tr><td>Server</td><td>Click <strong>"Create new"</strong></td><td>See next step</td></tr>
+  <tr><td>Elastic pool</td><td><code>No</code></td><td></td></tr>
+  <tr><td>Workload environment</td><td><code>Development</code></td><td></td></tr>
+  <tr><td style="color:#107c10; font-weight:600;">Apply free offer</td><td style="color:#107c10; font-weight:600;">Yes</td><td style="color:#107c10;">This makes it FREE!</td></tr>
+</table>
+
+<h3>2b: Create a New Server</h3>
+<p>When you click "Create new" for the server:</p>
+
+<!-- Server creation mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Azure Portal &mdash; Create SQL Server</div>
+  <div class="screen-body" style="background:#f3f2f1;">
+    <h3 style="margin:0 0 16px; font-size:16px; color:#323130;">Create SQL Database Server</h3>
+    <div class="az-form-group">
+      <label>Server name <span class="required">*</span></label>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <input class="az-input filled" value="buildtrack-server" style="max-width:250px;" />
+        <span style="font-size:12px; color:#605e5c;">.database.windows.net</span>
+      </div>
+    </div>
+    <div class="az-form-group">
+      <label>Location <span class="required">*</span></label>
+      <select class="az-select"><option>(Asia Pacific) Southeast Asia</option></select>
+    </div>
+    <div class="az-form-group">
+      <label>Authentication method</label>
+      <div class="az-radio"><input type="radio" checked> <span>Use SQL authentication</span></div>
+    </div>
+    <div class="az-form-group">
+      <label>Server admin login <span class="required">*</span></label>
+      <input class="az-input filled" value="btadmin" />
+    </div>
+    <div class="az-form-group">
+      <label>Password <span class="required">*</span></label>
+      <input class="az-input filled" value="&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;" />
+      <div style="font-size:10px; color:#605e5c; margin-top:2px;">Must have uppercase, lowercase, number, and special character</div>
+    </div>
+    <div style="margin-top:16px;"><span class="az-btn az-btn-primary">OK</span></div>
+  </div>
+</div>
+<div class="screen-caption">Figure 4.2 &mdash; Create a new SQL Server (remember these credentials!)</div>
+
+<table>
+  <tr><th>Field</th><th>Value</th><th>Notes</th></tr>
+  <tr><td>Server name</td><td><code>buildtrack-server</code></td><td>Must be globally unique, add numbers if taken</td></tr>
+  <tr><td>Location</td><td><code>Southeast Asia</code></td><td>Choose closest to your users</td></tr>
+  <tr><td>Authentication</td><td><code>SQL authentication</code></td><td></td></tr>
+  <tr><td>Admin login</td><td><code>btadmin</code></td><td>Your choice</td></tr>
+  <tr><td>Password</td><td><code>BuildTrack@2026!</code></td><td>Must be strong. <strong>SAVE THIS!</strong></td></tr>
+</table>
+
+<div class="danger">
+  <strong>SAVE YOUR CREDENTIALS!</strong> Write down the server name, admin login, and password. You'll need them for the connection string.
+</div>
+
+<h3>2c: Networking Tab</h3>
+<ol class="tutorial">
+  <li>Click <strong>"Next: Networking"</strong></li>
+  <li>Connectivity method: <strong>Public endpoint</strong></li>
+  <li>Set <strong>"Allow Azure services and resources to access this server"</strong> to <strong>Yes</strong></li>
+  <li>Set <strong>"Add current client IP address"</strong> to <strong>Yes</strong> (lets you connect from your PC)</li>
+</ol>
+
+<!-- Networking mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Azure Portal &mdash; Networking</div>
+  <div class="screen-body" style="background:#f3f2f1;">
+    <div class="az-form-group">
+      <label>Connectivity method</label>
+      <div class="az-radio"><input type="radio" checked> <span>Public endpoint</span></div>
+    </div>
+    <div class="az-form-group">
+      <label>Firewall rules</label>
+      <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #edebe9; font-size:12px;">
+        <span>Allow Azure services and resources to access this server</span>
+        <span style="color:#107c10; font-weight:600;">&#10003; Yes</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:8px 0; font-size:12px;">
+        <span>Add current client IP address</span>
+        <span style="color:#107c10; font-weight:600;">&#10003; Yes</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 4.3 &mdash; Allow Azure services and your PC IP to access the database</div>
+
+<ol class="tutorial" style="counter-reset: step 4;">
+  <li>Click <strong>"Review + create"</strong></li>
+  <li>Review your settings, then click <strong>"Create"</strong></li>
+  <li>Wait 2&ndash;5 minutes for deployment to complete</li>
+</ol>
+
+<h3>2d: Get Your Connection String</h3>
+<ol class="tutorial">
+  <li>After deployment, go to your SQL Database resource</li>
+  <li>Click <strong>"Connection strings"</strong> in the left sidebar</li>
+  <li>Copy the <strong>ADO.NET</strong> connection string</li>
+  <li>Replace <code>{your_password}</code> with your actual password</li>
+</ol>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span style="color:#94a3b8; font-size:11px; margin-left:8px;">Your Connection String</span></div>
+  <div class="terminal-body">
+<span class="output">Server=tcp:</span><span class="highlight">buildtrack-server</span><span class="output">.database.windows.net,1433;</span>
+<span class="output">Initial Catalog=</span><span class="highlight">BuildTrackDB</span><span class="output">;</span>
+<span class="output">Persist Security Info=False;</span>
+<span class="output">User ID=</span><span class="highlight">btadmin</span><span class="output">;</span>
+<span class="output">Password=</span><span class="highlight">BuildTrack@2026!</span><span class="output">;</span>
+<span class="output">Encrypt=True;TrustServerCertificate=False;</span>
+  </div>
+</div>
+
+<div class="tip">
+  <strong>Save this connection string!</strong> You'll paste it into the backend configuration in Step 4.
+</div>
+
+<!-- SECTION 5 -->
+<h2 id="s5">5. Step 3: Create Azure App Service (Backend)</h2>
+
+<div class="step-header">
+  <div class="step-circle">3</div>
+  <div class="step-title">Create a Free App Service for Your .NET Backend</div>
+</div>
+
+<ol class="tutorial">
+  <li>In Azure Portal, click <strong>"+ Create a resource"</strong></li>
+  <li>Search for <strong>"Web App"</strong> and click <strong>"Create"</strong></li>
+</ol>
+
+<!-- App Service creation mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Azure Portal &mdash; Create Web App</div>
+  <div class="azure-portal">
+    <div class="azure-header">
+      <span class="az-logo">Microsoft Azure</span>
+    </div>
+    <div class="azure-breadcrumb">Home &gt; App Services &gt; <strong>Create Web App</strong></div>
+    <div class="azure-content">
+      <h3>Create Web App</h3>
+      <div class="az-tabs">
+        <div class="az-tab active">Basics</div>
+        <div class="az-tab">Deployment</div>
+        <div class="az-tab">Networking</div>
+        <div class="az-tab">Monitoring</div>
+        <div class="az-tab">Tags</div>
+        <div class="az-tab">Review + create</div>
+      </div>
+
+      <div class="az-form-group">
+        <label>Resource group <span class="required">*</span></label>
+        <select class="az-select"><option>BuildTrack-RG</option></select>
+      </div>
+
+      <div class="az-form-group">
+        <label>Name <span class="required">*</span></label>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <input class="az-input filled" value="buildtrack-api" style="max-width:250px;" />
+          <span style="font-size:12px; color:#605e5c;">.azurewebsites.net</span>
+          <span style="color:#107c10;">&#10003;</span>
+        </div>
+      </div>
+
+      <div class="az-form-group">
+        <label>Publish</label>
+        <div class="az-radio"><input type="radio" checked> <span>Code</span></div>
+      </div>
+
+      <div class="az-form-group">
+        <label>Runtime stack <span class="required">*</span></label>
+        <select class="az-select"><option>.NET 8 (LTS)</option></select>
+      </div>
+
+      <div class="az-form-group">
+        <label>Operating System</label>
+        <div class="az-radio"><input type="radio" checked> <span>Linux</span></div>
+      </div>
+
+      <div class="az-form-group">
+        <label>Region <span class="required">*</span></label>
+        <select class="az-select"><option>Southeast Asia</option></select>
+      </div>
+
+      <div class="az-form-group">
+        <label>Pricing plan</label>
+        <div style="background:#f0fdf4; border:2px solid #107c10; border-radius:6px; padding:12px; max-width:450px;">
+          <div style="font-size:13px; font-weight:700; color:#107c10;">Free F1</div>
+          <div style="font-size:11px; color:#605e5c;">1 GB RAM &bull; 60 CPU min/day &bull; No custom domain &bull; No SSL on custom domain</div>
+          <div><span class="az-badge az-badge-free">$0.00/month</span></div>
+        </div>
+        <div style="font-size:10px; color:#605e5c; margin-top:4px;">Click "Explore pricing plans" &rarr; Select "Free F1" under Dev/Test</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 5.1 &mdash; Create Web App with Free F1 pricing plan</div>
+
+<h3>Fill in these values:</h3>
+<table>
+  <tr><th>Field</th><th>Value</th><th>Notes</th></tr>
+  <tr><td>Resource group</td><td><code>BuildTrack-RG</code></td><td>Same as database</td></tr>
+  <tr><td>Name</td><td><code>buildtrack-api</code></td><td>Must be globally unique (add numbers if taken)</td></tr>
+  <tr><td>Publish</td><td><code>Code</code></td><td></td></tr>
+  <tr><td>Runtime stack</td><td><code>.NET 8 (LTS)</code></td><td></td></tr>
+  <tr><td>Operating System</td><td><code>Linux</code></td><td>Linux is recommended (lighter)</td></tr>
+  <tr><td>Region</td><td><code>Southeast Asia</code></td><td>Same as database for lowest latency</td></tr>
+  <tr><td style="color:#107c10; font-weight:600;">Pricing plan</td><td style="color:#107c10; font-weight:600;">Free F1</td><td>Click "Explore pricing plans" &rarr; Dev/Test &rarr; F1</td></tr>
+</table>
+
+<div class="warning">
+  <strong>How to find Free F1:</strong> Under Pricing plan, click <strong>"Explore pricing plans"</strong> &rarr; Click the <strong>"Dev / Test"</strong> tab at the top &rarr; Select <strong>"F1" (Free)</strong> &rarr; Click <strong>"Select"</strong>.
+</div>
+
+<ol class="tutorial" style="counter-reset: step 2;">
+  <li>Click <strong>"Review + create"</strong></li>
+  <li>Click <strong>"Create"</strong></li>
+  <li>Wait 1&ndash;2 minutes for deployment</li>
+</ol>
+
+<p>Your backend URL will be: <code>https://buildtrack-api.azurewebsites.net</code></p>
+
+<!-- SECTION 6 -->
+<h2 id="s6">6. Step 4: Configure Backend Settings</h2>
+
+<div class="step-header">
+  <div class="step-circle">4</div>
+  <div class="step-title">Add Connection String &amp; App Settings</div>
+</div>
+
+<ol class="tutorial">
+  <li>Go to your <strong>App Service</strong> (<code>buildtrack-api</code>)</li>
+  <li>In the left sidebar, click <strong>"Environment variables"</strong> (under Settings)</li>
+  <li>Click <strong>"+ Add"</strong> for each setting below</li>
+</ol>
+
+<!-- App Settings mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Azure Portal &mdash; Environment Variables</div>
+  <div class="azure-portal">
+    <div class="azure-header"><span class="az-logo">Microsoft Azure</span></div>
+    <div class="azure-breadcrumb">buildtrack-api &gt; Settings &gt; <strong>Environment variables</strong></div>
+    <div class="azure-content">
+      <div class="az-tabs">
+        <div class="az-tab active">App settings</div>
+        <div class="az-tab">Connection strings</div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <span class="az-btn az-btn-primary">+ Add</span>
+        <span class="az-btn az-btn-outline" style="margin-left:8px;">Advanced edit</span>
+      </div>
+
+      <div style="background:white; border:1px solid #edebe9; border-radius:2px; overflow:hidden;">
+        <table class="mock-table" style="margin:0; font-size:11px;">
+          <tr style="background:#f3f2f1;"><th style="background:#f3f2f1; color:#323130;">Name</th><th style="background:#f3f2f1; color:#323130;">Value</th></tr>
+          <tr><td style="font-family:monospace; font-weight:600;">Jwt__Key</td><td style="font-family:monospace; color:#605e5c;">YourSuperSecretKeyAtLeast32Chars!!</td></tr>
+          <tr><td style="font-family:monospace; font-weight:600;">Jwt__Issuer</td><td style="font-family:monospace; color:#605e5c;">BuildTrack.API</td></tr>
+          <tr><td style="font-family:monospace; font-weight:600;">Jwt__Audience</td><td style="font-family:monospace; color:#605e5c;">BuildTrack.Client</td></tr>
+          <tr><td style="font-family:monospace; font-weight:600;">Jwt__ExpirationMinutes</td><td style="font-family:monospace; color:#605e5c;">60</td></tr>
+          <tr><td style="font-family:monospace; font-weight:600;">Cors__AllowedOrigins</td><td style="font-family:monospace; color:#0078d4;">https://myapp-buildtack.azurestaticapps.net</td></tr>
+        </table>
+      </div>
+
+      <div class="az-tabs" style="margin-top:20px;">
+        <div class="az-tab">App settings</div>
+        <div class="az-tab active">Connection strings</div>
+      </div>
+
+      <div style="background:white; border:1px solid #edebe9; border-radius:2px; overflow:hidden;">
+        <table class="mock-table" style="margin:0; font-size:11px;">
+          <tr style="background:#f3f2f1;"><th style="background:#f3f2f1; color:#323130;">Name</th><th style="background:#f3f2f1; color:#323130;">Value</th><th style="background:#f3f2f1; color:#323130;">Type</th></tr>
+          <tr><td style="font-family:monospace; font-weight:600;">DefaultConnection</td><td style="font-family:monospace; color:#605e5c; font-size:10px;">Server=tcp:buildtrack-server.database.windows.net,1433;Initial Catalog=BuildTrackDB;...</td><td>SQLAzure</td></tr>
+        </table>
+      </div>
+
+      <div style="margin-top:16px;"><span class="az-btn az-btn-primary">Apply</span></div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 6.1 &mdash; Configure App Settings and Connection Strings</div>
+
+<h3>App Settings to Add:</h3>
+<table>
+  <tr><th>Name</th><th>Value</th></tr>
+  <tr><td><code>Jwt__Key</code></td><td><code>YourSuperSecretKeyAtLeast32CharactersLong!!</code></td></tr>
+  <tr><td><code>Jwt__Issuer</code></td><td><code>BuildTrack.API</code></td></tr>
+  <tr><td><code>Jwt__Audience</code></td><td><code>BuildTrack.Client</code></td></tr>
+  <tr><td><code>Jwt__ExpirationMinutes</code></td><td><code>60</code></td></tr>
+  <tr><td><code>Cors__AllowedOrigins</code></td><td><code>https://myapp-buildtack.azurestaticapps.net</code> <em>(update after Step 6)</em></td></tr>
+</table>
+
+<h3>Connection String to Add:</h3>
+<p>Switch to the <strong>"Connection strings"</strong> tab and add:</p>
+<table>
+  <tr><th>Name</th><th>Value</th><th>Type</th></tr>
+  <tr><td><code>DefaultConnection</code></td><td>Your full connection string from Step 2d</td><td><code>SQLAzure</code></td></tr>
+</table>
+
+<ol class="tutorial" style="counter-reset: step 3;">
+  <li>Click <strong>"Apply"</strong> to save all settings</li>
+  <li>Click <strong>"Confirm"</strong> when prompted (this restarts the app)</li>
+</ol>
+
+<!-- SECTION 7 -->
+<h2 id="s7">7. Step 5: Deploy Backend to App Service</h2>
+
+<div class="step-header">
+  <div class="step-circle">5</div>
+  <div class="step-title">Publish Your .NET Backend to Azure</div>
+</div>
+
+<h3>Option A: Deploy from Command Line (Recommended)</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span style="color:#94a3b8; font-size:11px; margin-left:8px;">Windows Terminal &mdash; On Your PC</span></div>
+  <div class="terminal-body">
+<span class="comment"># Step 5a: Install Azure CLI (if not installed)</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">winget install Microsoft.AzureCLI</span>
+
+<span class="comment"># Step 5b: Login to Azure</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">az login</span>
+<span class="output">(Browser opens for login)</span>
+<span class="success">You have logged in.</span>
+
+<span class="comment"># Step 5c: Navigate to backend project</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">cd C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API</span>
+
+<span class="comment"># Step 5d: Publish (build for release)</span>
+<span class="prompt">PS ...\BuildTrack.API&gt;</span> <span class="cmd">dotnet publish -c Release -o ./publish</span>
+<span class="success">Build succeeded.</span>
+
+<span class="comment"># Step 5e: Create a zip file of the publish folder</span>
+<span class="prompt">PS ...\BuildTrack.API&gt;</span> <span class="cmd">Compress-Archive -Path ./publish/* -DestinationPath ./deploy.zip -Force</span>
+
+<span class="comment"># Step 5f: Deploy to Azure App Service</span>
+<span class="prompt">PS ...\BuildTrack.API&gt;</span> <span class="cmd">az webapp deploy --resource-group <span class="highlight">BuildTrack-RG</span> --name <span class="highlight">buildtrack-api</span> --src-path ./deploy.zip --type zip</span>
+
+<span class="success">Deploying ZIP file...</span>
+<span class="success">Deployment successful! Site: https://buildtrack-api.azurewebsites.net</span>
+  </div>
+</div>
+
+<h3>Option B: Deploy from Azure Portal (GUI)</h3>
+<ol class="tutorial">
+  <li>Go to your App Service in Azure Portal</li>
+  <li>Click <strong>"Deployment Center"</strong> in the left sidebar</li>
+  <li>Source: <strong>GitHub</strong></li>
+  <li>Authorize your GitHub account</li>
+  <li>Organization: <code>erinelopez22</code></li>
+  <li>Repository: <code>stockwell-build</code></li>
+  <li>Branch: <code>buildTrack_UsingDotNet</code></li>
+  <li>Build: select <strong>".NET"</strong></li>
+  <li>Click <strong>"Save"</strong></li>
+</ol>
+
+<div class="note">
+  <strong>If using GitHub deployment:</strong> Azure creates a GitHub Actions workflow file. You'll need to edit it to build only the backend folder. The workflow should run <code>dotnet publish</code> from <code>backend/BuildTrack.API</code>.
+</div>
+
+<h3>Verify Backend is Running</h3>
+<p>Open your browser and go to:</p>
+<pre><code>https://<span style="color:#fbbf24;">buildtrack-api</span>.azurewebsites.net/api/companies/list</code></pre>
+<p>You should see JSON:</p>
+<pre><code>{"success":true,"data":[{"id":"...","name":"BuildTrack"}]}</code></pre>
+
+<!-- SECTION 8 -->
+<h2 id="s8">8. Step 6: Create Azure Static Web App (Frontend)</h2>
+
+<div class="step-header">
+  <div class="step-circle">6</div>
+  <div class="step-title">Deploy Frontend as a Static Web App (Free)</div>
+</div>
+
+<ol class="tutorial">
+  <li>In Azure Portal, click <strong>"+ Create a resource"</strong></li>
+  <li>Search for <strong>"Static Web App"</strong> and click <strong>"Create"</strong></li>
+</ol>
+
+<!-- Static Web App creation mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Azure Portal &mdash; Create Static Web App</div>
+  <div class="azure-portal">
+    <div class="azure-header"><span class="az-logo">Microsoft Azure</span></div>
+    <div class="azure-breadcrumb">Home &gt; Static Web Apps &gt; <strong>Create Static Web App</strong></div>
+    <div class="azure-content">
+      <h3>Create Static Web App</h3>
+
+      <div class="az-card" style="border-color:#0078d4;">
+        <h4>Static Web App details</h4>
+        <div class="az-form-group">
+          <label>Name <span class="required">*</span></label>
+          <input class="az-input filled" value="myapp-buildtrack" />
+        </div>
+      </div>
+
+      <div class="az-card" style="background:#f0fdf4; border-color:#107c10;">
+        <h4 style="color:#107c10;">Hosting plan</h4>
+        <div class="az-radio"><input type="radio" checked> <span style="font-weight:600; color:#107c10;">Free: For hobby or personal projects</span></div>
+        <div class="az-radio"><input type="radio"> <span>Standard: For general purpose production apps</span></div>
+      </div>
+
+      <div class="az-card">
+        <h4>Deployment details</h4>
+        <div class="az-form-group">
+          <label>Source</label>
+          <div class="az-radio"><input type="radio" checked> <span style="font-weight:600;">GitHub</span></div>
+        </div>
+        <div class="az-form-group">
+          <label>Organization <span class="required">*</span></label>
+          <select class="az-select"><option>erinelopez22</option></select>
+        </div>
+        <div class="az-form-group">
+          <label>Repository <span class="required">*</span></label>
+          <select class="az-select"><option>stockwell-build</option></select>
+        </div>
+        <div class="az-form-group">
+          <label>Branch <span class="required">*</span></label>
+          <select class="az-select"><option>buildTrack_UsingDotNet</option></select>
+        </div>
+      </div>
+
+      <div class="az-card" style="border-color:#0078d4;">
+        <h4>Build Details</h4>
+        <div class="az-form-group">
+          <label>Build Presets</label>
+          <select class="az-select"><option>React</option></select>
+        </div>
+        <div class="az-form-group">
+          <label>App location <span class="required">*</span></label>
+          <input class="az-input filled" value="/" />
+          <div style="font-size:10px; color:#605e5c;">Where your React app source code is (root of repo)</div>
+        </div>
+        <div class="az-form-group">
+          <label>Api location</label>
+          <input class="az-input placeholder" value="" style="max-width:450px;" />
+          <div style="font-size:10px; color:#605e5c;">Leave EMPTY &mdash; your API is on App Service, not here</div>
+        </div>
+        <div class="az-form-group" style="background:#fff7ed; padding:8px; border-radius:4px; border:2px solid #f59e0b;">
+          <label>Output location <span class="required">*</span></label>
+          <input class="az-input filled" value="dist" style="max-width:450px; border-color:#f59e0b;" />
+          <div style="font-size:10px; color:#92400e; font-weight:600;">&#9888; IMPORTANT: Must be "dist" (not "build") because Vite outputs to dist/</div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px; display:flex; gap:8px;">
+        <span class="az-btn az-btn-primary">Review + create</span>
+        <span class="az-btn az-btn-outline">&lt; Previous</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 8.1 &mdash; Create Static Web App with correct build settings</div>
+
+<h3>Field Values:</h3>
+<table>
+  <tr><th>Field</th><th>Value</th><th>Why</th></tr>
+  <tr><td>Name</td><td><code>myapp-buildtrack</code></td><td>Your choice</td></tr>
+  <tr><td>Hosting plan</td><td><code>Free</code></td><td>$0/month</td></tr>
+  <tr><td>Source</td><td><code>GitHub</code></td><td>Auto-deploys from your repo</td></tr>
+  <tr><td>Organization</td><td><code>erinelopez22</code></td><td>Your GitHub username</td></tr>
+  <tr><td>Repository</td><td><code>stockwell-build</code></td><td>Your repo</td></tr>
+  <tr><td>Branch</td><td><code>buildTrack_UsingDotNet</code></td><td>Your working branch</td></tr>
+  <tr><td>Build Presets</td><td><code>React</code></td><td>Auto-detected</td></tr>
+  <tr><td>App location</td><td><code>/</code></td><td>Root of repo (where package.json is)</td></tr>
+  <tr><td>Api location</td><td><em>(leave empty)</em></td><td>API is separate (App Service)</td></tr>
+  <tr><td style="color:#f59e0b; font-weight:700;">Output location</td><td style="color:#f59e0b; font-weight:700;">dist</td><td>Vite builds to <code>dist/</code>, NOT <code>build/</code></td></tr>
+</table>
+
+<div class="danger">
+  <strong>CRITICAL:</strong> Output location must be <strong><code>dist</code></strong>, not <code>build</code>. Vite (your build tool) outputs files to the <code>dist</code> folder. If you put <code>build</code>, the deployment will fail because that folder doesn't exist.
+</div>
+
+<ol class="tutorial" style="counter-reset: step 2;">
+  <li>Click <strong>"Review + create"</strong></li>
+  <li>Click <strong>"Create"</strong></li>
+  <li>Wait 1&ndash;2 minutes</li>
+  <li>Azure creates a <strong>GitHub Actions workflow</strong> in your repo that auto-builds and deploys</li>
+  <li>Go to your Static Web App resource &rarr; Copy the <strong>URL</strong> (e.g., <code>https://myapp-buildtrack.azurestaticapps.net</code>)</li>
+</ol>
+
+<!-- SECTION 9 -->
+<h2 id="s9">9. Step 7: Configure Frontend Environment Variable</h2>
+
+<div class="step-header">
+  <div class="step-circle">7</div>
+  <div class="step-title">Tell the Frontend Where the Backend API Is</div>
+</div>
+
+<ol class="tutorial">
+  <li>Go to your <strong>Static Web App</strong> in Azure Portal</li>
+  <li>Click <strong>"Environment variables"</strong> in the left sidebar (under Settings)</li>
+  <li>Click <strong>"+ Add"</strong></li>
+  <li>Name: <code>VITE_API_BASE_URL</code></li>
+  <li>Value: <code>https://buildtrack-api.azurewebsites.net</code></li>
+  <li>Click <strong>"Save"</strong></li>
+</ol>
+
+<!-- Environment variable mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Azure Portal &mdash; Static Web App Environment Variables</div>
+  <div class="azure-portal">
+    <div class="azure-header"><span class="az-logo">Microsoft Azure</span></div>
+    <div class="azure-breadcrumb">myapp-buildtrack &gt; Settings &gt; <strong>Environment variables</strong></div>
+    <div class="azure-content">
+      <div style="margin-bottom:12px;">
+        <span class="az-btn az-btn-primary">+ Add</span>
+      </div>
+      <div style="background:white; border:1px solid #edebe9; border-radius:2px; overflow:hidden;">
+        <table class="mock-table" style="margin:0;">
+          <tr style="background:#f3f2f1;"><th style="background:#f3f2f1; color:#323130;">Name</th><th style="background:#f3f2f1; color:#323130;">Value</th><th style="background:#f3f2f1; color:#323130;">Environment</th></tr>
+          <tr>
+            <td style="font-family:monospace; font-weight:600;">VITE_API_BASE_URL</td>
+            <td style="font-family:monospace; color:#0078d4;">https://buildtrack-api.azurewebsites.net</td>
+            <td>Production</td>
+          </tr>
+        </table>
+      </div>
+      <div style="margin-top:12px;"><span class="az-btn az-btn-primary">Save</span></div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 9.1 &mdash; Add the API URL as an environment variable</div>
+
+<h3>Also update the Backend CORS:</h3>
+<ol class="tutorial">
+  <li>Go back to your <strong>App Service</strong> (<code>buildtrack-api</code>)</li>
+  <li>Go to <strong>Environment variables</strong></li>
+  <li>Update <code>Cors__AllowedOrigins</code> to your Static Web App URL:<br><code>https://myapp-buildtrack.azurestaticapps.net</code></li>
+  <li>Click <strong>"Apply"</strong></li>
+</ol>
+
+<div class="warning">
+  <strong>Trigger a rebuild:</strong> After adding the environment variable, the Static Web App needs to rebuild. Go to your GitHub repo &rarr; <strong>Actions</strong> tab &rarr; Click the latest workflow &rarr; <strong>"Re-run all jobs"</strong>. Or push a small commit to trigger it.
+</div>
+
+<!-- SECTION 10 -->
+<h2 id="s10">10. Step 8: Test Your Live Application</h2>
+
+<div class="step-header">
+  <div class="step-circle">8</div>
+  <div class="step-title">Verify Everything Works Together</div>
+</div>
+
+<ol class="tutorial">
+  <li>Open <code>https://myapp-buildtrack.azurestaticapps.net</code> in your browser</li>
+  <li>You should see the <strong>BuildTrack login page</strong></li>
+  <li>The company dropdown should load (this means frontend &rarr; backend &rarr; database is working!)</li>
+  <li>Select your company and log in with <code>admin@buildtrack.com</code> / <code>Admin@123456</code></li>
+  <li>You should see the Dashboard with live data!</li>
+</ol>
+
+<!-- Success mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>https://myapp-buildtrack.azurestaticapps.net</div>
+  <div class="screen-body" style="background:#f8fafc; display:flex;">
+    <div style="width:180px; background:#1e293b; padding:14px 0; flex-shrink:0;">
+      <div style="padding:0 14px 14px; border-bottom:1px solid #334155; display:flex; align-items:center; gap:8px;">
+        <div style="width:28px; height:28px; background:#f59e0b; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:14px;">&#x1F3D7;</div>
+        <div style="color:#f8fafc; font-size:12px; font-weight:600;">BuildTrack</div>
+      </div>
+      <div style="padding:10px 14px; font-size:11px; color:#e2e8f0;">
+        <div style="background:#334155; border-radius:4px; padding:5px 8px; margin:2px 0;">&#9647; Dashboard</div>
+        <div style="padding:5px 8px; color:#94a3b8; margin:2px 0;">&#128193; Projects</div>
+        <div style="padding:5px 8px; color:#94a3b8; margin:2px 0;">&#128230; Orders</div>
+      </div>
+    </div>
+    <div style="flex:1; padding:16px;">
+      <div style="font-size:16px; font-weight:700; color:#1e293b; margin-bottom:12px;">Dashboard</div>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px;">
+        <div style="background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+          <div style="font-size:9px; color:#64748b;">Active Projects</div><div style="font-size:18px; font-weight:700;">3</div>
+        </div>
+        <div style="background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+          <div style="font-size:9px; color:#64748b;">Pending Orders</div><div style="font-size:18px; font-weight:700;">5</div>
+        </div>
+        <div style="background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+          <div style="font-size:9px; color:#64748b;">Low Stock</div><div style="font-size:18px; font-weight:700;">2</div>
+        </div>
+        <div style="background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+          <div style="font-size:9px; color:#64748b;">Members</div><div style="font-size:18px; font-weight:700;">12</div>
+        </div>
+      </div>
+      <div style="text-align:center; padding:20px; background:#f0fdf4; border-radius:8px; border:1px solid #bbf7d0;">
+        <div style="font-size:24px;">&#127881;</div>
+        <div style="font-size:16px; font-weight:700; color:#107c10;">Your app is LIVE on Azure!</div>
+        <div style="font-size:11px; color:#64748b;">Frontend + Backend + Database all working together</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 10.1 &mdash; BuildTrack running live on Azure, fully free!</div>
+
+<!-- SECTION 11 -->
+<h2 id="s11">11. Step 9: Custom Domain (Optional)</h2>
+
+<p>Azure Static Web Apps (free tier) supports <strong>custom domains with free SSL</strong>.</p>
+
+<ol class="tutorial">
+  <li>Buy a domain (e.g., <code>buildtrack.com</code> from Namecheap/GoDaddy, ~$12/year)</li>
+  <li>In your Static Web App, go to <strong>"Custom domains"</strong></li>
+  <li>Click <strong>"+ Add"</strong></li>
+  <li>Enter your domain name</li>
+  <li>Add the <strong>CNAME record</strong> at your domain registrar pointing to the Static Web App URL</li>
+  <li>Azure auto-generates a <strong>free SSL certificate</strong></li>
+</ol>
+
+<div class="note">
+  <strong>Note:</strong> The App Service F1 (backend) does NOT support custom domains. Your backend will always be at <code>buildtrack-api.azurewebsites.net</code>. This is fine &mdash; users never see the backend URL directly.
+</div>
+
+<!-- SECTION 12 -->
+<h2 id="s12">12. Deploying Updates</h2>
+
+<h3>Frontend Updates (Automatic!)</h3>
+<p>Azure Static Web Apps auto-deploys when you push to GitHub:</p>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span style="color:#94a3b8; font-size:11px; margin-left:8px;">Windows Terminal &mdash; Push Frontend Changes</span></div>
+  <div class="terminal-body">
+<span class="comment"># Make your code changes, then:</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">git add .</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">git commit -m "Update frontend"</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">git push</span>
+
+<span class="success">&#10003; GitHub Actions automatically builds and deploys to Azure!</span>
+<span class="output">Check progress: GitHub repo &rarr; Actions tab</span>
+  </div>
+</div>
+
+<h3>Backend Updates</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span style="color:#94a3b8; font-size:11px; margin-left:8px;">Windows Terminal &mdash; Deploy Backend Update</span></div>
+  <div class="terminal-body">
+<span class="comment"># Build, zip, and deploy</span>
+<span class="prompt">PS ...\BuildTrack.API&gt;</span> <span class="cmd">dotnet publish -c Release -o ./publish</span>
+<span class="prompt">PS ...\BuildTrack.API&gt;</span> <span class="cmd">Compress-Archive -Path ./publish/* -DestinationPath ./deploy.zip -Force</span>
+<span class="prompt">PS ...\BuildTrack.API&gt;</span> <span class="cmd">az webapp deploy --resource-group BuildTrack-RG --name buildtrack-api --src-path ./deploy.zip --type zip</span>
+<span class="success">Deployment successful!</span>
+  </div>
+</div>
+
+<!-- SECTION 13 -->
+<h2 id="s13">13. Monitoring &amp; Logs</h2>
+
+<h3>Viewing Backend Logs</h3>
+<ol class="tutorial">
+  <li>Go to your App Service in Azure Portal</li>
+  <li>Click <strong>"Log stream"</strong> in the left sidebar (under Monitoring)</li>
+  <li>You'll see real-time logs from your .NET backend</li>
+</ol>
+
+<h3>Or via CLI:</h3>
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span style="color:#94a3b8; font-size:11px; margin-left:8px;">Windows Terminal</span></div>
+  <div class="terminal-body">
+<span class="prompt">PS&gt;</span> <span class="cmd">az webapp log tail --resource-group BuildTrack-RG --name buildtrack-api</span>
+<span class="output">2026-03-26T10:15:23  Starting BuildTrack.API...</span>
+<span class="output">2026-03-26T10:15:25  Database migration complete.</span>
+<span class="success">2026-03-26T10:15:26  Application started. Listening on http://localhost:8080</span>
+  </div>
+</div>
+
+<h3>Checking Static Web App Deployment</h3>
+<ol class="tutorial">
+  <li>Go to your GitHub repository</li>
+  <li>Click the <strong>"Actions"</strong> tab</li>
+  <li>You'll see build/deploy history for every push</li>
+  <li>Click any workflow run to see build logs and status</li>
+</ol>
+
+<!-- SECTION 14 -->
+<h2 id="s14">14. Troubleshooting</h2>
+
+<h3>Problem: Frontend loads but login fails / API errors</h3>
+<div class="note">
+  <strong>Check these:</strong>
+  <ol>
+    <li>Is <code>VITE_API_BASE_URL</code> set correctly in Static Web App environment variables?</li>
+    <li>Is <code>Cors__AllowedOrigins</code> set to your exact Static Web App URL (including <code>https://</code>)?</li>
+    <li>Did you redeploy the frontend after adding the environment variable?</li>
+    <li>Check App Service logs: <code>az webapp log tail --resource-group BuildTrack-RG --name buildtrack-api</code></li>
+  </ol>
+</div>
+
+<h3>Problem: "Error 500" or database connection fails</h3>
+<div class="note">
+  <strong>Check these:</strong>
+  <ol>
+    <li>Is the connection string correct? Check server name, database name, username, password.</li>
+    <li>Did you set "Allow Azure services" to Yes in the SQL Server firewall?</li>
+    <li>Is the connection string type set to <code>SQLAzure</code> (not <code>SQLServer</code>)?</li>
+  </ol>
+</div>
+
+<h3>Problem: Static Web App shows "404" on page refresh</h3>
+<div class="note">
+  <strong>Fix:</strong> Create a file <code>staticwebapp.config.json</code> in your project root:
+  <pre style="margin:8px 0;"><code>{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "/api/*"]
+  }
+}</code></pre>
+  Commit and push. This tells Azure to route all paths to <code>index.html</code> (SPA routing).
+</div>
+
+<h3>Problem: Backend is slow / takes 30 seconds to load</h3>
+<div class="note">
+  <strong>This is normal on F1 Free tier.</strong> The app sleeps after ~20 minutes of inactivity. The first request "wakes it up" (cold start), which takes 15&ndash;30 seconds. Subsequent requests are fast. To avoid this, upgrade to B1 Basic ($13/month) which has "Always On".
+</div>
+
+<h3>Problem: Output location "build" fails deployment</h3>
+<div class="note">
+  <strong>Fix:</strong> Change the output location to <code>dist</code> in the GitHub Actions workflow file. Open <code>.github/workflows/azure-static-web-apps-*.yml</code> in your repo and change <code>output_location: "build"</code> to <code>output_location: "dist"</code>.
+</div>
+
+<!-- SECTION 15 -->
+<h2 id="s15">15. Quick Reference Card</h2>
+
+<table>
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>Frontend URL</td><td><code>https://myapp-buildtrack.azurestaticapps.net</code></td></tr>
+  <tr><td>Backend API URL</td><td><code>https://buildtrack-api.azurewebsites.net</code></td></tr>
+  <tr><td>Database Server</td><td><code>buildtrack-server.database.windows.net</code></td></tr>
+  <tr><td>Database Name</td><td><code>BuildTrackDB</code></td></tr>
+  <tr><td>Azure Portal</td><td><code>https://portal.azure.com</code></td></tr>
+  <tr><td>Resource Group</td><td><code>BuildTrack-RG</code></td></tr>
+  <tr><td>Default Login</td><td><code>admin@buildtrack.com</code> / <code>Admin@123456</code></td></tr>
+</table>
+
+<h3>Common Commands</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span style="color:#94a3b8; font-size:11px; margin-left:8px;">Quick Commands Reference</span></div>
+  <div class="terminal-body">
+<span class="comment"># Login to Azure</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">az login</span>
+
+<span class="comment"># Deploy backend</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">cd backend/BuildTrack.API</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">dotnet publish -c Release -o ./publish</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">Compress-Archive -Path ./publish/* -DestinationPath ./deploy.zip -Force</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">az webapp deploy --resource-group BuildTrack-RG --name buildtrack-api --src-path ./deploy.zip --type zip</span>
+
+<span class="comment"># Deploy frontend (just push to GitHub!)</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">git add . && git commit -m "Update" && git push</span>
+
+<span class="comment"># View backend logs</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">az webapp log tail --resource-group BuildTrack-RG --name buildtrack-api</span>
+
+<span class="comment"># Restart backend</span>
+<span class="prompt">PS&gt;</span> <span class="cmd">az webapp restart --resource-group BuildTrack-RG --name buildtrack-api</span>
+  </div>
+</div>
+
+<div style="text-align:center; margin-top:30px; padding:20px; background:#f0fdf4; border-radius:12px; border:1px solid #bbf7d0;">
+  <div style="font-size:32px;">&#127881;</div>
+  <div style="font-size:20px; font-weight:700; color:#107c10; margin-top:8px;">Total Monthly Cost: $0.00</div>
+  <div style="font-size:12px; color:#64748b; margin-top:4px;">Azure Static Web Apps (Free) + App Service F1 (Free) + Azure SQL (Free Offer)</div>
+  <div style="font-size:11px; color:#94a3b8; margin-top:8px;">All hosted on Microsoft Azure with HTTPS, auto-deployment, and monitoring included.</div>
+</div>
+
+<hr>
+<p style="text-align: center; color: #94a3b8; margin-top: 40px;">
+  <em>BuildTrack Azure Hosting Guide v1.0 &mdash; March 2026</em><br>
+  <em>Azure Static Web Apps + App Service F1 + Azure SQL Free</em>
+</p>
+
+</body>
+</html>

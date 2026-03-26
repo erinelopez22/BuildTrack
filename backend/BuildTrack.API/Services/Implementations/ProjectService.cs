@@ -9,12 +9,17 @@ namespace BuildTrack.API.Services.Implementations;
 public class ProjectService(AppDbContext db) : IProjectService
 {
     public async Task<List<ProjectDto>> GetAllAsync(
-        bool includeHidden, string? status, string? search, Guid currentUserId)
+        bool includeHidden, string? status, string? search, Guid currentUserId,
+        Guid? companyId = null, bool isSuperAdmin = false)
     {
         var query = db.Projects
             .Include(p => p.ProjectManager)
             .Include(p => p.Members)
             .AsQueryable();
+
+        // Company scoping
+        if (!isSuperAdmin && companyId.HasValue)
+            query = query.Where(p => p.CompanyId == companyId.Value);
 
         if (!includeHidden)
             query = query.Where(p => !p.IsHidden);
@@ -44,7 +49,7 @@ public class ProjectService(AppDbContext db) : IProjectService
         return project == null ? null : Map(project);
     }
 
-    public async Task<ProjectDto> CreateAsync(CreateProjectRequest request, Guid createdBy)
+    public async Task<ProjectDto> CreateAsync(CreateProjectRequest request, Guid createdBy, Guid? companyId = null)
     {
         var project = new Project
         {
@@ -58,6 +63,7 @@ public class ProjectService(AppDbContext db) : IProjectService
             ProjectManagerId = request.ProjectManagerId,
             EstimatedCost = request.EstimatedCost,
             IsHidden = request.IsHidden,
+            CompanyId = companyId,
             CreatedBy = createdBy
         };
         db.Projects.Add(project);

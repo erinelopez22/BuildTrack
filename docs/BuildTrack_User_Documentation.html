@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BuildTrack - User Guide & Tutorial</title>
+<style>
+  @page { margin: 0.8in; size: A4; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.7; color: #1a1a2e; max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+  h1 { color: #16213e; font-size: 2.2em; border-bottom: 3px solid #0f3460; padding-bottom: 10px; }
+  h2 { color: #0f3460; font-size: 1.6em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 40px; page-break-before: always; }
+  h2:first-of-type { page-break-before: avoid; }
+  h3 { color: #1a1a2e; font-size: 1.2em; margin-top: 25px; }
+  h4 { color: #333; font-size: 1.05em; margin-top: 15px; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.9em; page-break-inside: avoid; }
+  th { background: #0f3460; color: white; padding: 10px 12px; text-align: left; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f8fafc; }
+  .cover { text-align: center; padding: 120px 0 80px; page-break-after: always; }
+  .cover h1 { font-size: 3em; border: none; color: #0f3460; }
+  .cover .subtitle { font-size: 1.4em; color: #64748b; margin-top: 10px; }
+  .cover .version { font-size: 1em; color: #94a3b8; margin-top: 30px; }
+  .cover .logo { font-size: 5em; margin-bottom: 20px; }
+  .toc { page-break-after: always; }
+  .toc h2 { page-break-before: avoid; }
+  .toc ul { list-style: none; padding: 0; }
+  .toc li { padding: 6px 0; border-bottom: 1px dotted #ccc; }
+  .toc a { text-decoration: none; color: #0f3460; }
+  .note { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .tip { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.85em; font-weight: 600; }
+  .status-active { background: #dcfce7; color: #166534; }
+  .status-pending { background: #fef3c7; color: #92400e; }
+  .status-approved { background: #dbeafe; color: #1e40af; }
+  .status-delivered { background: #e0e7ff; color: #3730a3; }
+  .status-rejected { background: #fce7f3; color: #9d174d; }
+  .status-transit { background: #fef3c7; color: #92400e; }
+  .status-draft { background: #f1f5f9; color: #475569; }
+  ol.tutorial { counter-reset: step; list-style: none; padding-left: 0; }
+  ol.tutorial li { counter-increment: step; margin: 10px 0; padding: 10px 10px 10px 45px; background: #f8fafc; border-radius: 8px; position: relative; }
+  ol.tutorial li::before { content: counter(step); position: absolute; left: 10px; top: 10px; background: #0f3460; color: white; width: 26px; height: 26px; border-radius: 50%; text-align: center; line-height: 26px; font-weight: bold; font-size: 0.85em; }
+  .feature-box { border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin: 15px 0; page-break-inside: avoid; }
+  .feature-box h4 { margin-top: 0; color: #0f3460; }
+  .kbd { background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; border: 1px solid #cbd5e1; font-family: monospace; }
+
+  /* ====== SCREEN MOCKUP STYLES ====== */
+  .screen { border: 2px solid #cbd5e1; border-radius: 12px; overflow: hidden; margin: 20px 0; font-size: 13px; background: #fff; page-break-inside: avoid; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .screen-title { background: #1e293b; color: #94a3b8; padding: 8px 16px; font-size: 11px; display: flex; align-items: center; gap: 8px; }
+  .screen-title .dots { display: flex; gap: 5px; }
+  .screen-title .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .screen-title .dot-r { background: #ef4444; }
+  .screen-title .dot-y { background: #eab308; }
+  .screen-title .dot-g { background: #22c55e; }
+  .screen-body { display: flex; min-height: 200px; }
+  .screen-body-full { padding: 20px; min-height: 180px; }
+
+  /* Sidebar mockup */
+  .mock-sidebar { width: 200px; background: #1e293b; color: #e2e8f0; padding: 16px 0; flex-shrink: 0; }
+  .mock-sidebar .brand { padding: 0 16px 16px; border-bottom: 1px solid #334155; display: flex; align-items: center; gap: 10px; }
+  .mock-sidebar .brand-icon { width: 32px; height: 32px; background: #f59e0b; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .mock-sidebar .brand-text { font-weight: 600; font-size: 14px; }
+  .mock-sidebar .brand-sub { font-size: 10px; color: #94a3b8; }
+  .mock-sidebar .nav-group { padding: 12px 0; }
+  .mock-sidebar .nav-label { padding: 4px 16px; font-size: 10px; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
+  .mock-sidebar .nav-item { padding: 7px 16px; font-size: 12px; display: flex; align-items: center; gap: 8px; cursor: default; color: #cbd5e1; }
+  .mock-sidebar .nav-item.active { background: #334155; color: #f8fafc; border-radius: 4px; margin: 0 8px; padding: 7px 8px; }
+  .mock-sidebar .nav-icon { width: 16px; text-align: center; }
+  .mock-sidebar .nav-badge { background: #ef4444; color: white; font-size: 9px; padding: 1px 5px; border-radius: 8px; margin-left: auto; }
+  .mock-sidebar .user-footer { border-top: 1px solid #334155; padding: 12px 16px; margin-top: auto; display: flex; align-items: center; gap: 8px; }
+  .mock-sidebar .user-avatar { width: 28px; height: 28px; background: #475569; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+  .mock-sidebar .user-name { font-size: 11px; font-weight: 600; }
+  .mock-sidebar .user-email { font-size: 9px; color: #94a3b8; }
+
+  /* Content area */
+  .mock-content { flex: 1; padding: 20px; background: #f8fafc; }
+  .mock-content h3 { margin: 0 0 4px; font-size: 18px; color: #1e293b; }
+  .mock-content .subtitle { font-size: 12px; color: #64748b; margin-bottom: 16px; }
+
+  /* Stat cards */
+  .mock-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .mock-stat { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+  .mock-stat .stat-icon { font-size: 16px; margin-bottom: 6px; }
+  .mock-stat .stat-label { font-size: 10px; color: #64748b; }
+  .mock-stat .stat-value { font-size: 20px; font-weight: 700; color: #1e293b; }
+
+  /* Cards grid */
+  .mock-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .mock-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; }
+  .mock-card .card-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #1e293b; }
+  .mock-card .card-meta { font-size: 10px; color: #64748b; display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+  .mock-card .card-divider { border-top: 1px solid #e2e8f0; margin: 8px 0; }
+  .mock-card .progress-row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; }
+  .mock-card .progress-row .pct { color: #0f3460; font-weight: 700; }
+  .mock-card .progress-bar { height: 4px; background: #e2e8f0; border-radius: 2px; margin-top: 4px; overflow: hidden; }
+  .mock-card .progress-fill { height: 100%; background: #1e293b; border-radius: 2px; }
+
+  /* Table mockup */
+  .mock-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .mock-table th { background: #f1f5f9; color: #64748b; padding: 8px 10px; text-align: left; font-weight: 600; text-transform: uppercase; font-size: 10px; border-bottom: 1px solid #e2e8f0; }
+  .mock-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+  .mock-table tr:hover { background: #f8fafc; }
+
+  /* Badges in mockups */
+  .mock-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+  .mock-badge-green { background: #dcfce7; color: #166534; }
+  .mock-badge-yellow { background: #fef3c7; color: #92400e; }
+  .mock-badge-blue { background: #dbeafe; color: #1e40af; }
+  .mock-badge-red { background: #fce7f3; color: #9d174d; }
+  .mock-badge-gray { background: #f1f5f9; color: #475569; }
+  .mock-badge-purple { background: #e0e7ff; color: #3730a3; }
+
+  /* Buttons in mockups */
+  .mock-btn { display: inline-block; padding: 6px 14px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: default; }
+  .mock-btn-primary { background: #1e293b; color: white; }
+  .mock-btn-outline { background: white; color: #334155; border: 1px solid #e2e8f0; }
+  .mock-btn-ghost { background: transparent; color: #64748b; }
+
+  /* Input mockups */
+  .mock-input { border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #94a3b8; background: white; display: inline-block; }
+  .mock-select { border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #334155; background: white; display: inline-block; }
+
+  /* Login form mockup */
+  .mock-login { max-width: 360px; margin: 0 auto; }
+  .mock-login-card { background: white; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; }
+  .mock-login .logo-area { text-align: center; margin-bottom: 20px; }
+  .mock-login .logo-box { display: inline-flex; width: 56px; height: 56px; background: #1e293b; border-radius: 12px; align-items: center; justify-content: center; font-size: 28px; margin-bottom: 8px; }
+  .mock-login .logo-title { font-size: 22px; font-weight: 700; color: #1e293b; }
+  .mock-login .logo-sub { font-size: 12px; color: #64748b; }
+  .mock-form-group { margin-bottom: 14px; }
+  .mock-form-group label { display: block; font-size: 11px; font-weight: 600; color: #334155; margin-bottom: 4px; }
+  .mock-form-input { width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; font-size: 12px; color: #334155; background: #fff; }
+  .mock-form-input.placeholder { color: #94a3b8; }
+  .mock-form-btn { width: 100%; padding: 10px; background: #1e293b; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; text-align: center; margin-top: 8px; }
+
+  /* Workflow board mockup */
+  .mock-workflow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .mock-wf-col { background: #f1f5f9; border-radius: 8px; padding: 8px; min-height: 100px; }
+  .mock-wf-col .wf-header { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 6px; text-align: center; }
+  .mock-wf-card { background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; margin-bottom: 6px; font-size: 10px; }
+  .mock-wf-card .wf-order { font-weight: 600; color: #1e293b; }
+  .mock-wf-card .wf-proj { color: #64748b; font-size: 9px; }
+
+  /* Modal mockup */
+  .mock-modal-overlay { background: rgba(0,0,0,0.15); border-radius: 10px; padding: 20px; display: flex; justify-content: center; }
+  .mock-modal { background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 20px; width: 100%; max-width: 450px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+  .mock-modal h4 { margin: 0 0 16px; font-size: 16px; color: #1e293b; }
+
+  /* Progress modal */
+  .mock-progress-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 11px; }
+  .mock-progress-item .mat-name { font-weight: 600; color: #1e293b; }
+  .mock-progress-item .mat-detail { color: #64748b; font-size: 10px; }
+
+  /* Chart mockup */
+  .mock-chart { display: flex; align-items: center; gap: 20px; }
+  .mock-pie { width: 100px; height: 100px; border-radius: 50%; background: conic-gradient(#f59e0b 0deg 72deg, #3b82f6 72deg 144deg, #1e293b 144deg 230deg, #22c55e 230deg 300deg, #94a3b8 300deg 360deg); position: relative; }
+  .mock-pie-hole { position: absolute; top: 20px; left: 20px; width: 60px; height: 60px; background: white; border-radius: 50%; }
+  .mock-legend { font-size: 10px; line-height: 2; }
+  .mock-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+
+  /* Detail page mockup */
+  .mock-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .mock-detail-header h3 { margin: 0; }
+  .mock-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+  .mock-info-box { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; }
+  .mock-info-box .info-label { font-size: 10px; color: #64748b; }
+  .mock-info-box .info-value { font-size: 12px; font-weight: 600; color: #1e293b; }
+  .mock-action-btns { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+
+  /* Tabs mockup */
+  .mock-tabs { display: flex; gap: 0; border-bottom: 2px solid #e2e8f0; margin-bottom: 12px; }
+  .mock-tab { padding: 6px 14px; font-size: 11px; font-weight: 600; color: #64748b; cursor: default; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+  .mock-tab.active { color: #1e293b; border-bottom-color: #1e293b; }
+
+  /* Report mockup */
+  .mock-report-section { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+  .mock-report-header { background: #f1f5f9; padding: 8px 12px; font-size: 11px; font-weight: 700; color: #334155; display: flex; align-items: center; gap: 6px; }
+  .mock-report-body { padding: 10px 12px; font-size: 11px; }
+
+  /* Callout for screen */
+  .screen-caption { text-align: center; font-size: 12px; color: #64748b; font-style: italic; margin: -12px 0 20px; }
+
+  @media print { body { padding: 0; } h2 { page-break-before: always; } .cover { padding: 200px 0 100px; } .screen { box-shadow: none; } }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div class="logo">&#x1F3D7;</div>
+  <h1>BuildTrack Inventory System</h1>
+  <div class="subtitle">User Guide &amp; Tutorial</div>
+  <div class="version">
+    <p>Version 1.0 &mdash; March 2026</p>
+    <p>Complete guide for all user roles</p>
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ul>
+    <li><a href="#u1">1. Introduction &amp; Overview</a></li>
+    <li><a href="#u2">2. Getting Started &mdash; Logging In</a></li>
+    <li><a href="#u3">3. Dashboard</a></li>
+    <li><a href="#u4">4. Projects</a></li>
+    <li><a href="#u5">5. Order &amp; Tracking</a></li>
+    <li><a href="#u6">6. View Orders</a></li>
+    <li><a href="#u7">7. Quotation Requests</a></li>
+    <li><a href="#u8">8. SKU Catalog</a></li>
+    <li><a href="#u9">9. Equipments &amp; Tools</a></li>
+    <li><a href="#u10">10. Reports</a></li>
+    <li><a href="#u11">11. Notifications</a></li>
+    <li><a href="#u12">12. User Roles &amp; Permissions</a></li>
+    <li><a href="#u13">13. Users &amp; Roles Management (Admin)</a></li>
+    <li><a href="#u14">14. Companies Management (Super Admin)</a></li>
+    <li><a href="#u15">15. Settings (Admin)</a></li>
+    <li><a href="#u16">16. Step-by-Step Tutorials</a></li>
+    <li><a href="#u17">17. Tips &amp; Best Practices</a></li>
+    <li><a href="#u18">18. Frequently Asked Questions (FAQ)</a></li>
+  </ul>
+</div>
+
+<!-- SECTION 1 -->
+<h2 id="u1">1. Introduction &amp; Overview</h2>
+
+<p><strong>BuildTrack Inventory System</strong> is a web-based application designed for <strong>construction companies</strong> to manage:</p>
+
+<ul>
+  <li><strong>Projects</strong> &mdash; Track construction projects with team members, timelines, and progress</li>
+  <li><strong>Purchase Orders</strong> &mdash; Create, approve, and track material orders through their full lifecycle</li>
+  <li><strong>Inventory &amp; Materials</strong> &mdash; Manage SKUs (Stock Keeping Units), quotations, and deliveries</li>
+  <li><strong>Equipment &amp; Tools</strong> &mdash; Track company assets, borrowing, and returns</li>
+  <li><strong>Delivery Tracking</strong> &mdash; Assign drivers, track shipments, and collect delivery evidence</li>
+  <li><strong>Reports</strong> &mdash; Generate comprehensive reports with PDF/Excel export</li>
+  <li><strong>Notifications</strong> &mdash; Real-time alerts for order updates, approvals, and more</li>
+</ul>
+
+<h3>Application Layout</h3>
+<p>The application has a <strong>dark sidebar</strong> on the left for navigation and a <strong>light content area</strong> on the right:</p>
+
+<!-- APP LAYOUT MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Main Application Layout
+  </div>
+  <div class="screen-body">
+    <div class="mock-sidebar">
+      <div class="brand">
+        <div class="brand-icon">&#x1F3D7;</div>
+        <div>
+          <div class="brand-text">BuildTrack</div>
+          <div class="brand-sub">BuildTrack Inc.</div>
+        </div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">Main Menu</div>
+        <div class="nav-item active"><span class="nav-icon">&#9647;</span> Dashboard</div>
+        <div class="nav-item"><span class="nav-icon">&#128193;</span> Projects</div>
+        <div class="nav-item"><span class="nav-icon">&#128230;</span> Order &amp; Tracking</div>
+        <div class="nav-item"><span class="nav-icon">&#128203;</span> View Orders</div>
+        <div class="nav-item"><span class="nav-icon">&#128196;</span> Quotation Request</div>
+        <div class="nav-item"><span class="nav-icon">&#128230;</span> SKU Catalog</div>
+        <div class="nav-item"><span class="nav-icon">&#128295;</span> Equipments &amp; Tools</div>
+        <div class="nav-item"><span class="nav-icon">&#128200;</span> Reports</div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-label">Administration</div>
+        <div class="nav-item"><span class="nav-icon">&#128101;</span> Users &amp; Roles</div>
+        <div class="nav-item"><span class="nav-icon">&#9881;</span> Settings</div>
+      </div>
+      <div class="nav-group">
+        <div class="nav-item"><span class="nav-icon">&#128276;</span> Notifications <span class="nav-badge">3</span></div>
+      </div>
+      <div class="user-footer">
+        <div class="user-avatar">SA</div>
+        <div>
+          <div class="user-name">System Admin</div>
+          <div class="user-email">admin@buildtrack.com</div>
+        </div>
+      </div>
+    </div>
+    <div class="mock-content">
+      <h3>Dashboard</h3>
+      <div class="subtitle">Overview of your company's activity</div>
+      <div class="mock-stats">
+        <div class="mock-stat"><div class="stat-icon">&#128193;</div><div class="stat-label">Active Projects</div><div class="stat-value">3</div></div>
+        <div class="mock-stat"><div class="stat-icon">&#128203;</div><div class="stat-label">Pending Orders</div><div class="stat-value">5</div></div>
+        <div class="mock-stat"><div class="stat-icon">&#128230;</div><div class="stat-label">Low Stock Items</div><div class="stat-value">2</div></div>
+        <div class="mock-stat"><div class="stat-icon">&#128101;</div><div class="stat-label">Total Members</div><div class="stat-value">12</div></div>
+      </div>
+      <div style="font-size:11px; color:#64748b; text-align:center;">(Content area shows the currently selected page)</div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 1.1 &mdash; Main application layout with sidebar navigation and content area</div>
+
+<h3>Navigation Overview</h3>
+<table>
+  <tr><th>Menu Item</th><th>Description</th><th>Who Can See</th></tr>
+  <tr><td>Dashboard</td><td>Overview statistics and recent activity</td><td>All users</td></tr>
+  <tr><td>Projects</td><td>Manage construction projects</td><td>All users</td></tr>
+  <tr><td>Order &amp; Tracking</td><td>Order workflow board per project</td><td>All users</td></tr>
+  <tr><td>View Orders</td><td>All orders in table format</td><td>All users</td></tr>
+  <tr><td>Quotation Request</td><td>Manage material quotations</td><td>All users</td></tr>
+  <tr><td>SKU Catalog</td><td>Stock keeping units database</td><td>All users</td></tr>
+  <tr><td>Equipments &amp; Tools</td><td>Company assets, borrowing</td><td>All users</td></tr>
+  <tr><td>Reports</td><td>Generate reports</td><td>All users</td></tr>
+  <tr><td>Users &amp; Roles</td><td>Manage users</td><td>Admins only</td></tr>
+  <tr><td>Companies</td><td>Manage companies</td><td>Super Admin only</td></tr>
+  <tr><td>Settings</td><td>System settings</td><td>Admins only</td></tr>
+  <tr><td>Notifications</td><td>View all notifications</td><td>All users</td></tr>
+</table>
+
+<!-- SECTION 2 -->
+<h2 id="u2">2. Getting Started &mdash; Logging In</h2>
+
+<h3>Login Page</h3>
+
+<!-- LOGIN MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Login Page
+  </div>
+  <div class="screen-body-full" style="background: #f1f5f9; display: flex; justify-content: center; align-items: center; padding: 30px;">
+    <div class="mock-login">
+      <div class="logo-area">
+        <div class="logo-box">&#x1F3D7;</div>
+        <div class="logo-title">BuildTrack</div>
+        <div class="logo-sub">Sign in to your account</div>
+      </div>
+      <div class="mock-login-card">
+        <div class="mock-form-group">
+          <label>Company *</label>
+          <div class="mock-form-input" style="color: #334155;">&#9660; BuildTrack Inc.</div>
+        </div>
+        <div class="mock-form-group">
+          <label>Email *</label>
+          <div class="mock-form-input placeholder">user@example.com</div>
+        </div>
+        <div class="mock-form-group">
+          <label>Password *</label>
+          <div class="mock-form-input placeholder">&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;&#9679;</div>
+        </div>
+        <div class="mock-form-btn">Sign In</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 2.1 &mdash; Login page with company selector, email, and password fields</div>
+
+<ol class="tutorial">
+  <li><strong>Select your Company</strong> &mdash; Choose your company from the dropdown. If only one company exists, it will be auto-selected. <em>(Super Admins can skip this)</em></li>
+  <li><strong>Enter your Email</strong> &mdash; Type the email address provided by your administrator</li>
+  <li><strong>Enter your Password</strong> &mdash; Type your password (minimum 6 characters)</li>
+  <li><strong>Click "Sign In"</strong> &mdash; You will be taken to the Dashboard</li>
+</ol>
+
+<div class="note">
+  <strong>First-time login:</strong> Use the credentials provided by your system administrator. It is recommended to change your password after first login.
+</div>
+
+<div class="warning">
+  <strong>Session Timeout:</strong> For security, you will be automatically logged out after <strong>10 minutes of inactivity</strong>. Any mouse movement, keyboard input, or touch resets the timer.
+</div>
+
+<!-- SECTION 3 -->
+<h2 id="u3">3. Dashboard</h2>
+
+<p>The Dashboard is your home screen, providing an at-a-glance overview of your company's activity.</p>
+
+<!-- DASHBOARD MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Dashboard
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <h3 style="margin:0 0 4px; font-size:18px; color:#1e293b;">Dashboard</h3>
+    <div style="font-size:12px; color:#64748b; margin-bottom:16px;">Overview of your company's activity</div>
+
+    <div class="mock-stats">
+      <div class="mock-stat"><div class="stat-icon">&#128193;</div><div class="stat-label">Active Projects</div><div class="stat-value">3</div></div>
+      <div class="mock-stat"><div class="stat-icon">&#128203;</div><div class="stat-label">Pending Orders</div><div class="stat-value">5</div></div>
+      <div class="mock-stat"><div class="stat-icon">&#128230;</div><div class="stat-label">Low Stock Items</div><div class="stat-value">2</div></div>
+      <div class="mock-stat"><div class="stat-icon">&#128101;</div><div class="stat-label">Total Members</div><div class="stat-value">12</div></div>
+    </div>
+
+    <div style="display:flex; gap:16px;">
+      <div style="flex:1; background:white; border:1px solid #e2e8f0; border-radius:8px; padding:14px;">
+        <div style="font-size:13px; font-weight:600; margin-bottom:10px; color:#1e293b;">Orders by Status</div>
+        <div class="mock-chart">
+          <div class="mock-pie"><div class="mock-pie-hole"></div></div>
+          <div class="mock-legend">
+            <div><span class="mock-legend-dot" style="background:#f59e0b;"></span> For Approval (5)</div>
+            <div><span class="mock-legend-dot" style="background:#3b82f6;"></span> Approved (3)</div>
+            <div><span class="mock-legend-dot" style="background:#1e293b;"></span> In Transit (4)</div>
+            <div><span class="mock-legend-dot" style="background:#22c55e;"></span> Delivered (6)</div>
+            <div><span class="mock-legend-dot" style="background:#94a3b8;"></span> Draft (2)</div>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1.5; background:white; border:1px solid #e2e8f0; border-radius:8px; padding:14px;">
+        <div style="font-size:13px; font-weight:600; margin-bottom:10px; color:#1e293b;">Recent Orders</div>
+        <table class="mock-table">
+          <tr><th>Order #</th><th>Project</th><th>Status</th><th>Date</th></tr>
+          <tr><td>ORD-00015</td><td>Project Cavite</td><td><span class="mock-badge mock-badge-green">Delivered</span></td><td>Mar 24</td></tr>
+          <tr><td>ORD-00014</td><td>Project Cavite</td><td><span class="mock-badge mock-badge-yellow">In Transit</span></td><td>Mar 23</td></tr>
+          <tr><td>ORD-00013</td><td>Warehouse Ext.</td><td><span class="mock-badge mock-badge-yellow">For Approval</span></td><td>Mar 22</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 3.1 &mdash; Dashboard with statistics cards, order status chart, and recent orders</div>
+
+<h3>Statistics Cards</h3>
+<table>
+  <tr><th>Card</th><th>What It Shows</th></tr>
+  <tr><td>Active Projects</td><td>Number of projects with "Active" status</td></tr>
+  <tr><td>Pending Orders</td><td>Number of orders awaiting approval</td></tr>
+  <tr><td>Low Stock Items</td><td>SKUs below minimum threshold</td></tr>
+  <tr><td>Total Members</td><td>Total users in your company (Admins only)</td></tr>
+</table>
+
+<!-- SECTION 4 -->
+<h2 id="u4">4. Projects</h2>
+
+<h3>Projects Page</h3>
+<p>Shows all your company's construction projects as <strong>cards</strong> in a grid layout.</p>
+
+<!-- PROJECTS PAGE MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Projects Page
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <h3 style="margin:0 0 2px; font-size:18px; color:#1e293b;">Projects</h3>
+        <div style="font-size:12px; color:#64748b;">Manage your construction projects</div>
+      </div>
+      <div class="mock-btn mock-btn-primary">+ Create Project</div>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:14px; align-items:center;">
+      <div class="mock-input" style="flex:1;">&#128269; Search projects...</div>
+      <div class="mock-select">All Statuses &#9660;</div>
+      <div style="font-size:11px; color:#64748b;">&#9744; Show Hidden</div>
+    </div>
+    <div class="mock-cards">
+      <div class="mock-card">
+        <div class="card-title">Project Cavite</div>
+        <div class="card-meta">&#128205; Trece Martires City, Cavite</div>
+        <div class="card-meta">&#128197; Mar 19, 2026 &ndash; Mar 27, 2026</div>
+        <div style="margin:6px 0;"><span class="mock-badge mock-badge-green">Active</span></div>
+        <div class="card-divider"></div>
+        <div class="progress-row"><span>Progress</span><span class="pct">50%</span></div>
+        <div class="progress-bar"><div class="progress-fill" style="width:50%;"></div></div>
+      </div>
+      <div class="mock-card">
+        <div class="card-title">Stockwell Warehouse Extension</div>
+        <div class="card-meta">&#128205; Paranaque, Metro Manila</div>
+        <div class="card-meta">&#128197; Feb 18, 2026 &ndash; Sep 18, 2026</div>
+        <div style="margin:6px 0;"><span class="mock-badge mock-badge-green">Active</span></div>
+        <div class="card-divider"></div>
+        <div style="text-align:center; font-size:10px; color:#94a3b8; padding:4px 0;">No quotation set</div>
+      </div>
+      <div class="mock-card">
+        <div class="card-title">Stockwell Main Building</div>
+        <div class="card-meta">&#128205; Makati City, Metro Manila</div>
+        <div class="card-meta">&#128197; Jan 18, 2026 &ndash; Jan 18, 2027</div>
+        <div style="margin:6px 0;"><span class="mock-badge mock-badge-green">Active</span></div>
+        <div class="card-divider"></div>
+        <div style="text-align:center; font-size:10px; color:#94a3b8; padding:4px 0;">No quotation set</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 4.1 &mdash; Projects page with search, filters, and project cards showing progress</div>
+
+<h4>Each Project Card Shows:</h4>
+<ul>
+  <li>Project name</li>
+  <li>Location with pin icon</li>
+  <li>Date range (start &ndash; end)</li>
+  <li>Status badge (<span class="status status-active">Active</span>, On Hold, Completed, Cancelled)</li>
+  <li>Progress bar (based on material delivery vs. quotation), or "No quotation set"</li>
+</ul>
+
+<h3>Project Detail Page</h3>
+<p>Click on any project card to view its full details:</p>
+
+<!-- PROJECT DETAIL MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Project Detail
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+      <span style="font-size:14px; cursor:default;">&#8592;</span>
+      <div class="mock-select" style="font-size:12px;">&#11021; Project Cavite &#9660;</div>
+      <div style="flex:1;"></div>
+      <span class="mock-badge mock-badge-green">Active</span>
+      <div class="mock-btn mock-btn-outline" style="font-size:10px;">&#9998; Edit</div>
+    </div>
+
+    <h3 style="margin:0 0 4px; font-size:18px; color:#1e293b;">Project Cavite</h3>
+    <div style="font-size:11px; color:#64748b; margin-bottom:14px; line-height:1.5;">A typical 2-storey house construction (approx. 100-200 sqm)...</div>
+
+    <div class="mock-info-grid">
+      <div class="mock-info-box"><div class="info-label">&#128205; Location</div><div class="info-value">Trece Martires City, Cavite</div></div>
+      <div class="mock-info-box"><div class="info-label">&#128197; Duration</div><div class="info-value">Mar 19, 2026 &ndash; Mar 27, 2026</div></div>
+      <div class="mock-info-box"><div class="info-label">&#128196; Status</div><div class="info-value"><span class="mock-badge mock-badge-green">Active</span></div></div>
+    </div>
+
+    <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; padding:14px; margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:13px; font-weight:600; color:#1e293b;">&#128196; Project Progress</div>
+          <div style="font-size:10px; color:#64748b;">Based on quotation materials received</div>
+        </div>
+        <div style="font-size:22px; font-weight:700; color:#0f3460;">50%</div>
+      </div>
+      <div class="progress-bar" style="margin-top:8px; height:6px;"><div class="progress-fill" style="width:50%;"></div></div>
+      <div style="font-size:10px; color:#3b82f6; margin-top:6px; cursor:default;">Click to view detailed progress</div>
+    </div>
+
+    <div class="mock-action-btns">
+      <div class="mock-btn mock-btn-outline">&#128196; View Quotation</div>
+      <div class="mock-btn mock-btn-outline">&#128230; View Active Orders</div>
+      <div class="mock-btn mock-btn-outline">&#128666; Delivered Materials</div>
+      <div class="mock-btn mock-btn-outline">&#128295; Borrow Equipments / Tools</div>
+    </div>
+
+    <div class="mock-tabs">
+      <div class="mock-tab active">&#128101; Team</div>
+      <div class="mock-tab">&#9889; Activity</div>
+    </div>
+    <div style="font-size:11px; color:#64748b;">Team members, activity log, and more shown here...</div>
+  </div>
+</div>
+<div class="screen-caption">Figure 4.2 &mdash; Project detail page with info cards, progress, actions, and tabs</div>
+
+<h3>Project Progress Modal</h3>
+<p>Click "Click to view detailed progress" to see per-material breakdown:</p>
+
+<!-- PROGRESS MODAL MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Progress Modal
+  </div>
+  <div class="mock-modal-overlay" style="background:#f0f0f0;">
+    <div class="mock-modal" style="max-width:520px;">
+      <h4>&#9881; Project Progress - Project Cavite</h4>
+      <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;"><span style="font-weight:600;">Overall Progress</span><span style="font-weight:700; color:#0f3460;">50%</span></div>
+        <div class="progress-bar" style="height:6px;"><div class="progress-fill" style="width:50%;"></div></div>
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; text-align:center;">
+          <div style="font-size:18px; font-weight:700; color:#1e293b;">5003<div style="font-size:9px; color:#64748b; font-weight:400;">Quoted</div></div>
+          <div style="font-size:18px; font-weight:700; color:#1e293b;">2507<div style="font-size:9px; color:#64748b; font-weight:400;">Received</div></div>
+          <div style="font-size:18px; font-weight:700; color:#ef4444;">2496<div style="font-size:9px; color:#64748b; font-weight:400;">Remaining</div></div>
+        </div>
+      </div>
+      <div style="font-size:11px; font-weight:600; margin-bottom:8px;">Material Progress (4 of 4)</div>
+      <div class="mock-progress-item">
+        <div><span class="mat-name">CEMENT</span><div class="mat-detail">Unit: sack &nbsp; Quoted/Received: 1000/503 &nbsp; Remaining: 497</div></div>
+        <div><span class="mock-badge mock-badge-yellow">Partial</span> &nbsp; 50.3%</div>
+      </div>
+      <div class="mock-progress-item">
+        <div><span class="mat-name">KAHOY</span><div class="mat-detail">Unit: pcs &nbsp; Quoted/Received: 2000/1003 &nbsp; Remaining: 997</div></div>
+        <div><span class="mock-badge mock-badge-yellow">Partial</span> &nbsp; 50.1%</div>
+      </div>
+      <div class="mock-progress-item">
+        <div><span class="mat-name">BAKAL</span><div class="mat-detail">Unit: pcs &nbsp; Quoted/Received: 2000/1000 &nbsp; Remaining: 1000</div></div>
+        <div><span class="mock-badge mock-badge-yellow">Partial</span> &nbsp; 50%</div>
+      </div>
+      <div class="mock-progress-item" style="border:none;">
+        <div><span class="mat-name">BUHANGIN</span><div class="mat-detail">Unit: truck &nbsp; Quoted/Received: 3/1 &nbsp; Remaining: 2</div></div>
+        <div><span class="mock-badge mock-badge-yellow">Partial</span> &nbsp; 33.3%</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 4.3 &mdash; Progress modal showing per-material quoted vs. received breakdown</div>
+
+<h4>Creating a New Project</h4>
+<ol class="tutorial">
+  <li>Click the <strong>"+ Create Project"</strong> button (top right)</li>
+  <li>Fill in: Project Name, Project Code, Location, Description</li>
+  <li>Set Start Date and End Date</li>
+  <li>Optionally set Estimated Cost and assign a Project Manager</li>
+  <li>Click <strong>"Create"</strong></li>
+</ol>
+
+<!-- SECTION 5 -->
+<h2 id="u5">5. Order &amp; Tracking</h2>
+
+<p>The Order &amp; Tracking page is a <strong>Kanban-style workflow board</strong> for managing orders per project.</p>
+
+<!-- WORKFLOW BOARD MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Order &amp; Tracking Workflow Board
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <h3 style="margin:0 0 2px; font-size:16px; color:#1e293b;">Project Cavite &mdash; Orders</h3>
+        <div style="font-size:11px; color:#64748b;">Manage purchase orders</div>
+      </div>
+      <div class="mock-btn mock-btn-primary">+ Create Order</div>
+    </div>
+    <div class="mock-workflow">
+      <div class="mock-wf-col">
+        <div class="wf-header" style="color:#f59e0b;">For Approval (2)</div>
+        <div class="mock-wf-card"><div class="wf-order">ORD-00013</div><div class="wf-proj">Jagon Hardware</div><div style="margin-top:3px;"><span class="mock-badge mock-badge-yellow" style="font-size:8px;">For Approval</span></div></div>
+        <div class="mock-wf-card"><div class="wf-order">ORD-00014</div><div class="wf-proj">Steel Corp</div><div style="margin-top:3px;"><span class="mock-badge mock-badge-yellow" style="font-size:8px;">For Approval</span></div></div>
+      </div>
+      <div class="mock-wf-col">
+        <div class="wf-header" style="color:#3b82f6;">Approved (1)</div>
+        <div class="mock-wf-card"><div class="wf-order">ORD-00012</div><div class="wf-proj">Jagon Hardware</div><div style="margin-top:3px;"><span class="mock-badge mock-badge-blue" style="font-size:8px;">Approved</span></div></div>
+      </div>
+      <div class="mock-wf-col">
+        <div class="wf-header" style="color:#6366f1;">Ordered (1)</div>
+        <div class="mock-wf-card"><div class="wf-order">ORD-00010</div><div class="wf-proj">ABC Supplies</div><div style="margin-top:3px;"><span class="mock-badge mock-badge-purple" style="font-size:8px;">Ordered</span></div></div>
+      </div>
+      <div class="mock-wf-col">
+        <div class="wf-header" style="color:#eab308;">In Transit (1)</div>
+        <div class="mock-wf-card"><div class="wf-order">ORD-00008</div><div class="wf-proj">Jagon Hardware</div><div style="margin-top:3px;"><span class="mock-badge mock-badge-yellow" style="font-size:8px;">In Transit</span></div></div>
+      </div>
+      <div class="mock-wf-col">
+        <div class="wf-header" style="color:#22c55e;">Delivered (2)</div>
+        <div class="mock-wf-card"><div class="wf-order">ORD-00005</div><div class="wf-proj">Jagon Hardware</div><div style="margin-top:3px;"><span class="mock-badge mock-badge-green" style="font-size:8px;">Delivered</span></div></div>
+        <div class="mock-wf-card"><div class="wf-order">ORD-00003</div><div class="wf-proj">Steel Corp</div><div style="margin-top:3px;"><span class="mock-badge mock-badge-green" style="font-size:8px;">Delivered</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 5.1 &mdash; Kanban workflow board with orders organized by status columns</div>
+
+<h3>Order Lifecycle</h3>
+<table>
+  <tr><th>Action</th><th>Who Can Do It</th><th>What Happens</th></tr>
+  <tr><td>Create &amp; Submit</td><td>Project Engineer, Admin</td><td>Order moves to "For Approval"</td></tr>
+  <tr><td>Approve</td><td>Approver, Office Admin, Admin</td><td>Order moves to "Approved"</td></tr>
+  <tr><td>Reject</td><td>Approver, Office Admin, Admin</td><td>Order rejected with reason</td></tr>
+  <tr><td>Mark Ordered</td><td>Logistics, Admin</td><td>Order placed with supplier</td></tr>
+  <tr><td>Mark In Transit</td><td>Logistics, Driver</td><td>Materials being transported</td></tr>
+  <tr><td>Mark Delivered</td><td>Logistics, Driver</td><td>Materials arrived</td></tr>
+  <tr><td>Receive</td><td>Checker, Receiver, Engineer</td><td>Materials verified and accepted</td></tr>
+</table>
+
+<h3>Creating an Order</h3>
+
+<!-- CREATE ORDER MODAL MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Create Order Modal
+  </div>
+  <div class="mock-modal-overlay" style="background:#f0f0f0;">
+    <div class="mock-modal" style="max-width:480px;">
+      <h4>Create Order</h4>
+      <div class="mock-form-group">
+        <label>Supplier *</label>
+        <div class="mock-form-input" style="color:#334155;">Jagon Hardware</div>
+      </div>
+      <div class="mock-form-group">
+        <label>Expected Delivery Date</label>
+        <div class="mock-form-input" style="color:#334155;">&#128197; Mar 28, 2026</div>
+      </div>
+      <div class="mock-form-group">
+        <label>Notes</label>
+        <div class="mock-form-input placeholder" style="height:40px;">Additional notes...</div>
+      </div>
+      <div style="font-size:12px; font-weight:600; margin:12px 0 8px; color:#1e293b;">Order Items</div>
+      <div style="border:1px solid #e2e8f0; border-radius:6px; padding:8px; margin-bottom:6px; font-size:11px;">
+        <div style="display:flex; justify-content:space-between;">
+          <span style="font-weight:600;">CEMENT</span><span style="color:#64748b;">sack</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:6px; align-items:center;">
+          <span style="color:#64748b; font-size:10px;">Quoted: 1000</span>
+          <span style="color:#64748b; font-size:10px;">Already Ordered: 500</span>
+          <div class="mock-input" style="width:60px; text-align:center;">500</div>
+          <span style="color:#ef4444; cursor:default;">&#10005;</span>
+        </div>
+      </div>
+      <div style="border:1px solid #e2e8f0; border-radius:6px; padding:8px; margin-bottom:10px; font-size:11px;">
+        <div style="display:flex; justify-content:space-between;">
+          <span style="font-weight:600;">BAKAL</span><span style="color:#64748b;">pcs</span>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:6px; align-items:center;">
+          <span style="color:#64748b; font-size:10px;">Quoted: 2000</span>
+          <span style="color:#64748b; font-size:10px;">Already Ordered: 1000</span>
+          <div class="mock-input" style="width:60px; text-align:center;">1000</div>
+          <span style="color:#ef4444; cursor:default;">&#10005;</span>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <div class="mock-btn mock-btn-outline">Cancel</div>
+        <div class="mock-btn mock-btn-primary">Create Order</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 5.2 &mdash; Create order modal with supplier, items from quotation, and quantities</div>
+
+<ol class="tutorial">
+  <li>Click <strong>"+ Create Order"</strong> on the workflow board</li>
+  <li>Select a quotation (optional) to pre-fill items</li>
+  <li>Add order items: select a SKU or type a material name</li>
+  <li>Set quantity and unit price for each item</li>
+  <li>Fill in supplier name and expected delivery date</li>
+  <li>Click <strong>"Create Order"</strong> to save, then <strong>"Submit"</strong> to send for approval</li>
+</ol>
+
+<!-- SECTION 6 -->
+<h2 id="u6">6. View Orders</h2>
+
+<p>Shows all orders across all projects in a <strong>searchable data table</strong>.</p>
+
+<!-- ORDERS TABLE MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; View Orders
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <h3 style="margin:0 0 2px; font-size:18px; color:#1e293b;">View Orders</h3>
+    <div style="font-size:12px; color:#64748b; margin-bottom:14px;">Manage purchase orders and track deliveries</div>
+    <div style="display:flex; gap:10px; margin-bottom:12px;">
+      <div class="mock-input" style="flex:1;">&#128269; Search orders...</div>
+      <div class="mock-select">All Statuses &#9660;</div>
+    </div>
+    <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+      <table class="mock-table">
+        <tr><th>Order #</th><th>Project</th><th>Supplier</th><th>Status</th><th>Amount</th><th>Created</th></tr>
+        <tr><td style="font-weight:600;">ORD-00015</td><td>Project Cavite</td><td>Jagon Hardware</td><td><span class="mock-badge mock-badge-green">Delivered</span></td><td>&#8369;125,000</td><td>Mar 24</td></tr>
+        <tr><td style="font-weight:600;">ORD-00014</td><td>Project Cavite</td><td>Steel Corp</td><td><span class="mock-badge mock-badge-yellow">In Transit</span></td><td>&#8369;89,500</td><td>Mar 23</td></tr>
+        <tr><td style="font-weight:600;">ORD-00013</td><td>Warehouse Ext.</td><td>Jagon Hardware</td><td><span class="mock-badge mock-badge-yellow">For Approval</span></td><td>&#8369;45,200</td><td>Mar 22</td></tr>
+        <tr><td style="font-weight:600;">ORD-00012</td><td>Project Cavite</td><td>ABC Supplies</td><td><span class="mock-badge mock-badge-blue">Approved</span></td><td>&#8369;78,000</td><td>Mar 21</td></tr>
+        <tr><td style="font-weight:600;">ORD-00011</td><td>Main Building</td><td>Jagon Hardware</td><td><span class="mock-badge mock-badge-red">Rejected</span></td><td>&#8369;32,100</td><td>Mar 20</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 6.1 &mdash; Orders table with search, status filter, and color-coded badges</div>
+
+<p>Click on any row to open the <strong>Order Detail Modal</strong> showing full order info, items, approval history, tracking, and actions.</p>
+
+<!-- SECTION 7 -->
+<h2 id="u7">7. Quotation Requests</h2>
+
+<p>Quotations define the <strong>material requirements</strong> for a project and serve as the baseline for tracking progress.</p>
+
+<ol class="tutorial">
+  <li>Go to <strong>Quotation Request</strong> page or the project's Quotation section</li>
+  <li>Select the project</li>
+  <li>Click <strong>"Create Quotation"</strong></li>
+  <li>Add material rows (Material Name, Unit, Quantity)</li>
+  <li>Click <strong>"Save"</strong></li>
+</ol>
+
+<div class="note">
+  <strong>How Quotations Affect Progress:</strong> Project progress is calculated by comparing quoted quantities vs. delivered order items. Without a quotation, no progress bar is shown.
+</div>
+
+<!-- SECTION 8 -->
+<h2 id="u8">8. SKU Catalog</h2>
+
+<p>The master list of all <strong>materials and supplies</strong> your company uses.</p>
+
+<!-- SKU CATALOG MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; SKU Catalog
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <h3 style="margin:0 0 2px; font-size:18px; color:#1e293b;">SKU Catalog</h3>
+        <div style="font-size:12px; color:#64748b;">Manage your materials and supplies</div>
+      </div>
+      <div class="mock-btn mock-btn-primary">+ Add Material</div>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:12px;">
+      <div class="mock-input" style="flex:1;">&#128269; Search SKUs...</div>
+      <div class="mock-select">All Categories &#9660;</div>
+      <div class="mock-select">Active &#9660;</div>
+    </div>
+    <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+      <table class="mock-table">
+        <tr><th>SKU Code</th><th>Name</th><th>Category</th><th>Unit</th><th>Status</th><th>Actions</th></tr>
+        <tr><td>CEM-001</td><td style="font-weight:600;">Portland Cement</td><td>Construction</td><td>sack</td><td><span class="mock-badge mock-badge-green">Active</span></td><td>&#8942;</td></tr>
+        <tr><td>STL-001</td><td style="font-weight:600;">Steel Bars 10mm</td><td>Steel</td><td>pcs</td><td><span class="mock-badge mock-badge-green">Active</span></td><td>&#8942;</td></tr>
+        <tr><td>WOD-001</td><td style="font-weight:600;">Plywood 4x8</td><td>Wood</td><td>sheet</td><td><span class="mock-badge mock-badge-green">Active</span></td><td>&#8942;</td></tr>
+        <tr><td>SND-001</td><td style="font-weight:600;">Fine Sand</td><td>Aggregates</td><td>truck</td><td><span class="mock-badge mock-badge-gray">Inactive</span></td><td>&#8942;</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 8.1 &mdash; SKU Catalog with search, category filter, and material listing</div>
+
+<h3>SKU Fields</h3>
+<table>
+  <tr><th>Field</th><th>Description</th><th>Example</th></tr>
+  <tr><td>SKU Code</td><td>Unique identifier</td><td>CEM-001</td></tr>
+  <tr><td>Name</td><td>Material name</td><td>Portland Cement</td></tr>
+  <tr><td>Category</td><td>Material category</td><td>Construction</td></tr>
+  <tr><td>Unit of Measure</td><td>How it's counted</td><td>sack, pcs, kg, m, box</td></tr>
+  <tr><td>Brand</td><td>Manufacturer</td><td>Eagle</td></tr>
+  <tr><td>Min Threshold</td><td>Low stock alert level</td><td>50</td></tr>
+</table>
+
+<!-- SECTION 9 -->
+<h2 id="u9">9. Equipments &amp; Tools</h2>
+
+<p>Manage company-owned <strong>equipment, tools, and materials</strong> that can be borrowed by project teams.</p>
+
+<!-- EQUIPMENT MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Equipments &amp; Tools
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <h3 style="margin:0 0 2px; font-size:18px; color:#1e293b;">Equipments &amp; Tools</h3>
+        <div style="font-size:12px; color:#64748b;">Manage company assets and borrowing</div>
+      </div>
+      <div class="mock-btn mock-btn-primary">+ Add Equipment</div>
+    </div>
+    <div class="mock-tabs">
+      <div class="mock-tab active">Assets</div>
+      <div class="mock-tab">Borrow Requests</div>
+      <div class="mock-tab">Return Requests</div>
+      <div class="mock-tab">History</div>
+    </div>
+    <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+      <table class="mock-table">
+        <tr><th>Asset Code</th><th>Name</th><th>Type</th><th>Total Qty</th><th>Available</th><th>Condition</th><th>Actions</th></tr>
+        <tr><td>EQ-001</td><td style="font-weight:600;">Concrete Mixer</td><td><span class="mock-badge mock-badge-blue">Equipment</span></td><td>3</td><td>2</td><td><span class="mock-badge mock-badge-green">Available</span></td><td>&#8942;</td></tr>
+        <tr><td>TL-001</td><td style="font-weight:600;">Power Drill Set</td><td><span class="mock-badge mock-badge-purple">Tool</span></td><td>10</td><td>7</td><td><span class="mock-badge mock-badge-green">Available</span></td><td>&#8942;</td></tr>
+        <tr><td>TL-002</td><td style="font-weight:600;">Welding Machine</td><td><span class="mock-badge mock-badge-purple">Tool</span></td><td>2</td><td>0</td><td><span class="mock-badge mock-badge-yellow">In Use</span></td><td>&#8942;</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 9.1 &mdash; Equipment page with tabs for assets, borrows, returns, and history</div>
+
+<h3>Borrowing Equipment</h3>
+<ol class="tutorial">
+  <li>Go to a project's detail page</li>
+  <li>Click <strong>"Borrow Equipments / Tools"</strong></li>
+  <li>Select the asset, enter quantity, set return date</li>
+  <li>Click <strong>"Borrow"</strong></li>
+</ol>
+
+<h3>Returning Equipment</h3>
+<ol class="tutorial">
+  <li>Go to <strong>Equipments &amp; Tools</strong> &rarr; <strong>Return Requests</strong> tab</li>
+  <li>Find the borrow transaction, click <strong>"Return"</strong></li>
+  <li>Enter return quantity and remarks</li>
+  <li>Click <strong>"Submit Return"</strong></li>
+</ol>
+
+<div class="note">
+  <strong>Partial Returns:</strong> You can return equipment in portions. The status shows "Partially Returned" until the full quantity is returned.
+</div>
+
+<!-- SECTION 10 -->
+<h2 id="u10">10. Reports</h2>
+
+<p>Generate comprehensive reports for your projects with export options.</p>
+
+<!-- REPORTS MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Reports
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <h3 style="margin:0 0 2px; font-size:18px; color:#1e293b;">Reports</h3>
+        <div style="font-size:12px; color:#64748b;">Generate and export project reports</div>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <div class="mock-btn mock-btn-outline">&#128424; Print</div>
+        <div class="mock-btn mock-btn-outline">&#128196; PDF</div>
+        <div class="mock-btn mock-btn-outline">&#128200; Excel</div>
+      </div>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:14px;">
+      <div class="mock-select" style="flex:1;">Select Project... &#9660;</div>
+      <div class="mock-select">&#128197; Date Range</div>
+      <div class="mock-btn mock-btn-primary">Generate Report</div>
+    </div>
+    <div class="mock-report-section">
+      <div class="mock-report-header">&#9660; &#128196; PROJECT DETAILS</div>
+      <div class="mock-report-body">
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px;">
+          <div><span style="color:#64748b; font-size:10px;">Project:</span><br><strong>Project Cavite</strong></div>
+          <div><span style="color:#64748b; font-size:10px;">Location:</span><br>Trece Martires City</div>
+          <div><span style="color:#64748b; font-size:10px;">Status:</span><br><span class="mock-badge mock-badge-green">Active</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="mock-report-section">
+      <div class="mock-report-header">&#9660; &#128203; ORDERS &amp; STATUS <span style="margin-left:auto; font-weight:400; color:#94a3b8;">7</span></div>
+      <div class="mock-report-body">
+        <table class="mock-table">
+          <tr><th>Order #</th><th>Supplier</th><th>Status</th><th>Items</th><th>Received</th></tr>
+          <tr><td>ORD-00015</td><td>Jagon Hardware</td><td><span class="mock-badge mock-badge-green">Delivered</span></td><td>3</td><td>503 / 503</td></tr>
+          <tr><td>ORD-00014</td><td>Steel Corp</td><td><span class="mock-badge mock-badge-yellow">In Transit</span></td><td>2</td><td>0 / 1000</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="mock-report-section">
+      <div class="mock-report-header">&#9654; &#128200; MATERIALS PROGRESS <span style="margin-left:auto; font-weight:400; color:#94a3b8;">4</span></div>
+    </div>
+    <div class="mock-report-section">
+      <div class="mock-report-header">&#9654; &#9203; ACTIVITY HISTORY <span style="margin-left:auto; font-weight:400; color:#94a3b8;">12</span></div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 10.1 &mdash; Reports page with collapsible sections, export buttons, and project selection</div>
+
+<h3>Report Tabs</h3>
+<table>
+  <tr><th>Tab</th><th>What It Shows</th></tr>
+  <tr><td>Projects</td><td>Project details, dates, progress summary</td></tr>
+  <tr><td>Orders</td><td>All orders with items, quantities, received amounts</td></tr>
+  <tr><td>Materials</td><td>Material progress vs. quotation</td></tr>
+  <tr><td>Equipment</td><td>Equipment borrowing and return history</td></tr>
+  <tr><td>Team</td><td>Team members and their roles</td></tr>
+  <tr><td>Transactions</td><td>Inventory transaction log</td></tr>
+</table>
+
+<h3>Exporting Reports</h3>
+<ul>
+  <li><strong>PDF</strong> &mdash; Click the PDF button to download</li>
+  <li><strong>Excel</strong> &mdash; Click the Excel button for a spreadsheet</li>
+  <li><strong>Print</strong> &mdash; Click Print to send to your printer</li>
+</ul>
+
+<!-- SECTION 11 -->
+<h2 id="u11">11. Notifications</h2>
+
+<p>BuildTrack sends <strong>real-time notifications</strong> for important events.</p>
+
+<table>
+  <tr><th>Type</th><th>Example Events</th></tr>
+  <tr><td>Order</td><td>New order submitted, order approved/rejected, status changed</td></tr>
+  <tr><td>Inventory</td><td>Delivery received, inventory adjusted</td></tr>
+  <tr><td>Low Stock</td><td>Material fell below minimum threshold</td></tr>
+  <tr><td>Team</td><td>New member added, member removed</td></tr>
+  <tr><td>Project</td><td>Project status changed, progress update</td></tr>
+</table>
+
+<p>The <strong>bell icon</strong> in the sidebar shows your unread count. Click to view all notifications. Click on a notification to navigate to the related item.</p>
+
+<div class="tip">
+  <strong>Real-Time Updates:</strong> Notifications appear instantly. If the real-time connection is unavailable, the system checks every 30 seconds.
+</div>
+
+<!-- SECTION 12 -->
+<h2 id="u12">12. User Roles &amp; Permissions</h2>
+
+<h3>Role Descriptions</h3>
+<table>
+  <tr><th>Role</th><th>What You Can Do</th></tr>
+  <tr><td><strong>Super Admin</strong></td><td>Everything. Manage companies, see all data across companies.</td></tr>
+  <tr><td><strong>Admin</strong></td><td>Full access within your company. Manage users, projects, orders.</td></tr>
+  <tr><td><strong>Office Admin</strong></td><td>Manage quotations and change requests. Approve orders.</td></tr>
+  <tr><td><strong>Warehouse Admin</strong></td><td>Manage SKU catalog, company assets/equipment.</td></tr>
+  <tr><td><strong>Project Manager</strong></td><td>Create and manage projects. Assign team members.</td></tr>
+  <tr><td><strong>Project Engineer</strong></td><td>Create projects and orders. Manage team. Receive deliveries.</td></tr>
+  <tr><td><strong>Approver</strong></td><td>Approve or reject purchase orders.</td></tr>
+  <tr><td><strong>Logistics Admin</strong></td><td>Manage delivery tracking, driver assignments.</td></tr>
+  <tr><td><strong>Driver</strong></td><td>Update delivery status, upload evidence.</td></tr>
+  <tr><td><strong>Checker</strong></td><td>Verify delivered materials, confirm receipt.</td></tr>
+  <tr><td><strong>Receiver</strong></td><td>Receive and accept deliveries.</td></tr>
+  <tr><td><strong>Viewer</strong></td><td>Read-only access to all visible data.</td></tr>
+</table>
+
+<!-- SECTION 13 -->
+<h2 id="u13">13. Users &amp; Roles Management (Admin)</h2>
+
+<!-- USERS PAGE MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Users &amp; Roles
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <h3 style="margin:0 0 2px; font-size:18px; color:#1e293b;">Users &amp; Roles</h3>
+        <div style="font-size:12px; color:#64748b;">Manage user accounts and permissions</div>
+      </div>
+      <div class="mock-btn mock-btn-primary">+ Add User</div>
+    </div>
+    <div style="display:flex; gap:10px; margin-bottom:12px;">
+      <div class="mock-input" style="flex:1;">&#128269; Search users...</div>
+    </div>
+    <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+      <table class="mock-table">
+        <tr><th>Name</th><th>Email</th><th>Role(s)</th><th>Company</th><th>Status</th><th>Actions</th></tr>
+        <tr><td style="font-weight:600;">System Admin</td><td>admin@buildtrack.com</td><td><span class="mock-badge mock-badge-red" style="font-size:9px;">super_admin</span></td><td>BuildTrack</td><td><span class="mock-badge mock-badge-green">Active</span></td><td>&#8942;</td></tr>
+        <tr><td style="font-weight:600;">Juan Dela Cruz</td><td>juan@buildtrack.com</td><td><span class="mock-badge mock-badge-blue" style="font-size:9px;">project_engineer</span></td><td>BuildTrack</td><td><span class="mock-badge mock-badge-green">Active</span></td><td>&#8942;</td></tr>
+        <tr><td style="font-weight:600;">Maria Santos</td><td>maria@buildtrack.com</td><td><span class="mock-badge mock-badge-purple" style="font-size:9px;">office_admin</span></td><td>BuildTrack</td><td><span class="mock-badge mock-badge-green">Active</span></td><td>&#8942;</td></tr>
+        <tr><td style="font-weight:600;">Pedro Reyes</td><td>pedro@buildtrack.com</td><td><span class="mock-badge mock-badge-yellow" style="font-size:9px;">checker</span></td><td>BuildTrack</td><td><span class="mock-badge mock-badge-green">Active</span></td><td>&#8942;</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 13.1 &mdash; Users & Roles page with user list, roles, and company column</div>
+
+<h3>Creating a New User</h3>
+
+<!-- ADD USER MODAL MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Add User Modal
+  </div>
+  <div class="mock-modal-overlay" style="background:#f0f0f0;">
+    <div class="mock-modal" style="max-width:400px;">
+      <h4>Add User</h4>
+      <div class="mock-form-group">
+        <label>Name *</label>
+        <div class="mock-form-input placeholder">Full name</div>
+      </div>
+      <div class="mock-form-group">
+        <label>Role *</label>
+        <div class="mock-form-input" style="color:#334155;">Viewer &#9660;</div>
+      </div>
+      <div class="mock-form-group">
+        <label>Email *</label>
+        <div class="mock-form-input placeholder">user@example.com</div>
+      </div>
+      <div class="mock-form-group">
+        <label>Password *</label>
+        <div class="mock-form-input placeholder">Minimum 6 characters</div>
+      </div>
+      <div class="mock-form-group" style="background:#eff6ff; padding:8px; border-radius:6px; border:1px dashed #3b82f6;">
+        <label>Company * <span style="font-weight:400; font-size:10px; color:#64748b;">(Super Admin only)</span></label>
+        <div class="mock-form-input" style="color:#334155;">BuildTrack Inc. &#9660;</div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+        <div class="mock-btn mock-btn-outline">Cancel</div>
+        <div class="mock-btn mock-btn-primary">Create User</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 13.2 &mdash; Add user form (Company field only visible to Super Admins)</div>
+
+<ol class="tutorial">
+  <li>Click <strong>"+ Add User"</strong></li>
+  <li>Enter full name, select role, enter email and password</li>
+  <li>If you are Super Admin, select the user's company</li>
+  <li>Click <strong>"Create User"</strong></li>
+</ol>
+
+<div class="note">
+  <strong>Company Assignment:</strong> Regular Admins don't see the Company field &mdash; new users are auto-assigned to the admin's company. Only Super Admins can assign users to different companies.
+</div>
+
+<!-- SECTION 14 -->
+<h2 id="u14">14. Companies Management (Super Admin)</h2>
+
+<p>Only <strong>Super Admins</strong> can access the Companies page.</p>
+
+<!-- COMPANIES MOCKUP -->
+<div class="screen">
+  <div class="screen-title">
+    <div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>
+    BuildTrack &mdash; Companies (Super Admin)
+  </div>
+  <div class="screen-body-full" style="background: #f8fafc;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <h3 style="margin:0 0 2px; font-size:18px; color:#1e293b;">Companies</h3>
+        <div style="font-size:12px; color:#64748b;">Manage registered companies</div>
+      </div>
+      <div class="mock-btn mock-btn-primary">+ Add Company</div>
+    </div>
+    <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+      <table class="mock-table">
+        <tr><th>Company Name</th><th>Address</th><th>Phone</th><th>Users</th><th>Status</th><th>Actions</th></tr>
+        <tr><td style="font-weight:600;">BuildTrack Inc.</td><td>Makati City, Metro Manila</td><td>+63 2 8888 1234</td><td>12</td><td><span class="mock-badge mock-badge-green">Active</span></td><td>&#8942;</td></tr>
+        <tr><td style="font-weight:600;">ABC Construction</td><td>Quezon City, Metro Manila</td><td>+63 2 7777 5678</td><td>5</td><td><span class="mock-badge mock-badge-green">Active</span></td><td>&#8942;</td></tr>
+        <tr><td style="font-weight:600;">XYZ Builders</td><td>Cebu City</td><td>&mdash;</td><td>0</td><td><span class="mock-badge mock-badge-gray">Inactive</span></td><td>&#8942;</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 14.1 &mdash; Companies management page (Super Admin only)</div>
+
+<div class="warning">
+  <strong>Deactivating a Company:</strong> This prevents all users of that company from logging in. Data is preserved and the company can be reactivated.
+</div>
+
+<!-- SECTION 15 -->
+<h2 id="u15">15. Settings (Admin)</h2>
+
+<p>The Settings page allows administrators to configure notification rules and system preferences.</p>
+
+<!-- SECTION 16 -->
+<h2 id="u16">16. Step-by-Step Tutorials</h2>
+
+<h3>Tutorial 1: Complete Order Workflow (End to End)</h3>
+
+<div class="feature-box">
+  <h4>Phase 1: Create the Quotation</h4>
+  <ol class="tutorial">
+    <li>Go to <strong>Projects</strong> &rarr; Click on your project</li>
+    <li>Click <strong>"View Quotation"</strong></li>
+    <li>Click <strong>"Create Quotation"</strong></li>
+    <li>Add materials: e.g., "Cement" - sack - 1000, "Steel Bars" - pcs - 500</li>
+    <li>Click <strong>"Save"</strong></li>
+  </ol>
+</div>
+
+<div class="feature-box">
+  <h4>Phase 2: Create and Submit an Order</h4>
+  <ol class="tutorial">
+    <li>Go to <strong>Order &amp; Tracking</strong> &rarr; Select your project</li>
+    <li>Click <strong>"+ Create Order"</strong></li>
+    <li>Select the quotation, add items, fill supplier info</li>
+    <li>Click <strong>"Create Order"</strong> then <strong>"Submit"</strong></li>
+  </ol>
+</div>
+
+<div class="feature-box">
+  <h4>Phase 3: Approve the Order</h4>
+  <ol class="tutorial">
+    <li>Log in as an <strong>Approver</strong></li>
+    <li>Find the pending order and review items</li>
+    <li>Click <strong>"Approve"</strong> (or <strong>"Reject"</strong> with a reason)</li>
+  </ol>
+</div>
+
+<div class="feature-box">
+  <h4>Phase 4: Track Delivery</h4>
+  <ol class="tutorial">
+    <li>Change status to <strong>"Ordered"</strong> then <strong>"In Transit"</strong></li>
+    <li>Assign a driver with plate number and materials</li>
+    <li>Driver uploads evidence photos along the way</li>
+    <li>Mark as <strong>"Delivered"</strong> when materials arrive</li>
+  </ol>
+</div>
+
+<div class="feature-box">
+  <h4>Phase 5: Receive and Close</h4>
+  <ol class="tutorial">
+    <li>Receiver opens the delivered order</li>
+    <li>Uploads receiver evidence (photos)</li>
+    <li>Marks as <strong>"Fully Received"</strong></li>
+    <li>Project progress updates automatically!</li>
+  </ol>
+</div>
+
+<h3>Tutorial 2: Setting Up a New Project</h3>
+<ol class="tutorial">
+  <li>Go to <strong>Projects</strong> &rarr; Click <strong>"+ Create Project"</strong></li>
+  <li>Fill in: Name, Code, Location, Description, Dates</li>
+  <li>Click <strong>"Create"</strong></li>
+  <li>Go to <strong>Team</strong> tab &rarr; Add team members</li>
+  <li>Click <strong>"View Quotation"</strong> &rarr; Create quotation with all materials</li>
+  <li>Go to <strong>Order &amp; Tracking</strong> to start creating orders</li>
+</ol>
+
+<h3>Tutorial 3: Generating a Report</h3>
+<ol class="tutorial">
+  <li>Go to <strong>Reports</strong> page</li>
+  <li>Select a project from the dropdown</li>
+  <li>Click <strong>"Generate Report"</strong></li>
+  <li>Browse collapsible sections: Projects, Orders, Materials, Equipment, Team</li>
+  <li>Click <strong>PDF</strong>, <strong>Excel</strong>, or <strong>Print</strong> to export</li>
+</ol>
+
+<!-- SECTION 17 -->
+<h2 id="u17">17. Tips &amp; Best Practices</h2>
+
+<div class="tip">
+  <h4>Always Create Quotations First</h4>
+  <p>Creating a quotation before placing orders allows the system to track <strong>project progress</strong> automatically. Without a quotation, no progress bar appears.</p>
+</div>
+
+<div class="tip">
+  <h4>Use Consistent SKU Names</h4>
+  <p>Use the same SKU codes/names as in your quotation for accurate progress tracking.</p>
+</div>
+
+<div class="tip">
+  <h4>Upload Delivery Evidence</h4>
+  <p>Always upload photos when receiving deliveries. This creates a <strong>verifiable record</strong>.</p>
+</div>
+
+<div class="tip">
+  <h4>Check the Dashboard Daily</h4>
+  <p>The Dashboard shows pending orders, active projects, and low stock. Check it first thing each day.</p>
+</div>
+
+<div class="warning">
+  <h4>Security Reminders</h4>
+  <ul>
+    <li>Never share your login credentials</li>
+    <li>Change your password if compromised</li>
+    <li>Log out when using shared computers</li>
+    <li>Auto-logout after 10 minutes of inactivity</li>
+  </ul>
+</div>
+
+<!-- SECTION 18 -->
+<h2 id="u18">18. Frequently Asked Questions (FAQ)</h2>
+
+<h4>Q: I can't see the progress bar on my project. Why?</h4>
+<p><strong>A:</strong> Create a <strong>quotation</strong> with material requirements first. The progress bar calculates based on delivered orders vs. quotation.</p>
+
+<h4>Q: My order shows 0% received even though materials were delivered. Why?</h4>
+<p><strong>A:</strong> The order status must be <strong>"Delivered"</strong> or beyond for materials to count as received.</p>
+
+<h4>Q: I submitted an order but it disappeared. Where is it?</h4>
+<p><strong>A:</strong> It moved to <strong>"For Approval"</strong> column on the workflow board. An approver needs to review it.</p>
+
+<h4>Q: Can I edit an order after it's been approved?</h4>
+<p><strong>A:</strong> Only limited edits (supplier, notes). Item changes require rejecting and recreating.</p>
+
+<h4>Q: How do I change my company?</h4>
+<p><strong>A:</strong> Only a <strong>Super Admin</strong> can reassign users to different companies.</p>
+
+<h4>Q: The system logged me out. What happened?</h4>
+<p><strong>A:</strong> Auto-logout after <strong>10 minutes of inactivity</strong>. Log back in to continue.</p>
+
+<h4>Q: Can I access BuildTrack from my phone?</h4>
+<p><strong>A:</strong> Yes! BuildTrack is <strong>responsive</strong> and works on mobile devices.</p>
+
+<h4>Q: How is project progress calculated?</h4>
+<p><strong>A:</strong> Progress = (Total Delivered Quantity / Total Quoted Quantity) &times; 100. Only orders with "Delivered" status or beyond are counted.</p>
+
+<h4>Q: Do I need to select a company when logging in as Super Admin?</h4>
+<p><strong>A:</strong> No. Super Admins can log in without selecting a company and see all data system-wide.</p>
+
+<hr>
+<p style="text-align: center; color: #94a3b8; margin-top: 60px;">
+  <em>BuildTrack Inventory System &mdash; User Guide &amp; Tutorial v1.0</em><br>
+  <em>Generated March 2026</em><br>
+  <em>For support, contact your system administrator</em>
+</p>
+
+</body>
+</html>

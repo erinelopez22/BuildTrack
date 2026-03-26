@@ -12,7 +12,8 @@ public class OrderService(AppDbContext db) : IOrderService
     private static int _orderCounter = 0;
 
     public async Task<List<OrderDto>> GetAllAsync(
-        string? status, Guid? projectId, string? search, Guid currentUserId)
+        string? status, Guid? projectId, string? search, Guid currentUserId,
+        Guid? companyId = null, bool isSuperAdmin = false)
     {
         var query = db.Orders
             .Include(o => o.Project)
@@ -21,6 +22,9 @@ public class OrderService(AppDbContext db) : IOrderService
             .Include(o => o.Approver)
             .Include(o => o.Rejector)
             .AsQueryable();
+
+        if (!isSuperAdmin && companyId.HasValue)
+            query = query.Where(o => o.Project.CompanyId == companyId.Value);
 
         if (!string.IsNullOrWhiteSpace(status))
         {

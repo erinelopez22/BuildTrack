@@ -100,14 +100,26 @@ const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const authApi = {
-  login: (loginId: string, password: string) =>
-    post<AuthResponse>('/api/auth/login', { loginId, password }),
+  login: (loginId: string, password: string, companyId?: string) =>
+    post<AuthResponse>('/api/auth/login', { loginId, password, companyId: companyId || null }),
   refresh: (refreshToken: string) =>
     post<AuthResponse>('/api/auth/refresh', { refreshToken }),
   logout: () => post('/api/auth/logout'),
   me: () => get<UserSession>('/api/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
     post('/api/auth/change-password', { currentPassword, newPassword }),
+};
+
+// ── Companies ────────────────────────────────────────────────────────────────
+
+export const companiesApi = {
+  getList: () => get<CompanyListItem[]>('/api/companies/list'),
+  getAll: () => get<Company[]>('/api/companies'),
+  getById: (id: string) => get<Company>(`/api/companies/${id}`),
+  create: (data: CreateCompanyRequest) => post<Company>('/api/companies', data),
+  update: (id: string, data: Partial<CreateCompanyRequest> & { isActive?: boolean }) =>
+    put<Company>(`/api/companies/${id}`, data),
+  delete: (id: string) => del(`/api/companies/${id}`),
 };
 
 // ── Users ─────────────────────────────────────────────────────────────────────
@@ -370,6 +382,8 @@ export interface UserSession {
   smsOptIn: boolean;
   isActive: boolean;
   roles: string[];
+  companyId?: string;
+  companyName?: string;
 }
 
 export interface User {
@@ -386,6 +400,8 @@ export interface User {
   updatedAt: string;
   createdBy?: string;
   roles: string[];
+  companyId?: string;
+  companyName?: string;
 }
 
 export interface CreateUserRequest {
@@ -397,6 +413,7 @@ export interface CreateUserRequest {
   address?: string;
   smsOptIn?: boolean;
   role?: string;
+  companyId?: string;
 }
 
 export interface UpdateUserRequest {
@@ -407,6 +424,7 @@ export interface UpdateUserRequest {
   avatarUrl?: string;
   smsOptIn?: boolean;
   isActive?: boolean;
+  companyId?: string;
 }
 
 export interface Project {
@@ -805,4 +823,30 @@ export interface SaveTrackingRequest {
     materials: { orderItemId: string; assignedQuantity: number }[];
     evidence?: TrackingEvidenceItem[];
   }[];
+}
+
+// ── Company interfaces ───────────────────────────────────────────────────────
+
+export interface CompanyListItem {
+  id: string;
+  name: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  userCount: number;
+}
+
+export interface CreateCompanyRequest {
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
 }

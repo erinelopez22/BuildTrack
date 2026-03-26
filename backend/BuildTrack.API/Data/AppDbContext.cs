@@ -5,6 +5,7 @@ namespace BuildTrack.API.Data;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    public DbSet<Company> Companies => Set<Company>();
     public DbSet<Profile> Profiles => Set<Profile>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
@@ -32,11 +33,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         base.OnModelCreating(modelBuilder);
 
+        // ── Company ─────────────────────────────────────────────────────────
+        modelBuilder.Entity<Company>(e =>
+        {
+            e.HasIndex(c => c.Name).IsUnique();
+        });
+
         // ── Profile ──────────────────────────────────────────────────────────
         modelBuilder.Entity<Profile>(e =>
         {
             e.HasIndex(p => p.Email).IsUnique();
             e.HasIndex(p => p.Username).IsUnique().HasFilter("[Username] IS NOT NULL");
+            e.HasOne(p => p.Company)
+             .WithMany(c => c.Users)
+             .HasForeignKey(p => p.CompanyId)
+             .OnDelete(DeleteBehavior.ClientSetNull);
         });
 
         // ── UserRole ─────────────────────────────────────────────────────────
@@ -66,6 +77,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
              .WithMany()
              .HasForeignKey(p => p.ProjectManagerId)
              .OnDelete(DeleteBehavior.ClientSetNull);
+            e.HasOne(p => p.Company)
+             .WithMany(c => c.Projects)
+             .HasForeignKey(p => p.CompanyId)
+             .OnDelete(DeleteBehavior.ClientSetNull);
         });
 
         // ── ProjectMember ─────────────────────────────────────────────────────
@@ -86,6 +101,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<SKU>(e =>
         {
             e.HasIndex(s => s.SkuCode).IsUnique();
+            e.HasOne(s => s.Company)
+             .WithMany(c => c.SKUs)
+             .HasForeignKey(s => s.CompanyId)
+             .OnDelete(DeleteBehavior.ClientSetNull);
         });
 
         // ── Order ─────────────────────────────────────────────────────────────

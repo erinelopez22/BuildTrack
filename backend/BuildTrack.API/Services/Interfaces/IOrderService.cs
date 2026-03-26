@@ -4,7 +4,7 @@ namespace BuildTrack.API.Services.Interfaces;
 
 public interface IOrderService
 {
-    Task<List<OrderDto>> GetAllAsync(string? status, Guid? projectId, string? search, Guid currentUserId);
+    Task<List<OrderDto>> GetAllAsync(string? status, Guid? projectId, string? search, Guid currentUserId, Guid? companyId = null, bool isSuperAdmin = false);
     Task<OrderDto?> GetByIdAsync(Guid id);
     Task<(OrderDto? order, string? error)> CreateAsync(CreateOrderRequest request, Guid createdBy);
     Task<OrderDto?> UpdateAsync(Guid id, UpdateOrderRequest request, Guid updatedBy);

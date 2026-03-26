@@ -14,7 +14,7 @@ public class AuthController(IAuthService authService) : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<AuthResponse>>> Login([FromBody] LoginRequest request)
     {
-        var result = await authService.LoginAsync(request.LoginId, request.Password);
+        var result = await authService.LoginAsync(request.LoginId, request.Password, request.CompanyId);
         if (result == null)
             return Unauthorized(ApiResponse<AuthResponse>.Fail("Invalid credentials."));
 

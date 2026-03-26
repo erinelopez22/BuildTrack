@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BuildTrack - Free Hosting Guide</title>
+<style>
+  @page { margin: 0.8in; size: A4; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.7; color: #1a1a2e; max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+  h1 { color: #16213e; font-size: 2.2em; border-bottom: 3px solid #0f3460; padding-bottom: 10px; }
+  h2 { color: #0f3460; font-size: 1.6em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 40px; page-break-before: always; }
+  h2:first-of-type { page-break-before: avoid; }
+  h3 { color: #1a1a2e; font-size: 1.2em; margin-top: 25px; }
+  h4 { color: #333; font-size: 1.05em; margin-top: 15px; }
+  code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #e11d48; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.82em; line-height: 1.5; page-break-inside: avoid; }
+  pre code { background: none; color: inherit; padding: 0; }
+  pre .comment { color: #64748b; }
+  pre .highlight { color: #fbbf24; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.9em; page-break-inside: avoid; }
+  th { background: #0f3460; color: white; padding: 10px 12px; text-align: left; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f8fafc; }
+  .cover { text-align: center; padding: 100px 0 60px; page-break-after: always; }
+  .cover h1 { font-size: 2.8em; border: none; color: #0f3460; }
+  .cover .subtitle { font-size: 1.3em; color: #64748b; margin-top: 10px; }
+  .cover .version { font-size: 1em; color: #94a3b8; margin-top: 30px; }
+  .cover .logo { font-size: 5em; margin-bottom: 20px; }
+  .toc { page-break-after: always; }
+  .toc h2 { page-break-before: avoid; }
+  .toc ul { list-style: none; padding: 0; }
+  .toc li { padding: 6px 0; border-bottom: 1px dotted #ccc; }
+  .toc a { text-decoration: none; color: #0f3460; }
+  .note { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .tip { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .danger { background: #fef2f2; border-left: 4px solid #ef4444; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  ol.tutorial { counter-reset: step; list-style: none; padding-left: 0; }
+  ol.tutorial li { counter-increment: step; margin: 10px 0; padding: 10px 10px 10px 45px; background: #f8fafc; border-radius: 8px; position: relative; }
+  ol.tutorial li::before { content: counter(step); position: absolute; left: 10px; top: 10px; background: #0f3460; color: white; width: 26px; height: 26px; border-radius: 50%; text-align: center; line-height: 26px; font-weight: bold; font-size: 0.85em; }
+
+  /* Screen mockup styles */
+  .screen { border: 2px solid #cbd5e1; border-radius: 12px; overflow: hidden; margin: 20px 0; font-size: 13px; background: #fff; page-break-inside: avoid; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .screen-title { background: #1e293b; color: #94a3b8; padding: 8px 16px; font-size: 11px; display: flex; align-items: center; gap: 8px; }
+  .screen-title .dots { display: flex; gap: 5px; }
+  .screen-title .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .screen-title .dot-r { background: #ef4444; }
+  .screen-title .dot-y { background: #eab308; }
+  .screen-title .dot-g { background: #22c55e; }
+  .screen-body { padding: 20px; }
+  .screen-caption { text-align: center; font-size: 12px; color: #64748b; font-style: italic; margin: -12px 0 20px; }
+
+  /* UI mockup elements */
+  .mock-btn { display: inline-block; padding: 8px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: default; }
+  .mock-btn-primary { background: #0f3460; color: white; }
+  .mock-btn-orange { background: #f97316; color: white; }
+  .mock-btn-green { background: #22c55e; color: white; }
+  .mock-btn-outline { background: white; color: #334155; border: 1px solid #e2e8f0; }
+  .mock-input { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; font-size: 12px; color: #94a3b8; background: white; width: 100%; margin-bottom: 10px; }
+  .mock-input.filled { color: #334155; }
+  .mock-select { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; font-size: 12px; color: #334155; background: white; }
+  .mock-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .mock-card h4 { margin: 0 0 4px; font-size: 14px; color: #1e293b; }
+  .mock-card p { margin: 0; font-size: 11px; color: #64748b; }
+  .mock-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+  .mock-badge-green { background: #dcfce7; color: #166534; }
+  .mock-badge-blue { background: #dbeafe; color: #1e40af; }
+  .mock-badge-orange { background: #ffedd5; color: #c2410c; }
+  .mock-badge-free { background: #dcfce7; color: #166534; font-size: 11px; padding: 3px 10px; }
+
+  /* Dashboard-like UI elements */
+  .mock-sidebar-mini { width: 50px; background: #1e293b; padding: 12px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; border-radius: 8px 0 0 8px; }
+  .mock-sidebar-mini .icon { width: 28px; height: 28px; background: #334155; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #94a3b8; }
+  .mock-sidebar-mini .icon.active { background: #475569; color: white; }
+
+  /* Architecture diagram */
+  .arch-diagram { display: flex; align-items: center; justify-content: center; gap: 16px; flex-wrap: wrap; margin: 20px 0; }
+  .arch-box { background: white; border: 2px solid #e2e8f0; border-radius: 12px; padding: 16px 20px; text-align: center; min-width: 160px; }
+  .arch-box.highlight { border-color: #22c55e; background: #f0fdf4; }
+  .arch-box .icon { font-size: 28px; margin-bottom: 6px; }
+  .arch-box .label { font-size: 13px; font-weight: 700; color: #1e293b; }
+  .arch-box .sub { font-size: 10px; color: #64748b; }
+  .arch-box .cost { font-size: 12px; font-weight: 700; color: #22c55e; margin-top: 4px; }
+  .arch-arrow { font-size: 20px; color: #94a3b8; }
+
+  /* Console/Terminal mockup */
+  .terminal { background: #0f172a; color: #a5f3fc; border-radius: 10px; overflow: hidden; margin: 16px 0; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; page-break-inside: avoid; }
+  .terminal-header { background: #1e293b; padding: 8px 14px; display: flex; align-items: center; gap: 6px; }
+  .terminal-header .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .terminal-header .t-title { color: #94a3b8; font-size: 11px; margin-left: 8px; }
+  .terminal-body { padding: 14px 16px; line-height: 1.6; }
+  .terminal-body .prompt { color: #22c55e; }
+  .terminal-body .cmd { color: #f8fafc; }
+  .terminal-body .output { color: #94a3b8; }
+  .terminal-body .highlight { color: #fbbf24; }
+  .terminal-body .success { color: #4ade80; }
+  .terminal-body .error { color: #f87171; }
+
+  /* Step indicator */
+  .step-header { display: flex; align-items: center; gap: 12px; margin: 24px 0 12px; }
+  .step-circle { width: 36px; height: 36px; background: #0f3460; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; flex-shrink: 0; }
+  .step-title { font-size: 1.15em; font-weight: 700; color: #1e293b; }
+
+  /* Web UI mockup */
+  .web-form { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 20px; margin: 16px 0; }
+  .web-form label { display: block; font-size: 11px; font-weight: 600; color: #475569; margin-bottom: 4px; margin-top: 10px; }
+  .web-form label:first-child { margin-top: 0; }
+
+  /* Checklist */
+  .checklist { list-style: none; padding: 0; }
+  .checklist li { padding: 6px 0 6px 28px; position: relative; font-size: 0.95em; }
+  .checklist li::before { content: "✓"; position: absolute; left: 4px; color: #22c55e; font-weight: bold; }
+
+  @media print { body { padding: 0; } h2 { page-break-before: always; } .cover { padding: 180px 0 80px; } .screen { box-shadow: none; } .terminal { break-inside: avoid; } }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div class="logo">&#x2601;</div>
+  <h1>BuildTrack Hosting Guide</h1>
+  <div class="subtitle">Step-by-Step Guide to Host Your Web App for Free</div>
+  <div class="version">
+    <p>Oracle Cloud (Always Free) + Vercel</p>
+    <p>Version 1.0 &mdash; March 2026</p>
+    <p><strong>Total Cost: $0/month</strong></p>
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ul>
+    <li><a href="#s1">1. Overview &mdash; What We're Setting Up</a></li>
+    <li><a href="#s2">2. Prerequisites &mdash; What You Need</a></li>
+    <li><a href="#s3">3. Step 1: Create Oracle Cloud Account (Free)</a></li>
+    <li><a href="#s4">4. Step 2: Create a Free Virtual Machine</a></li>
+    <li><a href="#s5">5. Step 3: Connect to Your VM via SSH</a></li>
+    <li><a href="#s6">6. Step 4: Install SQL Server Express on VM</a></li>
+    <li><a href="#s7">7. Step 5: Install .NET 8 Runtime on VM</a></li>
+    <li><a href="#s8">8. Step 6: Install Nginx Web Server on VM</a></li>
+    <li><a href="#s9">9. Step 7: Prepare &amp; Upload Backend to VM</a></li>
+    <li><a href="#s10">10. Step 8: Configure &amp; Start Backend Service</a></li>
+    <li><a href="#s11">11. Step 9: Configure Nginx Reverse Proxy</a></li>
+    <li><a href="#s12">12. Step 10: Open Firewall Ports</a></li>
+    <li><a href="#s13">13. Step 11: Deploy Frontend to Vercel (Free)</a></li>
+    <li><a href="#s14">14. Step 12: Test Everything</a></li>
+    <li><a href="#s15">15. Optional: Custom Domain &amp; SSL</a></li>
+    <li><a href="#s16">16. Maintenance &amp; Updates</a></li>
+    <li><a href="#s17">17. Troubleshooting</a></li>
+  </ul>
+</div>
+
+<!-- SECTION 1 -->
+<h2 id="s1">1. Overview &mdash; What We're Setting Up</h2>
+
+<p>We will host the entire BuildTrack web application for <strong>$0/month</strong> using two free services:</p>
+
+<div class="arch-diagram">
+  <div class="arch-box">
+    <div class="icon">&#128100;</div>
+    <div class="label">Users</div>
+    <div class="sub">Browser / Phone</div>
+  </div>
+  <div class="arch-arrow">&#8594;</div>
+  <div class="arch-box highlight">
+    <div class="icon">&#9889;</div>
+    <div class="label">Frontend</div>
+    <div class="sub">Vercel (React App)</div>
+    <div class="cost">FREE</div>
+  </div>
+  <div class="arch-arrow">&#8594;</div>
+  <div class="arch-box highlight">
+    <div class="icon">&#9881;</div>
+    <div class="label">Backend API</div>
+    <div class="sub">Oracle Cloud VM (.NET 8)</div>
+    <div class="cost">FREE</div>
+  </div>
+  <div class="arch-arrow">&#8594;</div>
+  <div class="arch-box highlight">
+    <div class="icon">&#128451;</div>
+    <div class="label">Database</div>
+    <div class="sub">SQL Server Express on VM</div>
+    <div class="cost">FREE</div>
+  </div>
+</div>
+<div class="screen-caption">Figure 1.1 &mdash; Architecture overview: all components hosted for free</div>
+
+<h3>Why This Setup?</h3>
+<table>
+  <tr><th>Component</th><th>Service</th><th>Why Free?</th><th>Limits</th></tr>
+  <tr><td>Frontend</td><td>Vercel</td><td>Free hobby tier for static sites</td><td>100GB bandwidth/month</td></tr>
+  <tr><td>Backend + DB</td><td>Oracle Cloud Always Free</td><td>Permanently free VM (not a trial!)</td><td>1GB RAM, 1 CPU per VM</td></tr>
+  <tr><td>Database</td><td>SQL Server Express</td><td>Free edition from Microsoft</td><td>10GB database size</td></tr>
+  <tr><td>SSL Certificate</td><td>Let's Encrypt</td><td>Free automated SSL</td><td>Renew every 90 days (auto)</td></tr>
+</table>
+
+<div class="note">
+  <strong>Oracle Cloud "Always Free"</strong> is different from a trial. These resources are <strong>permanently free</strong> and will never be charged, even after the 30-day trial period ends. You get 2 VMs forever.
+</div>
+
+<!-- SECTION 2 -->
+<h2 id="s2">2. Prerequisites &mdash; What You Need</h2>
+
+<ul class="checklist">
+  <li>A computer with internet (you're using Windows 11 &mdash; perfect)</li>
+  <li>A credit/debit card (Oracle requires it for verification, <strong>you will NOT be charged</strong>)</li>
+  <li>An email address (for Oracle Cloud and Vercel accounts)</li>
+  <li>A GitHub account (for Vercel deployment, free at github.com)</li>
+  <li>BuildTrack source code (your current project)</li>
+  <li>Node.js installed (you already have this)</li>
+  <li>.NET 8 SDK installed (you already have this)</li>
+</ul>
+
+<h3>Software to Install on Your Windows PC</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">Windows Terminal &mdash; Install Tools</span></div>
+  <div class="terminal-body">
+<span class="comment"># Install PuTTY (SSH client to connect to your VM)</span>
+<span class="prompt">$</span> <span class="cmd">winget install PuTTY.PuTTY</span>
+
+<span class="comment"># Install WinSCP (file transfer to your VM)</span>
+<span class="prompt">$</span> <span class="cmd">winget install WinSCP.WinSCP</span>
+
+<span class="comment"># Install Vercel CLI</span>
+<span class="prompt">$</span> <span class="cmd">npm install -g vercel</span>
+  </div>
+</div>
+
+<!-- SECTION 3 -->
+<h2 id="s3">3. Step 1: Create Oracle Cloud Account</h2>
+
+<div class="step-header">
+  <div class="step-circle">1</div>
+  <div class="step-title">Sign Up for Oracle Cloud Free Tier</div>
+</div>
+
+<ol class="tutorial">
+  <li>Go to <strong><code>https://cloud.oracle.com</code></strong> in your browser</li>
+  <li>Click <strong>"Sign Up for Free"</strong> (top right corner)</li>
+  <li>Fill in your name, email, and country</li>
+  <li>Verify your email address</li>
+  <li>Set a password for your Oracle Cloud account</li>
+  <li>Select your <strong>Home Region</strong> &mdash; choose the closest to your users (e.g., <strong>Singapore</strong> or <strong>AP-Sydney</strong> for Philippines/Asia)</li>
+  <li>Enter credit/debit card details for verification (you will <strong>NOT</strong> be charged)</li>
+  <li>Complete signup and wait for account activation (usually 5&ndash;15 minutes)</li>
+</ol>
+
+<!-- Oracle signup mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>cloud.oracle.com &mdash; Sign Up</div>
+  <div class="screen-body" style="background:#f9fafb;">
+    <div style="max-width:400px; margin:0 auto;">
+      <div style="text-align:center; margin-bottom:16px;">
+        <div style="font-size:28px; color:#c74634; font-weight:700;">ORACLE</div>
+        <div style="font-size:14px; color:#1e293b; font-weight:600; margin-top:8px;">Create Your Free Account</div>
+      </div>
+      <div class="web-form">
+        <label>Country/Territory</label>
+        <div class="mock-input filled">Philippines &#9660;</div>
+        <label>First Name</label>
+        <div class="mock-input filled">Eduardo</div>
+        <label>Last Name</label>
+        <div class="mock-input filled">Lopez</div>
+        <label>Email</label>
+        <div class="mock-input filled">elopez@example.com</div>
+        <label>Home Region</label>
+        <div class="mock-input filled">&#128205; Asia Pacific (Singapore) &#9660;</div>
+        <div style="margin-top:14px;">
+          <div class="mock-btn mock-btn-orange" style="width:100%; text-align:center;">Start My Free Trial</div>
+        </div>
+      </div>
+      <div style="text-align:center; font-size:10px; color:#64748b; margin-top:10px;">
+        &#128274; Your card will NOT be charged. Free tier resources are always free.
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 3.1 &mdash; Oracle Cloud signup form (select closest region)</div>
+
+<div class="warning">
+  <strong>Important &mdash; Home Region:</strong> You <strong>cannot change</strong> your home region after signup. Choose wisely. For Philippines users, select <strong>Singapore</strong> or <strong>Japan (Tokyo)</strong> for lowest latency.
+</div>
+
+<!-- SECTION 4 -->
+<h2 id="s4">4. Step 2: Create a Free Virtual Machine</h2>
+
+<div class="step-header">
+  <div class="step-circle">2</div>
+  <div class="step-title">Create an Always Free VM Instance</div>
+</div>
+
+<ol class="tutorial">
+  <li>Log in to <strong>Oracle Cloud Console</strong> at <code>cloud.oracle.com</code></li>
+  <li>Click the hamburger menu (&#9776;) &rarr; <strong>Compute</strong> &rarr; <strong>Instances</strong></li>
+  <li>Click <strong>"Create Instance"</strong></li>
+  <li>Set the <strong>Name</strong>: <code>buildtrack-server</code></li>
+  <li>Under <strong>Image and Shape</strong>, click <strong>"Edit"</strong>:
+    <ul>
+      <li>Image: <strong>Ubuntu 22.04</strong> (Canonical Ubuntu)</li>
+      <li>Shape: Click <strong>"Change Shape"</strong> &rarr; Select <strong>"Specialty and Previous Generation"</strong> &rarr; <strong>VM.Standard.E2.1.Micro</strong> (Always Free eligible)</li>
+    </ul>
+  </li>
+  <li>Under <strong>Networking</strong>: leave defaults (creates a new VCN)</li>
+  <li>Under <strong>Add SSH keys</strong>: Select <strong>"Generate a key pair for me"</strong></li>
+  <li>Click <strong>"Save Private Key"</strong> and <strong>"Save Public Key"</strong> &mdash; <span style="color:#ef4444; font-weight:700;">SAVE THESE FILES! You need them to connect.</span></li>
+  <li>Click <strong>"Create"</strong></li>
+  <li>Wait 2&ndash;5 minutes for the instance to show <span class="mock-badge mock-badge-green">RUNNING</span></li>
+  <li>Copy the <strong>Public IP Address</strong> shown on the instance details page (e.g., <code>129.154.xxx.xxx</code>)</li>
+</ol>
+
+<!-- Oracle VM creation mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Oracle Cloud &mdash; Create Instance</div>
+  <div class="screen-body" style="background:#f9fafb;">
+    <h3 style="margin:0 0 16px; font-size:18px; color:#1e293b;">Create Compute Instance</h3>
+    <div class="mock-card">
+      <h4>Name</h4>
+      <div class="mock-input filled" style="max-width:400px;">buildtrack-server</div>
+    </div>
+    <div class="mock-card">
+      <h4>Image and Shape</h4>
+      <div style="display:flex; gap:16px; align-items:center; margin-top:8px;">
+        <div style="background:#f1f5f9; border-radius:8px; padding:10px 16px; text-align:center;">
+          <div style="font-size:24px;">&#128039;</div>
+          <div style="font-size:11px; font-weight:600;">Ubuntu 22.04</div>
+        </div>
+        <div>
+          <div style="font-size:12px; font-weight:600; color:#1e293b;">VM.Standard.E2.1.Micro</div>
+          <div style="font-size:11px; color:#64748b;">1 OCPU, 1 GB RAM</div>
+          <div><span class="mock-badge mock-badge-green" style="margin-top:4px;">Always Free Eligible</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="mock-card">
+      <h4>Add SSH Keys</h4>
+      <div style="margin-top:8px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <input type="radio" checked> <span style="font-size:12px;">Generate a key pair for me</span>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <div class="mock-btn mock-btn-outline" style="font-size:11px;">&#11015; Save Private Key</div>
+          <div class="mock-btn mock-btn-outline" style="font-size:11px;">&#11015; Save Public Key</div>
+        </div>
+        <div style="font-size:10px; color:#ef4444; margin-top:6px;">&#9888; Download and save both files! You cannot retrieve them later.</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;"><div class="mock-btn mock-btn-orange">Create</div></div>
+  </div>
+</div>
+<div class="screen-caption">Figure 4.1 &mdash; Creating an Always Free VM instance on Oracle Cloud</div>
+
+<!-- VM running mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Oracle Cloud &mdash; Instance Details</div>
+  <div class="screen-body" style="background:#f9fafb;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div>
+        <div style="font-size:16px; font-weight:700; color:#1e293b;">buildtrack-server</div>
+        <span class="mock-badge mock-badge-green">RUNNING</span>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+      <div class="mock-card">
+        <div style="font-size:10px; color:#64748b;">Public IP Address</div>
+        <div style="font-size:16px; font-weight:700; color:#1e293b; font-family:monospace;">129.154.52.187</div>
+        <div style="font-size:10px; color:#3b82f6; margin-top:4px;">&#128203; Copy</div>
+      </div>
+      <div class="mock-card">
+        <div style="font-size:10px; color:#64748b;">Shape</div>
+        <div style="font-size:13px; font-weight:600; color:#1e293b;">VM.Standard.E2.1.Micro</div>
+        <div style="font-size:10px; color:#64748b;">1 OCPU &bull; 1 GB RAM &bull; <span class="mock-badge mock-badge-green">Always Free</span></div>
+      </div>
+      <div class="mock-card">
+        <div style="font-size:10px; color:#64748b;">Username</div>
+        <div style="font-size:13px; font-weight:600; font-family:monospace; color:#1e293b;">ubuntu</div>
+      </div>
+      <div class="mock-card">
+        <div style="font-size:10px; color:#64748b;">Image</div>
+        <div style="font-size:13px; font-weight:600; color:#1e293b;">Ubuntu 22.04</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 4.2 &mdash; Your VM is running! Note the Public IP Address &mdash; you'll need it everywhere.</div>
+
+<div class="danger">
+  <strong>Save your SSH private key file!</strong> Store it somewhere safe (e.g., <code>C:\Users\YourName\.ssh\oracle_key.pem</code>). Without it, you cannot access your server.
+</div>
+
+<!-- SECTION 5 -->
+<h2 id="s5">5. Step 3: Connect to Your VM via SSH</h2>
+
+<div class="step-header">
+  <div class="step-circle">3</div>
+  <div class="step-title">Connect to Your Server from Windows</div>
+</div>
+
+<h3>Option A: Using Windows Terminal / PowerShell (Recommended)</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">Windows Terminal &mdash; SSH Connection</span></div>
+  <div class="terminal-body">
+<span class="comment"># Navigate to where you saved the private key</span>
+<span class="prompt">$</span> <span class="cmd">cd C:\Users\elopez24\.ssh</span>
+
+<span class="comment"># Connect to your VM (replace with YOUR IP)</span>
+<span class="prompt">$</span> <span class="cmd">ssh -i oracle_key.key ubuntu@<span class="highlight">129.154.52.187</span></span>
+
+<span class="output">The authenticity of host '129.154.52.187' can't be established.</span>
+<span class="output">Are you sure you want to continue connecting? (yes/no):</span> <span class="cmd">yes</span>
+
+<span class="success">Welcome to Ubuntu 22.04 LTS</span>
+<span class="prompt">ubuntu@buildtrack-server:~$</span> <span class="cmd">_</span>
+  </div>
+</div>
+
+<h3>Option B: Using PuTTY</h3>
+<ol class="tutorial">
+  <li>Open <strong>PuTTYgen</strong> &rarr; Click <strong>"Load"</strong> &rarr; Select your <code>.key</code> file</li>
+  <li>Click <strong>"Save private key"</strong> as <code>.ppk</code> format</li>
+  <li>Open <strong>PuTTY</strong></li>
+  <li>Host Name: <code>129.154.52.187</code> (your VM IP)</li>
+  <li>Go to Connection &rarr; SSH &rarr; Auth &rarr; Browse for your <code>.ppk</code> file</li>
+  <li>Click <strong>"Open"</strong></li>
+  <li>Login as: <code>ubuntu</code></li>
+</ol>
+
+<div class="tip">
+  <strong>You're now inside your server!</strong> All the following commands in this guide should be run inside this SSH session (on your VM), unless stated otherwise.
+</div>
+
+<!-- SECTION 6 -->
+<h2 id="s6">6. Step 4: Install SQL Server Express</h2>
+
+<div class="step-header">
+  <div class="step-circle">4</div>
+  <div class="step-title">Install SQL Server Express (Free) on Your VM</div>
+</div>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Install SQL Server</span></div>
+  <div class="terminal-body">
+<span class="comment"># Step 4a: Add Microsoft package repository</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg</span>
+
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">curl -fsSL https://packages.microsoft.com/config/ubuntu/22.04/mssql-server-2022.list | sudo tee /etc/apt/sources.list.d/mssql-server-2022.list</span>
+
+<span class="comment"># Step 4b: Install SQL Server</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo apt update</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo apt install -y mssql-server</span>
+
+<span class="comment"># Step 4c: Configure SQL Server</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo /opt/mssql/bin/mssql-conf setup</span>
+
+<span class="output">Choose an edition of SQL Server:</span>
+<span class="output">  1) Evaluation</span>
+<span class="output">  2) Developer (free, no production use rights)</span>
+<span class="output">  3) Express (free)</span>
+<span class="highlight">Enter your edition (1-3): 3</span>     <span class="comment">&lt;-- Choose 3 (Express = FREE)</span>
+
+<span class="output">Accept the license terms? [Yes/No]:</span> <span class="highlight">Yes</span>
+
+<span class="output">Enter the SQL Server system administrator password:</span>
+<span class="highlight">YourStr0ngP@ssword!</span>     <span class="comment">&lt;-- Remember this! You'll need it.</span>
+
+<span class="output">Confirm the password:</span>
+<span class="highlight">YourStr0ngP@ssword!</span>
+
+<span class="success">Setup has completed successfully. SQL Server is now starting.</span>
+
+<span class="comment"># Step 4d: Verify SQL Server is running</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">systemctl status mssql-server</span>
+<span class="success">● mssql-server.service - Microsoft SQL Server Database Engine</span>
+<span class="success">   Active: active (running)</span>
+  </div>
+</div>
+
+<div class="warning">
+  <strong>Password Requirements:</strong> SQL Server requires a strong password: at least 8 characters with uppercase, lowercase, numbers, and special characters. Example: <code>BuildTrack@2026!</code>
+</div>
+
+<!-- SECTION 7 -->
+<h2 id="s7">7. Step 5: Install .NET 8 Runtime</h2>
+
+<div class="step-header">
+  <div class="step-circle">5</div>
+  <div class="step-title">Install ASP.NET Core 8 Runtime on Your VM</div>
+</div>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Install .NET 8</span></div>
+  <div class="terminal-body">
+<span class="comment"># Add Microsoft package feed</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo dpkg -i packages-microsoft-prod.deb</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">rm packages-microsoft-prod.deb</span>
+
+<span class="comment"># Install ASP.NET Core runtime</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo apt update</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo apt install -y aspnetcore-runtime-8.0</span>
+
+<span class="comment"># Verify installation</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">dotnet --info</span>
+<span class="success">ASP.NET Core Runtime 8.0.x</span>
+  </div>
+</div>
+
+<!-- SECTION 8 -->
+<h2 id="s8">8. Step 6: Install Nginx Web Server</h2>
+
+<div class="step-header">
+  <div class="step-circle">6</div>
+  <div class="step-title">Install Nginx (Reverse Proxy)</div>
+</div>
+
+<p>Nginx sits in front of your .NET app and handles incoming HTTP requests, SSL, and proxies them to your backend.</p>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Install Nginx</span></div>
+  <div class="terminal-body">
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo apt install -y nginx</span>
+
+<span class="comment"># Verify it's running</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl status nginx</span>
+<span class="success">● nginx.service - A high performance web server</span>
+<span class="success">   Active: active (running)</span>
+  </div>
+</div>
+
+<!-- SECTION 9 -->
+<h2 id="s9">9. Step 7: Prepare &amp; Upload Backend</h2>
+
+<div class="step-header">
+  <div class="step-circle">7</div>
+  <div class="step-title">Build and Upload Your Backend to the VM</div>
+</div>
+
+<h3>7a: Build the Backend (on your Windows PC)</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">Windows Terminal &mdash; Build Backend</span></div>
+  <div class="terminal-body">
+<span class="comment"># Navigate to your backend project</span>
+<span class="prompt">PS C:\&gt;</span> <span class="cmd">cd C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API</span>
+
+<span class="comment"># Publish a Release build</span>
+<span class="prompt">PS ...\BuildTrack.API&gt;</span> <span class="cmd">dotnet publish -c Release -o ./publish</span>
+
+<span class="success">Build succeeded.</span>
+<span class="success">BuildTrack.API -> ...\publish\</span>
+
+<span class="comment"># The 'publish' folder contains everything needed to run on the server</span>
+  </div>
+</div>
+
+<h3>7b: Upload to VM (Using WinSCP)</h3>
+
+<ol class="tutorial">
+  <li>Open <strong>WinSCP</strong></li>
+  <li>Protocol: <strong>SCP</strong></li>
+  <li>Host name: <code>129.154.52.187</code> (your VM IP)</li>
+  <li>User name: <code>ubuntu</code></li>
+  <li>Click <strong>Advanced</strong> &rarr; SSH &rarr; Authentication &rarr; Browse for your private key file</li>
+  <li>Click <strong>Login</strong></li>
+  <li>On the remote side (right panel), navigate to <code>/home/ubuntu/</code></li>
+  <li>Create a folder: <code>buildtrack-api</code></li>
+  <li>Drag all files from your local <code>publish\</code> folder into <code>/home/ubuntu/buildtrack-api/</code></li>
+  <li>Wait for upload to complete</li>
+</ol>
+
+<!-- WinSCP mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>WinSCP &mdash; File Transfer</div>
+  <div class="screen-body" style="background:#f9fafb; display:flex; gap:2px;">
+    <div style="flex:1; background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+      <div style="font-size:10px; font-weight:600; color:#64748b; margin-bottom:6px;">&#128187; Local (Your PC)</div>
+      <div style="font-size:10px; color:#64748b; margin-bottom:4px;">C:\...\BuildTrack.API\publish\</div>
+      <div style="font-size:11px; font-family:monospace; line-height:1.8;">
+        <div>&#128196; BuildTrack.API.dll</div>
+        <div>&#128196; BuildTrack.API.exe</div>
+        <div>&#128196; appsettings.json</div>
+        <div>&#128196; Microsoft.*.dll</div>
+        <div style="color:#94a3b8;">... (many .dll files)</div>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; padding:0 8px;">
+      <div style="font-size:20px; color:#22c55e;">&#10132;</div>
+      <div style="font-size:9px; color:#64748b;">Upload</div>
+    </div>
+    <div style="flex:1; background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+      <div style="font-size:10px; font-weight:600; color:#64748b; margin-bottom:6px;">&#128421; Remote (VM Server)</div>
+      <div style="font-size:10px; color:#64748b; margin-bottom:4px;">/home/ubuntu/buildtrack-api/</div>
+      <div style="font-size:11px; font-family:monospace; line-height:1.8;">
+        <div>&#128196; BuildTrack.API.dll</div>
+        <div>&#128196; BuildTrack.API.exe</div>
+        <div>&#128196; appsettings.json</div>
+        <div>&#128196; Microsoft.*.dll</div>
+        <div style="color:#94a3b8;">... (many .dll files)</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 9.1 &mdash; Upload published backend files from Windows to the Oracle Cloud VM via WinSCP</div>
+
+<h3>7c: Move files to proper location (on VM)</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Setup App Directory</span></div>
+  <div class="terminal-body">
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo mkdir -p /var/www/buildtrack-api</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo cp -r ~/buildtrack-api/* /var/www/buildtrack-api/</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo chown -R www-data:www-data /var/www/buildtrack-api</span>
+  </div>
+</div>
+
+<!-- SECTION 10 -->
+<h2 id="s10">10. Step 8: Configure &amp; Start Backend Service</h2>
+
+<div class="step-header">
+  <div class="step-circle">8</div>
+  <div class="step-title">Create a Systemd Service for Auto-Start</div>
+</div>
+
+<p>This makes your backend <strong>start automatically</strong> when the server boots and <strong>restart if it crashes</strong>.</p>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Create Service File</span></div>
+  <div class="terminal-body">
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo nano /etc/systemd/system/buildtrack.service</span>
+  </div>
+</div>
+
+<p>Paste this content (press <code>Ctrl+Shift+V</code> to paste in terminal):</p>
+
+<pre><code>[Unit]
+Description=BuildTrack API
+After=network.target mssql-server.service
+
+[Service]
+WorkingDirectory=/var/www/buildtrack-api
+ExecStart=/usr/bin/dotnet /var/www/buildtrack-api/BuildTrack.API.dll
+Restart=always
+RestartSec=10
+SyslogIdentifier=buildtrack-api
+User=www-data
+
+<span class="comment"># === EDIT THESE VALUES ===</span>
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://localhost:5069
+Environment=ConnectionStrings__DefaultConnection=Server=localhost;Database=BuildTrackDB;User Id=sa;Password=<span class="highlight">YourStr0ngP@ssword!</span>;TrustServerCertificate=true;
+Environment=Jwt__Key=<span class="highlight">YourSuperSecretKeyAtLeast32CharactersLong!!</span>
+Environment=Jwt__Issuer=BuildTrack.API
+Environment=Jwt__Audience=BuildTrack.Client
+Environment=Jwt__ExpirationMinutes=60
+Environment=Cors__AllowedOrigins=<span class="highlight">https://your-app.vercel.app</span>
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+
+<div class="warning">
+  <strong>Replace these values:</strong>
+  <ul>
+    <li><code>Password=</code> &mdash; Your SQL Server SA password from Step 4</li>
+    <li><code>Jwt__Key=</code> &mdash; Any random string, at least 32 characters</li>
+    <li><code>Cors__AllowedOrigins=</code> &mdash; Your Vercel URL (you'll get this in Step 11, update later)</li>
+  </ul>
+</div>
+
+<p>Save the file: Press <code>Ctrl+X</code>, then <code>Y</code>, then <code>Enter</code>.</p>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Start the Service</span></div>
+  <div class="terminal-body">
+<span class="comment"># Enable auto-start on boot</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl enable buildtrack</span>
+<span class="success">Created symlink ... → buildtrack.service</span>
+
+<span class="comment"># Start the service now</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl start buildtrack</span>
+
+<span class="comment"># Check if it's running</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl status buildtrack</span>
+<span class="success">● buildtrack.service - BuildTrack API</span>
+<span class="success">   Active: active (running)</span>
+
+<span class="comment"># Check the logs if something went wrong</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo journalctl -u buildtrack -f</span>
+  </div>
+</div>
+
+<!-- SECTION 11 -->
+<h2 id="s11">11. Step 9: Configure Nginx Reverse Proxy</h2>
+
+<div class="step-header">
+  <div class="step-circle">9</div>
+  <div class="step-title">Set Up Nginx to Forward Requests to .NET</div>
+</div>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Configure Nginx</span></div>
+  <div class="terminal-body">
+<span class="comment"># Remove default config</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo rm /etc/nginx/sites-enabled/default</span>
+
+<span class="comment"># Create BuildTrack config</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo nano /etc/nginx/sites-available/buildtrack</span>
+  </div>
+</div>
+
+<p>Paste this Nginx configuration:</p>
+
+<pre><code>server {
+    listen 80;
+    server_name <span class="highlight">129.154.52.187</span>;  # Replace with YOUR VM's public IP
+
+    # Increase max upload size (for file/evidence uploads)
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://localhost:5069;
+        proxy_http_version 1.1;
+
+        # Required for SignalR WebSockets
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # Forward real client info
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts for long-running requests
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}</code></pre>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Enable &amp; Test Nginx</span></div>
+  <div class="terminal-body">
+<span class="comment"># Enable the config</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo ln -s /etc/nginx/sites-available/buildtrack /etc/nginx/sites-enabled/</span>
+
+<span class="comment"># Test the config for syntax errors</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo nginx -t</span>
+<span class="success">nginx: configuration file /etc/nginx/nginx.conf test is successful</span>
+
+<span class="comment"># Restart Nginx</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl restart nginx</span>
+  </div>
+</div>
+
+<!-- SECTION 12 -->
+<h2 id="s12">12. Step 10: Open Firewall Ports</h2>
+
+<div class="step-header">
+  <div class="step-circle">10</div>
+  <div class="step-title">Open Ports on VM and Oracle Cloud</div>
+</div>
+
+<p>You need to open ports in <strong>two places</strong>: the VM's firewall AND Oracle Cloud's Security List.</p>
+
+<h3>10a: VM Firewall (iptables)</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Open Firewall Ports</span></div>
+  <div class="terminal-body">
+<span class="comment"># Open port 80 (HTTP)</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT</span>
+
+<span class="comment"># Open port 443 (HTTPS - for future SSL)</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT</span>
+
+<span class="comment"># Save rules so they persist after reboot</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo apt install -y iptables-persistent</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo netfilter-persistent save</span>
+  </div>
+</div>
+
+<h3>10b: Oracle Cloud Security List (Web Console)</h3>
+
+<ol class="tutorial">
+  <li>Go to Oracle Cloud Console &rarr; &#9776; Menu &rarr; <strong>Networking</strong> &rarr; <strong>Virtual Cloud Networks</strong></li>
+  <li>Click your VCN (the one auto-created with your VM)</li>
+  <li>Click the <strong>subnet</strong> (Public Subnet)</li>
+  <li>Click the <strong>Security List</strong> (Default Security List)</li>
+  <li>Click <strong>"Add Ingress Rules"</strong></li>
+  <li>Add these rules:</li>
+</ol>
+
+<!-- Oracle Security List mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>Oracle Cloud &mdash; Add Ingress Rules</div>
+  <div class="screen-body" style="background:#f9fafb;">
+    <h3 style="margin:0 0 16px; font-size:16px; color:#1e293b;">Add Ingress Rules</h3>
+    <div style="background:white; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+      <table class="mock-table">
+        <tr><th>Source CIDR</th><th>Protocol</th><th>Dest Port</th><th>Description</th></tr>
+        <tr><td style="font-family:monospace;">0.0.0.0/0</td><td>TCP</td><td style="font-weight:700;">80</td><td>HTTP (Web Traffic)</td></tr>
+        <tr><td style="font-family:monospace;">0.0.0.0/0</td><td>TCP</td><td style="font-weight:700;">443</td><td>HTTPS (SSL Traffic)</td></tr>
+      </table>
+    </div>
+    <div style="margin-top:12px;">
+      <div class="mock-btn mock-btn-orange">Add Ingress Rules</div>
+    </div>
+    <div style="font-size:10px; color:#64748b; margin-top:8px;">
+      &#9888; Source CIDR <code>0.0.0.0/0</code> means "allow from anywhere" (required for a public website)
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 12.1 &mdash; Adding ingress rules to allow web traffic to your VM</div>
+
+<h3>10c: Test Your Backend is Accessible</h3>
+
+<p>Open your browser and go to:</p>
+<pre><code>http://<span class="highlight">129.154.52.187</span>/api/companies/list</code></pre>
+
+<p>You should see a JSON response like:</p>
+<pre><code>{"success":true,"message":"Companies retrieved","data":[{"id":"...","name":"BuildTrack"}]}</code></pre>
+
+<div class="tip">
+  <strong>If you see the JSON response, your backend is live!</strong> The API is now accessible from the internet.
+</div>
+
+<!-- SECTION 13 -->
+<h2 id="s13">13. Step 11: Deploy Frontend to Vercel</h2>
+
+<div class="step-header">
+  <div class="step-circle">11</div>
+  <div class="step-title">Deploy React Frontend to Vercel (Free)</div>
+</div>
+
+<h3>11a: Configure Production API URL</h3>
+
+<p>On your <strong>Windows PC</strong>, create a production environment file:</p>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">Windows Terminal &mdash; Create .env.production</span></div>
+  <div class="terminal-body">
+<span class="comment"># Navigate to project root</span>
+<span class="prompt">PS C:\&gt;</span> <span class="cmd">cd C:\Users\elopez24\Documents\stockwell-build</span>
+
+<span class="comment"># Create .env.production file pointing to your Oracle VM</span>
+<span class="prompt">PS ...\stockwell-build&gt;</span> <span class="cmd">echo "VITE_API_BASE_URL=http://<span class="highlight">129.154.52.187</span>" > .env.production</span>
+  </div>
+</div>
+
+<h3>11b: Build the Frontend</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">Windows Terminal &mdash; Build Frontend</span></div>
+  <div class="terminal-body">
+<span class="prompt">PS ...\stockwell-build&gt;</span> <span class="cmd">npm run build</span>
+
+<span class="success">vite v5.x.x building for production...</span>
+<span class="success">✓ 523 modules transformed.</span>
+<span class="success">dist/index.html          1.23 kB</span>
+<span class="success">dist/assets/index-xxx.js 456.78 kB</span>
+<span class="success">✓ built in 12.3s</span>
+  </div>
+</div>
+
+<h3>11c: Deploy to Vercel</h3>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">Windows Terminal &mdash; Deploy to Vercel</span></div>
+  <div class="terminal-body">
+<span class="prompt">PS ...\stockwell-build&gt;</span> <span class="cmd">vercel</span>
+
+<span class="output">? Set up and deploy "stockwell-build"?</span> <span class="highlight">Y</span>
+<span class="output">? Which scope?</span> <span class="highlight">your-username</span>
+<span class="output">? Link to existing project?</span> <span class="highlight">N</span>
+<span class="output">? Project name:</span> <span class="highlight">buildtrack</span>
+<span class="output">? Directory where code is located:</span> <span class="highlight">./</span>
+<span class="output">? Override settings?</span> <span class="highlight">N</span>
+
+<span class="success">🔗 Linked to your-username/buildtrack</span>
+<span class="success">🔍 Inspect: https://vercel.com/your-username/buildtrack/xxx</span>
+<span class="success">✅ Preview: https://buildtrack-xxx.vercel.app</span>
+
+<span class="comment"># Now deploy to production</span>
+<span class="prompt">PS ...\stockwell-build&gt;</span> <span class="cmd">vercel --prod</span>
+
+<span class="success">✅ Production: https://buildtrack.vercel.app</span>
+  </div>
+</div>
+
+<!-- Vercel dashboard mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>vercel.com &mdash; Deployment Successful</div>
+  <div class="screen-body" style="background:#000; color:#fff;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+      <div style="font-size:14px; font-weight:700;">&#9650; buildtrack</div>
+      <span class="mock-badge mock-badge-green">Production</span>
+    </div>
+    <div class="mock-card" style="background:#111; border-color:#333;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:12px; color:#888;">Deployment</div>
+          <div style="font-size:16px; font-weight:700; color:#fff;">&#10003; Ready</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:10px; color:#888;">Domain</div>
+          <div style="font-size:13px; color:#0ea5e9; font-family:monospace;">https://buildtrack.vercel.app</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:12px;">
+      <div style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; text-align:center;">
+        <div style="font-size:10px; color:#888;">Status</div>
+        <div style="font-size:14px; color:#4ade80; font-weight:700;">&#10003; Ready</div>
+      </div>
+      <div style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; text-align:center;">
+        <div style="font-size:10px; color:#888;">Build Time</div>
+        <div style="font-size:14px; color:#fff; font-weight:700;">12s</div>
+      </div>
+      <div style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; text-align:center;">
+        <div style="font-size:10px; color:#888;">Functions</div>
+        <div style="font-size:14px; color:#fff; font-weight:700;">0</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 13.1 &mdash; Your frontend is now live on Vercel!</div>
+
+<h3>11d: Update Backend CORS with Vercel URL</h3>
+
+<p>Now go back to your VM and update the CORS setting:</p>
+
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Update CORS</span></div>
+  <div class="terminal-body">
+<span class="comment"># Edit the service file</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo nano /etc/systemd/system/buildtrack.service</span>
+
+<span class="comment"># Change the Cors line to your actual Vercel URL:</span>
+<span class="highlight">Environment=Cors__AllowedOrigins=https://buildtrack.vercel.app</span>
+
+<span class="comment"># Save (Ctrl+X, Y, Enter), then restart</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl daemon-reload</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl restart buildtrack</span>
+  </div>
+</div>
+
+<!-- SECTION 14 -->
+<h2 id="s14">14. Step 12: Test Everything</h2>
+
+<div class="step-header">
+  <div class="step-circle">12</div>
+  <div class="step-title">Verify Your App is Working</div>
+</div>
+
+<ol class="tutorial">
+  <li>Open <code>https://buildtrack.vercel.app</code> in your browser</li>
+  <li>You should see the BuildTrack login page</li>
+  <li>Select your company from the dropdown (loads from your Oracle VM API)</li>
+  <li>Log in with <code>admin@buildtrack.com</code> / <code>Admin@123456</code></li>
+  <li>You should see the Dashboard with data!</li>
+</ol>
+
+<!-- Final result mockup -->
+<div class="screen">
+  <div class="screen-title"><div class="dots"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div></div>https://buildtrack.vercel.app &mdash; Your Live App!</div>
+  <div class="screen-body" style="background:#f8fafc; display:flex;">
+    <div style="width:180px; background:#1e293b; padding:14px 0; flex-shrink:0;">
+      <div style="padding:0 14px 14px; border-bottom:1px solid #334155; display:flex; align-items:center; gap:8px;">
+        <div style="width:28px; height:28px; background:#f59e0b; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:14px;">&#x1F3D7;</div>
+        <div style="color:#f8fafc; font-size:12px; font-weight:600;">BuildTrack</div>
+      </div>
+      <div style="padding:10px 14px; font-size:11px; color:#e2e8f0;">
+        <div style="background:#334155; border-radius:4px; padding:5px 8px; margin:2px 0;">&#9647; Dashboard</div>
+        <div style="padding:5px 8px; color:#94a3b8; margin:2px 0;">&#128193; Projects</div>
+        <div style="padding:5px 8px; color:#94a3b8; margin:2px 0;">&#128230; Orders</div>
+      </div>
+    </div>
+    <div style="flex:1; padding:16px;">
+      <div style="font-size:16px; font-weight:700; color:#1e293b; margin-bottom:4px;">Dashboard</div>
+      <div style="font-size:11px; color:#64748b; margin-bottom:12px;">Overview of your activity</div>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+        <div style="background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+          <div style="font-size:9px; color:#64748b;">Active Projects</div><div style="font-size:18px; font-weight:700;">3</div>
+        </div>
+        <div style="background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+          <div style="font-size:9px; color:#64748b;">Pending Orders</div><div style="font-size:18px; font-weight:700;">5</div>
+        </div>
+        <div style="background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+          <div style="font-size:9px; color:#64748b;">Low Stock</div><div style="font-size:18px; font-weight:700;">2</div>
+        </div>
+        <div style="background:white; border:1px solid #e2e8f0; border-radius:6px; padding:10px;">
+          <div style="font-size:9px; color:#64748b;">Members</div><div style="font-size:18px; font-weight:700;">12</div>
+        </div>
+      </div>
+      <div style="text-align:center; margin-top:16px; font-size:14px; color:#22c55e; font-weight:700;">&#10003; Your app is live and working!</div>
+    </div>
+  </div>
+</div>
+<div class="screen-caption">Figure 14.1 &mdash; BuildTrack running live at your Vercel URL, connected to Oracle Cloud backend</div>
+
+<!-- SECTION 15 -->
+<h2 id="s15">15. Optional: Custom Domain &amp; SSL</h2>
+
+<p>Right now your app is at <code>buildtrack.vercel.app</code> (frontend) and <code>http://129.154.52.187</code> (backend). To use a custom domain like <code>buildtrack.com</code>:</p>
+
+<h3>15a: Buy a Domain (~$12/year)</h3>
+<p>Get a domain from Namecheap, GoDaddy, Cloudflare, or Google Domains.</p>
+
+<h3>15b: DNS Settings</h3>
+<table>
+  <tr><th>Record Type</th><th>Name</th><th>Value</th><th>Purpose</th></tr>
+  <tr><td>CNAME</td><td>@</td><td>cname.vercel-dns.com</td><td>Frontend</td></tr>
+  <tr><td>A</td><td>api</td><td>129.154.52.187</td><td>Backend</td></tr>
+</table>
+
+<h3>15c: Add Domain to Vercel</h3>
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">Windows Terminal</span></div>
+  <div class="terminal-body">
+<span class="prompt">PS&gt;</span> <span class="cmd">vercel domains add buildtrack.com</span>
+  </div>
+</div>
+
+<h3>15d: Add SSL to Backend (Free with Let's Encrypt)</h3>
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Add SSL Certificate</span></div>
+  <div class="terminal-body">
+<span class="comment"># Install certbot</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo apt install -y certbot python3-certbot-nginx</span>
+
+<span class="comment"># Get free SSL certificate (replace with your domain)</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo certbot --nginx -d <span class="highlight">api.buildtrack.com</span></span>
+
+<span class="output">Enter email address:</span> <span class="highlight">your@email.com</span>
+<span class="output">Agree to terms:</span> <span class="highlight">Y</span>
+<span class="success">Successfully deployed certificate for api.buildtrack.com</span>
+<span class="success">Certificate auto-renews every 90 days</span>
+
+<span class="comment"># Update Nginx server_name</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo nano /etc/nginx/sites-available/buildtrack</span>
+<span class="comment"># Change: server_name 129.154.52.187;</span>
+<span class="comment"># To:     server_name api.buildtrack.com;</span>
+
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl restart nginx</span>
+  </div>
+</div>
+
+<p>Then update your <code>.env.production</code> and redeploy the frontend:</p>
+<pre><code>VITE_API_BASE_URL=https://api.buildtrack.com</code></pre>
+
+<!-- SECTION 16 -->
+<h2 id="s16">16. Maintenance &amp; Updates</h2>
+
+<h3>Deploying Backend Updates</h3>
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">Windows + VM &mdash; Update Backend</span></div>
+  <div class="terminal-body">
+<span class="comment"># 1. Build on Windows</span>
+<span class="prompt">PS ...\BuildTrack.API&gt;</span> <span class="cmd">dotnet publish -c Release -o ./publish</span>
+
+<span class="comment"># 2. Upload new files via WinSCP to /home/ubuntu/buildtrack-api/</span>
+
+<span class="comment"># 3. On VM: copy and restart</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl stop buildtrack</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo cp -r ~/buildtrack-api/* /var/www/buildtrack-api/</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl start buildtrack</span>
+  </div>
+</div>
+
+<h3>Deploying Frontend Updates</h3>
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">Windows &mdash; Update Frontend</span></div>
+  <div class="terminal-body">
+<span class="prompt">PS ...\stockwell-build&gt;</span> <span class="cmd">npm run build</span>
+<span class="prompt">PS ...\stockwell-build&gt;</span> <span class="cmd">vercel --prod</span>
+<span class="success">✅ Production deployed in 8s</span>
+  </div>
+</div>
+
+<h3>Checking Server Health</h3>
+<div class="terminal">
+  <div class="terminal-header"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="t-title">VM Terminal &mdash; Health Checks</span></div>
+  <div class="terminal-body">
+<span class="comment"># Check all services are running</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl status mssql-server</span>    <span class="comment"># Database</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl status buildtrack</span>       <span class="comment"># Backend API</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo systemctl status nginx</span>            <span class="comment"># Web server</span>
+
+<span class="comment"># Check memory usage (1GB is tight)</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">free -h</span>
+
+<span class="comment"># Check disk space</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">df -h</span>
+
+<span class="comment"># View backend logs</span>
+<span class="prompt">ubuntu@buildtrack:~$</span> <span class="cmd">sudo journalctl -u buildtrack --since "1 hour ago"</span>
+  </div>
+</div>
+
+<!-- SECTION 17 -->
+<h2 id="s17">17. Troubleshooting</h2>
+
+<h3>Problem: Can't access the API from browser</h3>
+<div class="note">
+  <strong>Check these in order:</strong>
+  <ol>
+    <li>Is the backend running? <code>sudo systemctl status buildtrack</code></li>
+    <li>Is Nginx running? <code>sudo systemctl status nginx</code></li>
+    <li>Did you open ports in Oracle Cloud Security List? (Step 10b)</li>
+    <li>Did you open ports in VM firewall? (Step 10a)</li>
+    <li>Check logs: <code>sudo journalctl -u buildtrack -f</code></li>
+  </ol>
+</div>
+
+<h3>Problem: Frontend shows "Network Error" or CORS error</h3>
+<div class="note">
+  <strong>Fix:</strong> Make sure the <code>Cors__AllowedOrigins</code> in your service file matches your exact Vercel URL (including <code>https://</code>). Then restart: <code>sudo systemctl daemon-reload && sudo systemctl restart buildtrack</code>
+</div>
+
+<h3>Problem: SQL Server won't start (not enough memory)</h3>
+<div class="note">
+  <strong>Fix:</strong> The 1GB VM is tight. Add swap space:
+  <pre style="margin:8px 0;"><code>sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab</code></pre>
+  This adds 2GB of swap (uses disk as extra memory). Restart SQL Server after.
+</div>
+
+<h3>Problem: Backend crashes after running a while</h3>
+<div class="note">
+  <strong>Fix:</strong> The systemd service has <code>Restart=always</code> which auto-restarts on crash. If it keeps crashing, check memory with <code>free -h</code> and add swap if needed.
+</div>
+
+<h3>Problem: "Shape VM.Standard.E2.1.Micro not available"</h3>
+<div class="note">
+  <strong>Fix:</strong> Always Free shapes are limited per region. Try:
+  <ul>
+    <li>Wait a few hours and try again (capacity fluctuates)</li>
+    <li>Try a different Availability Domain in the same region</li>
+    <li>Use the ARM shape <code>VM.Standard.A1.Flex</code> (also Always Free, 4 CPUs + 24GB RAM total, much more powerful!)</li>
+  </ul>
+</div>
+
+<hr>
+
+<h2 style="page-break-before:always;">Quick Reference Card</h2>
+
+<table>
+  <tr><th>Item</th><th>Value</th></tr>
+  <tr><td>Frontend URL</td><td><code>https://buildtrack.vercel.app</code></td></tr>
+  <tr><td>Backend API URL</td><td><code>http://YOUR_VM_IP</code></td></tr>
+  <tr><td>VM SSH Command</td><td><code>ssh -i oracle_key.key ubuntu@YOUR_VM_IP</code></td></tr>
+  <tr><td>Start Backend</td><td><code>sudo systemctl start buildtrack</code></td></tr>
+  <tr><td>Stop Backend</td><td><code>sudo systemctl stop buildtrack</code></td></tr>
+  <tr><td>View Backend Logs</td><td><code>sudo journalctl -u buildtrack -f</code></td></tr>
+  <tr><td>Restart Nginx</td><td><code>sudo systemctl restart nginx</code></td></tr>
+  <tr><td>Restart SQL Server</td><td><code>sudo systemctl restart mssql-server</code></td></tr>
+  <tr><td>Deploy Frontend</td><td><code>npm run build && vercel --prod</code></td></tr>
+  <tr><td>Default Login</td><td><code>admin@buildtrack.com</code> / <code>Admin@123456</code></td></tr>
+</table>
+
+<div style="text-align:center; margin-top:20px; padding:16px; background:#f0fdf4; border-radius:12px; border: 1px solid #bbf7d0;">
+  <div style="font-size:28px;">&#127881;</div>
+  <div style="font-size:18px; font-weight:700; color:#166534; margin-top:8px;">Total Monthly Cost: $0</div>
+  <div style="font-size:12px; color:#64748b; margin-top:4px;">Oracle Cloud Always Free + Vercel Free + SQL Server Express + Let's Encrypt</div>
+</div>
+
+<hr>
+<p style="text-align: center; color: #94a3b8; margin-top: 40px;">
+  <em>BuildTrack Hosting Guide v1.0 &mdash; March 2026</em><br>
+  <em>Oracle Cloud Always Free + Vercel + SQL Server Express</em>
+</p>
+
+</body>
+</html>

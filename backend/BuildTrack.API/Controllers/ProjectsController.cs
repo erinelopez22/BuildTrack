@@ -9,18 +9,15 @@ namespace BuildTrack.API.Controllers;
 [ApiController]
 [Route("api/projects")]
 [Authorize]
-public class ProjectsController(IProjectService projectService) : ControllerBase
+public class ProjectsController(IProjectService projectService) : BaseApiController
 {
-    private Guid CurrentUserId =>
-        Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<ProjectDto>>>> GetAll(
         [FromQuery] bool includeHidden = false,
         [FromQuery] string? status = null,
         [FromQuery] string? search = null)
     {
-        var projects = await projectService.GetAllAsync(includeHidden, status, search, CurrentUserId);
+        var projects = await projectService.GetAllAsync(includeHidden, status, search, CurrentUserId, CurrentCompanyId, IsSuperAdmin);
         return Ok(ApiResponse<List<ProjectDto>>.Ok(projects));
     }
 
@@ -36,7 +33,7 @@ public class ProjectsController(IProjectService projectService) : ControllerBase
     [Authorize(Policy = "RequireProjectManager")]
     public async Task<ActionResult<ApiResponse<ProjectDto>>> Create([FromBody] CreateProjectRequest request)
     {
-        var project = await projectService.CreateAsync(request, CurrentUserId);
+        var project = await projectService.CreateAsync(request, CurrentUserId, CurrentCompanyId);
         return CreatedAtAction(nameof(GetById), new { id = project.Id }, ApiResponse<ProjectDto>.Ok(project));
     }
 

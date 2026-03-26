@@ -16,9 +16,9 @@ public interface IInventoryService
 
 public interface ICompanyAssetService
 {
-    Task<List<CompanyAssetDto>> GetAllAsync(string? search, string? assetType);
+    Task<List<CompanyAssetDto>> GetAllAsync(string? search, string? assetType, Guid? companyId = null, bool isSuperAdmin = false);
     Task<CompanyAssetDto?> GetByIdAsync(Guid id);
-    Task<CompanyAssetDto> CreateAsync(CreateCompanyAssetRequest request, Guid createdBy);
+    Task<CompanyAssetDto> CreateAsync(CreateCompanyAssetRequest request, Guid createdBy, Guid? companyId = null);
     Task<CompanyAssetDto?> UpdateAsync(Guid id, UpdateCompanyAssetRequest request);
     Task<bool> DeleteAsync(Guid id);
     Task<List<BorrowTransactionDto>> GetBorrowsAsync(Guid assetId);
@@ -50,7 +50,7 @@ public interface INotificationService
 
 public interface IDashboardService
 {
-    Task<DashboardStatsDto> GetStatsAsync(Guid userId);
+    Task<DashboardStatsDto> GetStatsAsync(Guid userId, Guid? companyId = null, bool isSuperAdmin = false);
 }
 
 public interface IAuditLogService
@@ -62,7 +62,7 @@ public interface IAuditLogService
 
 public interface IJwtService
 {
-    string GenerateAccessToken(Guid userId, string email, IEnumerable<string> roles);
+    string GenerateAccessToken(Guid userId, string email, IEnumerable<string> roles, Guid? companyId = null);
     string GenerateRefreshToken();
     Guid? ValidateAccessToken(string token);
 }

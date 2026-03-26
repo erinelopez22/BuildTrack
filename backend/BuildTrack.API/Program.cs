@@ -61,6 +61,7 @@ builder.Services.AddAuthorizationBuilder()
 // ── Application Services ─────────────────────────────────────────────────────
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ICompanyService, CompanyService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
@@ -129,11 +130,13 @@ builder.Services.AddHttpContextAccessor();
 // ── Build ──────────────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "BuildTrack API v1"));
-}
+// if (app.Environment.IsDevelopment())
+// {
+//     app.UseSwagger();
+//     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "BuildTrack API v1"));
+// }
+app.UseSwagger();
+app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "BuildTrack API v1"));
 
 app.UseMiddleware<ErrorHandlingMiddleware>();
 app.UseCors("FrontendPolicy");
@@ -144,8 +147,8 @@ app.MapControllers();
 app.MapHub<NotificationHub>("/hubs/notifications");
 
 // Auto-migrate and seed on startup (dev convenience)
-if (app.Environment.IsDevelopment())
-{
+// if (app.Environment.IsDevelopment())
+// {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
@@ -224,6 +227,74 @@ if (app.Environment.IsDevelopment())
             ALTER TABLE [OrderTrackingAssignments] ADD [ReceiverEvidenceJson] nvarchar(max) NULL
     ");
 
+    // ── Multi-company migration ─────────────────────────────────────────────
+    // Create Companies table if it doesn't exist
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Companies')
+        BEGIN
+            CREATE TABLE [Companies] (
+                [Id] uniqueidentifier NOT NULL PRIMARY KEY DEFAULT NEWID(),
+                [Name] nvarchar(256) NOT NULL,
+                [Address] nvarchar(500) NULL,
+                [Phone] nvarchar(100) NULL,
+                [Email] nvarchar(256) NULL,
+                [IsActive] bit NOT NULL DEFAULT 1,
+                [CreatedAt] datetime2 NOT NULL DEFAULT GETUTCDATE(),
+                [UpdatedAt] datetime2 NOT NULL DEFAULT GETUTCDATE()
+            )
+            CREATE UNIQUE INDEX [IX_Companies_Name] ON [Companies] ([Name])
+        END
+    ");
+
+    // Seed default company "BuildTrack"
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT 1 FROM [Companies] WHERE [Name] = 'BuildTrack')
+            INSERT INTO [Companies] ([Id], [Name], [CreatedAt], [UpdatedAt])
+            VALUES ('00000000-0000-0000-0000-000000000001', 'BuildTrack', GETUTCDATE(), GETUTCDATE())
+    ");
+
+    // Add CompanyId column to Profiles
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Profiles') AND name = 'CompanyId')
+        BEGIN
+            ALTER TABLE [Profiles] ADD [CompanyId] uniqueidentifier NULL
+            ALTER TABLE [Profiles] ADD CONSTRAINT [FK_Profiles_Companies] FOREIGN KEY ([CompanyId]) REFERENCES [Companies]([Id])
+        END
+    ");
+
+    // Add CompanyId column to Projects
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('Projects') AND name = 'CompanyId')
+        BEGIN
+            ALTER TABLE [Projects] ADD [CompanyId] uniqueidentifier NULL
+            ALTER TABLE [Projects] ADD CONSTRAINT [FK_Projects_Companies] FOREIGN KEY ([CompanyId]) REFERENCES [Companies]([Id])
+        END
+    ");
+
+    // Add CompanyId column to SKUs
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('SKUs') AND name = 'CompanyId')
+        BEGIN
+            ALTER TABLE [SKUs] ADD [CompanyId] uniqueidentifier NULL
+            ALTER TABLE [SKUs] ADD CONSTRAINT [FK_SKUs_Companies] FOREIGN KEY ([CompanyId]) REFERENCES [Companies]([Id])
+        END
+    ");
+
+    // Add CompanyId column to CompanyAssets
+    db.Database.ExecuteSqlRaw(@"
+        IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('CompanyAssets') AND name = 'CompanyId')
+        BEGIN
+            ALTER TABLE [CompanyAssets] ADD [CompanyId] uniqueidentifier NULL
+            ALTER TABLE [CompanyAssets] ADD CONSTRAINT [FK_CompanyAssets_Companies] FOREIGN KEY ([CompanyId]) REFERENCES [Companies]([Id])
+        END
+    ");
+
+    // Migrate all existing data to BuildTrack company
+    db.Database.ExecuteSqlRaw("UPDATE [Profiles] SET [CompanyId] = '00000000-0000-0000-0000-000000000001' WHERE [CompanyId] IS NULL");
+    db.Database.ExecuteSqlRaw("UPDATE [Projects] SET [CompanyId] = '00000000-0000-0000-0000-000000000001' WHERE [CompanyId] IS NULL");
+    db.Database.ExecuteSqlRaw("UPDATE [SKUs] SET [CompanyId] = '00000000-0000-0000-0000-000000000001' WHERE [CompanyId] IS NULL");
+    db.Database.ExecuteSqlRaw("UPDATE [CompanyAssets] SET [CompanyId] = '00000000-0000-0000-0000-000000000001' WHERE [CompanyId] IS NULL");
+
     // Seed super admin if no users exist
     if (!db.Profiles.Any())
     {
@@ -238,6 +309,7 @@ if (app.Environment.IsDevelopment())
             PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123456"),
             SmsOptIn = false,
             IsActive = true,
+            CompanyId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
             CreatedAt = now,
             UpdatedAt = now
         };
@@ -249,6 +321,6 @@ if (app.Environment.IsDevelopment())
         db.SaveChanges();
         Console.WriteLine("✓ Default admin seeded: admin@buildtrack.com / Admin@123456");
     }
-}
+//}
 
 app.Run();

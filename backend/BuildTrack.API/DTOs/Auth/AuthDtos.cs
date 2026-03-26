@@ -4,7 +4,8 @@ namespace BuildTrack.API.DTOs.Auth;
 
 public record LoginRequest(
     [Required] string LoginId,  // email or username
-    [Required] string Password
+    [Required] string Password,
+    Guid? CompanyId = null  // required for non-super_admin users
 );
 
 public record RefreshTokenRequest([Required] string RefreshToken);
@@ -33,4 +34,6 @@ public class UserSessionDto
     public bool SmsOptIn { get; set; }
     public bool IsActive { get; set; }
     public List<string> Roles { get; set; } = [];
+    public Guid? CompanyId { get; set; }
+    public string? CompanyName { get; set; }
 }

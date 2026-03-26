@@ -146,9 +146,13 @@ public class InventoryService(AppDbContext db) : IInventoryService
 // ── Company Asset Service ─────────────────────────────────────────────────────
 public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
 {
-    public async Task<List<CompanyAssetDto>> GetAllAsync(string? search, string? assetType)
+    public async Task<List<CompanyAssetDto>> GetAllAsync(string? search, string? assetType,
+        Guid? companyId = null, bool isSuperAdmin = false)
     {
         var query = db.CompanyAssets.Include(a => a.BorrowTransactions).AsQueryable();
+
+        if (!isSuperAdmin && companyId.HasValue)
+            query = query.Where(a => a.CompanyId == companyId.Value);
 
         if (!string.IsNullOrWhiteSpace(search))
             query = query.Where(a => a.AssetName.Contains(search) ||
@@ -169,7 +173,7 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
         return asset == null ? null : MapAsset(asset);
     }
 
-    public async Task<CompanyAssetDto> CreateAsync(CreateCompanyAssetRequest request, Guid createdBy)
+    public async Task<CompanyAssetDto> CreateAsync(CreateCompanyAssetRequest request, Guid createdBy, Guid? companyId = null)
     {
         var asset = new CompanyAsset
         {
@@ -180,7 +184,8 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
             TotalQuantity = request.TotalQuantity,
             Condition = request.Condition ?? "Available",
             Notes = request.Notes,
-            CreatedBy = createdBy
+            CreatedBy = createdBy,
+            CompanyId = companyId
         };
         db.CompanyAssets.Add(asset);
         await db.SaveChangesAsync();
@@ -592,23 +597,35 @@ public class NotificationService(
 // ── Dashboard Service ─────────────────────────────────────────────────────────
 public class DashboardService(AppDbContext db) : IDashboardService
 {
-    public async Task<DashboardStatsDto> GetStatsAsync(Guid userId)
+    public async Task<DashboardStatsDto> GetStatsAsync(Guid userId, Guid? companyId = null, bool isSuperAdmin = false)
     {
-        var activeProjects = await db.Projects.CountAsync(p =>
-            p.Status == "active" && !p.IsHidden);
+        var projectQuery = db.Projects.Where(p => p.Status == "active" && !p.IsHidden);
+        if (!isSuperAdmin && companyId.HasValue)
+            projectQuery = projectQuery.Where(p => p.CompanyId == companyId.Value);
+        var activeProjects = await projectQuery.CountAsync();
 
-        var pendingOrders = await db.Orders.CountAsync(o =>
+        var orderQuery = db.Orders.AsQueryable();
+        if (!isSuperAdmin && companyId.HasValue)
+            orderQuery = orderQuery.Where(o => o.Project.CompanyId == companyId.Value);
+
+        var pendingOrders = await orderQuery.CountAsync(o =>
             o.Status == "for_approval" || o.Status == "draft");
 
-        var totalUsers = await db.Profiles.CountAsync(p => p.IsActive);
+        var userQuery = db.Profiles.Where(p => p.IsActive);
+        if (!isSuperAdmin && companyId.HasValue)
+            userQuery = userQuery.Where(p => p.CompanyId == companyId.Value);
+        var totalUsers = await userQuery.CountAsync();
 
-        var ordersByStatus = await db.Orders
+        var ordersByStatus = await orderQuery
             .GroupBy(o => o.Status)
             .Select(g => new OrderStatusCountDto { Status = g.Key, Count = g.Count() })
             .ToListAsync();
 
-        var recentOrders = await db.Orders
-            .Include(o => o.Project)
+        var recentOrderQuery = db.Orders.Include(o => o.Project).AsQueryable();
+        if (!isSuperAdmin && companyId.HasValue)
+            recentOrderQuery = recentOrderQuery.Where(o => o.Project.CompanyId == companyId.Value);
+
+        var recentOrders = await recentOrderQuery
             .OrderByDescending(o => o.CreatedAt)
             .Take(10)
             .Select(o => new RecentOrderDto

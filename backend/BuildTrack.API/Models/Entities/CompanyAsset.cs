@@ -33,6 +33,10 @@ public class CompanyAsset
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    public Guid? CompanyId { get; set; }
+
     // Navigation
+    [ForeignKey(nameof(CompanyId))]
+    public Company? Company { get; set; }
     public ICollection<BorrowTransaction> BorrowTransactions { get; set; } = [];
 }

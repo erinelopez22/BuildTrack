@@ -9,17 +9,15 @@ namespace BuildTrack.API.Controllers;
 [ApiController]
 [Route("api/company-assets")]
 [Authorize]
-public class CompanyAssetsController(ICompanyAssetService assetService) : ControllerBase
+public class CompanyAssetsController(ICompanyAssetService assetService) : BaseApiController
 {
-    private Guid CurrentUserId =>
-        Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
 
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<CompanyAssetDto>>>> GetAll(
         [FromQuery] string? search = null,
         [FromQuery] string? assetType = null)
     {
-        var assets = await assetService.GetAllAsync(search, assetType);
+        var assets = await assetService.GetAllAsync(search, assetType, CurrentCompanyId, IsSuperAdmin);
         return Ok(ApiResponse<List<CompanyAssetDto>>.Ok(assets));
     }
 
@@ -35,7 +33,7 @@ public class CompanyAssetsController(ICompanyAssetService assetService) : Contro
     [Authorize(Policy = "RequireWarehouseAdmin")]
     public async Task<ActionResult<ApiResponse<CompanyAssetDto>>> Create([FromBody] CreateCompanyAssetRequest request)
     {
-        var asset = await assetService.CreateAsync(request, CurrentUserId);
+        var asset = await assetService.CreateAsync(request, CurrentUserId, CurrentCompanyId);
         return CreatedAtAction(nameof(GetById), new { id = asset.Id }, ApiResponse<CompanyAssetDto>.Ok(asset));
     }
 

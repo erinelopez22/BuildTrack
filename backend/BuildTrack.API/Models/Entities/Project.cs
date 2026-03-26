@@ -37,7 +37,12 @@ public class Project
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public Guid? CreatedBy { get; set; }
 
+    public Guid? CompanyId { get; set; }
+
     // Navigation
+    [ForeignKey(nameof(CompanyId))]
+    public Company? Company { get; set; }
+
     [ForeignKey(nameof(ProjectManagerId))]
     public Profile? ProjectManager { get; set; }
 

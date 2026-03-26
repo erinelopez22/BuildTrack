@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { HardHat, Loader2 } from 'lucide-react';
+import { companiesApi, type CompanyListItem } from '@/lib/apiClient';
 
 export default function Login() {
   const { user, signIn, loading } = useAuth();
@@ -15,7 +17,26 @@ export default function Login() {
 
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
+  const [companyId, setCompanyId] = useState('');
+  const [companies, setCompanies] = useState<CompanyListItem[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Load companies on mount
+  useEffect(() => {
+    companiesApi.getList()
+      .then(res => {
+        if (res.success && res.data) {
+          setCompanies(res.data);
+          // Auto-select if only one company
+          if (res.data.length === 1) {
+            setCompanyId(res.data[0].id);
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingCompanies(false));
+  }, []);
 
   if (loading) {
     return (
@@ -33,7 +54,8 @@ export default function Login() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    const { error } = await signIn(loginId.trim(), password);
+    // Pass companyId (empty string means no company selected — super_admin can skip)
+    const { error } = await signIn(loginId.trim(), password, companyId || undefined);
 
     if (error) {
       toast({
@@ -67,6 +89,31 @@ export default function Login() {
           </CardHeader>
           <form onSubmit={handleSignIn}>
             <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="company">Company</Label>
+                {loadingCompanies ? (
+                  <div className="flex items-center gap-2 h-10 px-3 text-sm text-muted-foreground border rounded-md">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading companies...
+                  </div>
+                ) : (
+                  <Select value={companyId} onValueChange={setCompanyId}>
+                    <SelectTrigger id="company">
+                      <SelectValue placeholder="Select company" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {companies.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Super admins can sign in without selecting a company.
+                </p>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="login-id">Email</Label>
                 <Input

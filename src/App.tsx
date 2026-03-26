@@ -19,6 +19,7 @@ import Members from "./pages/Members";
 import CompanyAssets from "./pages/CompanyAssets";
 import QuotationRequests from "./pages/QuotationRequests";
 import Reports from "./pages/Reports";
+import Companies from "./pages/Companies";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/company-assets" element={<CompanyAssets />} />
               <Route path="/quotation-requests" element={<QuotationRequests />} />
               <Route path="/reports" element={<Reports />} />
+              <Route path="/companies" element={<Companies />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

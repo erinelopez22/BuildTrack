@@ -37,7 +37,11 @@ public class SKU
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public Guid? CreatedBy { get; set; }
 
+    public Guid? CompanyId { get; set; }
+
     // Navigation
+    [ForeignKey(nameof(CompanyId))]
+    public Company? Company { get; set; }
     public ICollection<ProjectInventory> ProjectInventories { get; set; } = [];
     public ICollection<OrderItem> OrderItems { get; set; } = [];
     public ICollection<InventoryTransaction> InventoryTransactions { get; set; } = [];

@@ -15,6 +15,7 @@ import {
   RotateCcw,
   FileCheck,
   BarChart3,
+  Building2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -94,11 +95,15 @@ const adminNavItems = [
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
+const superAdminNavItems = [
+  { title: "Companies", url: "/companies", icon: Building2 },
+];
+
 export function AppSidebar() {
   const { state, setOpenMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { signOut, isAdmin, isSuperAdmin, profile, roles } = useAuth();
+  const { signOut, isAdmin, isSuperAdmin, profile, roles, user } = useAuth();
   const { unreadCount } = useNotifications();
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
@@ -153,7 +158,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="flex flex-col">
               <span className="font-semibold text-sidebar-foreground">BuildTrack</span>
-              <span className="text-xs text-sidebar-foreground/60">Inventory System</span>
+              <span className="text-xs text-sidebar-foreground/60">{user?.companyName || 'Inventory System'}</span>
             </div>
           )}
         </div>
@@ -195,6 +200,25 @@ export function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 {adminNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
+                      <NavLink
+                        to={item.url}
+                        onClick={handleNavClick}
+                        className={cn(
+                          "flex items-center gap-3 rounded-md px-3 py-2 transition-colors",
+                          isActive(item.url)
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                            : "text-sidebar-foreground hover:bg-sidebar-accent/50",
+                        )}
+                      >
+                        <item.icon className="h-5 w-5" />
+                        {!collapsed && <span>{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+                {isSuperAdmin() && superAdminNavItems.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={item.title}>
                       <NavLink

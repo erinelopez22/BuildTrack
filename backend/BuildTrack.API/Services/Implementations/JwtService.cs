@@ -9,7 +9,9 @@ namespace BuildTrack.API.Services.Implementations;
 
 public class JwtService(IConfiguration config) : IJwtService
 {
-    public string GenerateAccessToken(Guid userId, string email, IEnumerable<string> roles)
+    public const string CompanyIdClaimType = "company_id";
+
+    public string GenerateAccessToken(Guid userId, string email, IEnumerable<string> roles, Guid? companyId = null)
     {
         var secret = config["Jwt:Secret"]!;
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
@@ -24,6 +26,9 @@ public class JwtService(IConfiguration config) : IJwtService
                 DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
                 ClaimValueTypes.Integer64)
         };
+
+        if (companyId.HasValue)
+            claims.Add(new Claim(CompanyIdClaimType, companyId.Value.ToString()));
 
         foreach (var role in roles)
             claims.Add(new Claim(ClaimTypes.Role, role));

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { usersApi } from '@/lib/apiClient';
-import type { User as ApiUser } from '@/lib/apiClient';
+import { usersApi, companiesApi } from '@/lib/apiClient';
+import type { User as ApiUser, CompanyListItem } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
 import { DataTable, Column } from '@/components/common/DataTable';
@@ -51,6 +51,8 @@ import { EmailNotificationsTab } from '@/components/users/EmailNotificationsTab'
 interface UserWithRoles extends Profile {
   roles: UserRole[];
   creator_name?: string;
+  company_id?: string;
+  company_name?: string;
 }
 
 import { ROLE_DISPLAY_NAMES, ACTIVE_ROLES } from '@/types/database';
@@ -90,6 +92,8 @@ function toUserWithRoles(u: ApiUser, allUsers: ApiUser[]): UserWithRoles {
     ...profile,
     roles,
     creator_name: creatorApi?.fullName ?? undefined,
+    company_id: u.companyId ?? undefined,
+    company_name: u.companyName ?? undefined,
   };
 }
 
@@ -105,6 +109,9 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [selectedRole, setSelectedRole] = useState<AppRole>('viewer');
 
+  // Companies list (for super_admin company selector)
+  const [companies, setCompanies] = useState<CompanyListItem[]>([]);
+
   // Add user dialog
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [addUserForm, setAddUserForm] = useState({
@@ -112,6 +119,7 @@ export default function UsersPage() {
     email: '',
     password: '',
     role: 'viewer' as AppRole,
+    companyId: '',
   });
   const [addUserErrors, setAddUserErrors] = useState<Record<string, string>>({});
   const [isCreatingUser, setIsCreatingUser] = useState(false);
@@ -122,7 +130,7 @@ export default function UsersPage() {
 
   // Edit user dialog
   const [isEditUserOpen, setIsEditUserOpen] = useState(false);
-  const [editUserForm, setEditUserForm] = useState({ name: '', is_active: true });
+  const [editUserForm, setEditUserForm] = useState({ name: '', is_active: true, companyId: '' });
   const [editingUser, setEditingUser] = useState<UserWithRoles | null>(null);
   const [isUpdatingUser, setIsUpdatingUser] = useState(false);
 
@@ -148,6 +156,12 @@ export default function UsersPage() {
   useEffect(() => {
     if (isAdmin()) {
       fetchUsers();
+      // Load companies list for super_admin company selector
+      if (isSuperAdmin()) {
+        companiesApi.getList().then(res => {
+          if (res.success && res.data) setCompanies(res.data);
+        });
+      }
     } else {
       setLoading(false);
     }
@@ -209,6 +223,7 @@ export default function UsersPage() {
     setEditUserForm({
       name: user.full_name || '',
       is_active: user.is_active !== false,
+      companyId: user.company_id || '',
     });
     setIsEditUserOpen(true);
   };
@@ -218,10 +233,15 @@ export default function UsersPage() {
     if (!editingUser) return;
     setIsUpdatingUser(true);
     try {
-      const res = await usersApi.update(editingUser.id, {
+      const updatePayload: any = {
         fullName: editUserForm.name.trim(),
         isActive: editUserForm.is_active,
-      });
+      };
+      // Only super_admin can change company
+      if (isSuperAdmin() && editUserForm.companyId) {
+        updatePayload.companyId = editUserForm.companyId;
+      }
+      const res = await usersApi.update(editingUser.id, updatePayload);
 
       if (!res.success) {
         toast({ title: 'Error', description: res.message || 'Failed to update user', variant: 'destructive' });
@@ -312,6 +332,7 @@ export default function UsersPage() {
     else if (addUserForm.password.length < 6) errors.password = 'Password must be at least 6 characters';
     if (!addUserForm.role) errors.role = 'Role is required';
     if (addUserForm.role === 'super_admin' && !isSuperAdmin()) errors.role = 'Only Super Admin can assign this role';
+    if (isSuperAdmin() && !addUserForm.companyId) errors.companyId = 'Company is required';
     setAddUserErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -322,6 +343,7 @@ export default function UsersPage() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email.trim())) return false;
     if (f.password.length < 6) return false;
     if (f.role === 'super_admin' && !isSuperAdmin()) return false;
+    if (isSuperAdmin() && !f.companyId) return false;
     if (addUserErrors.email) return false;
     return true;
   };
@@ -338,6 +360,7 @@ export default function UsersPage() {
         username: addUserForm.email.trim().toLowerCase(),
         password: addUserForm.password,
         role: addUserForm.role,
+        companyId: addUserForm.companyId || undefined,
       });
 
       if (!res.success) {
@@ -350,7 +373,7 @@ export default function UsersPage() {
       } else {
         toast({ title: 'Success', description: 'User created successfully. They can now log in.' });
         setIsAddUserOpen(false);
-        setAddUserForm({ name: '', email: '', password: '', role: 'viewer' });
+        setAddUserForm({ name: '', email: '', password: '', role: 'viewer', companyId: '' });
         setAddUserErrors({});
         fetchUsers();
       }
@@ -414,6 +437,13 @@ export default function UsersPage() {
             <span className="text-muted-foreground">No roles</span>
           )}
         </div>
+      ),
+    },
+    {
+      key: 'company',
+      header: 'Company',
+      render: (user) => (
+        <span className="text-sm">{user.company_name || '—'}</span>
       ),
     },
     {
@@ -518,7 +548,7 @@ export default function UsersPage() {
       <Dialog open={isAddUserOpen} onOpenChange={(open) => {
         setIsAddUserOpen(open);
         if (!open) {
-          setAddUserForm({ name: '', email: '', password: '', role: 'viewer' });
+          setAddUserForm({ name: '', email: '', password: '', role: 'viewer', companyId: '' });
           setAddUserErrors({});
         }
       }}>
@@ -549,6 +579,21 @@ export default function UsersPage() {
               </Select>
               {addUserErrors.role && <p className="text-xs text-destructive">{addUserErrors.role}</p>}
             </div>
+
+            {isSuperAdmin() && (
+              <div className="space-y-2">
+                <Label>Company *</Label>
+                <Select value={addUserForm.companyId} onValueChange={(v) => setAddUserForm(p => ({ ...p, companyId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select company" /></SelectTrigger>
+                  <SelectContent>
+                    {companies.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {addUserErrors.companyId && <p className="text-xs text-destructive">{addUserErrors.companyId}</p>}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Email *</Label>
@@ -628,6 +673,21 @@ export default function UsersPage() {
               <Label>Email</Label>
               <Input value={editingUser?.email || ''} disabled className="opacity-60" />
               <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Company</Label>
+              {isSuperAdmin() ? (
+                <Select value={editUserForm.companyId} onValueChange={(v) => setEditUserForm(p => ({ ...p, companyId: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Select company" /></SelectTrigger>
+                  <SelectContent>
+                    {companies.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={editingUser?.company_name || '—'} disabled className="opacity-60" />
+              )}
             </div>
             <div className="flex items-center gap-3">
               <Label htmlFor="edit-active-toggle">Active</Label>
@@ -732,6 +792,7 @@ function UserDetailModal({
         <div className="space-y-4">
           <DetailRow label="Full Name" value={user.full_name || '-'} />
           <DetailRow label="Email" value={user.email || '-'} />
+          <DetailRow label="Company" value={user.company_name || '-'} />
           <Separator />
           <div>
             <p className="text-xs text-muted-foreground mb-1">Role(s)</p>

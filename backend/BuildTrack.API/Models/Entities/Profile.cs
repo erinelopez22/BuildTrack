@@ -41,7 +41,12 @@ public class Profile
 
     public Guid? CreatedBy { get; set; }
 
+    public Guid? CompanyId { get; set; }
+
     // Navigation
+    [ForeignKey(nameof(CompanyId))]
+    public Company? Company { get; set; }
+
     public ICollection<UserRole> UserRoles { get; set; } = [];
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
     public ICollection<Notification> Notifications { get; set; } = [];

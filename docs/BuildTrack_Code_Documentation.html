@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BuildTrack - Code Level Documentation</title>
+<style>
+  @page { margin: 1in; size: A4; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #1a1a2e; max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+  h1 { color: #16213e; font-size: 2.2em; border-bottom: 3px solid #0f3460; padding-bottom: 10px; page-break-before: avoid; }
+  h2 { color: #0f3460; font-size: 1.6em; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 40px; page-break-before: always; }
+  h2:first-of-type { page-break-before: avoid; }
+  h3 { color: #1a1a2e; font-size: 1.2em; margin-top: 25px; }
+  h4 { color: #333; font-size: 1.05em; margin-top: 15px; }
+  code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; color: #e11d48; }
+  pre { background: #1e293b; color: #e2e8f0; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 0.85em; line-height: 1.5; page-break-inside: avoid; }
+  pre code { background: none; color: inherit; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.9em; page-break-inside: avoid; }
+  th { background: #0f3460; color: white; padding: 10px 12px; text-align: left; }
+  td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f8fafc; }
+  .cover { text-align: center; padding: 120px 0 80px; page-break-after: always; }
+  .cover h1 { font-size: 3em; border: none; color: #0f3460; }
+  .cover .subtitle { font-size: 1.4em; color: #64748b; margin-top: 10px; }
+  .cover .version { font-size: 1em; color: #94a3b8; margin-top: 30px; }
+  .cover .logo { font-size: 5em; margin-bottom: 20px; }
+  .toc { page-break-after: always; }
+  .toc h2 { page-break-before: avoid; }
+  .toc ul { list-style: none; padding: 0; }
+  .toc li { padding: 6px 0; border-bottom: 1px dotted #ccc; }
+  .toc a { text-decoration: none; color: #0f3460; }
+  .note { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .tip { background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; margin: 15px 0; border-radius: 0 8px 8px 0; }
+  .file-tree { font-family: monospace; font-size: 0.9em; line-height: 1.8; background: #f8fafc; padding: 16px; border-radius: 8px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 600; }
+  .badge-get { background: #dcfce7; color: #166534; }
+  .badge-post { background: #dbeafe; color: #1e40af; }
+  .badge-put { background: #fef3c7; color: #92400e; }
+  .badge-delete { background: #fce7f3; color: #9d174d; }
+  @media print { body { padding: 0; } h2 { page-break-before: always; } .cover { padding: 200px 0 100px; } }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div class="logo">&#x1F3D7;</div>
+  <h1>BuildTrack Inventory System</h1>
+  <div class="subtitle">Code-Level Documentation &amp; Developer Tutorial</div>
+  <div class="version">
+    <p>Version 1.0 &mdash; March 2026</p>
+    <p>ASP.NET Core 8 + React 18 + TypeScript</p>
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ul>
+    <li><a href="#s1">1. System Overview &amp; Architecture</a></li>
+    <li><a href="#s2">2. Technology Stack</a></li>
+    <li><a href="#s3">3. Project Structure</a></li>
+    <li><a href="#s4">4. Getting Started &mdash; Setup Tutorial</a></li>
+    <li><a href="#s5">5. Database Schema &amp; Entities</a></li>
+    <li><a href="#s6">6. Backend Architecture</a></li>
+    <li><a href="#s7">7. API Endpoints Reference</a></li>
+    <li><a href="#s8">8. Authentication &amp; Authorization</a></li>
+    <li><a href="#s9">9. Frontend Architecture</a></li>
+    <li><a href="#s10">10. API Client &amp; Data Flow</a></li>
+    <li><a href="#s11">11. Component Architecture</a></li>
+    <li><a href="#s12">12. Role-Based Access Control</a></li>
+    <li><a href="#s13">13. Real-Time Notifications (SignalR)</a></li>
+    <li><a href="#s14">14. Key Business Workflows</a></li>
+    <li><a href="#s15">15. Multi-Tenancy Architecture</a></li>
+    <li><a href="#s16">16. Adding New Features &mdash; Tutorial</a></li>
+    <li><a href="#s17">17. Troubleshooting &amp; Common Issues</a></li>
+  </ul>
+</div>
+
+<!-- SECTION 1 -->
+<h2 id="s1">1. System Overview &amp; Architecture</h2>
+
+<p>BuildTrack is a full-stack <strong>construction inventory management system</strong> designed for tracking materials, purchase orders, equipment, and project progress. It supports <strong>multi-company tenancy</strong>, role-based access, and real-time notifications.</p>
+
+<h3>High-Level Architecture</h3>
+<pre><code>┌────────────────────┐     HTTP/REST     ┌─────────────────────────┐
+│   React Frontend   │ ◄──────────────► │  ASP.NET Core 8 API     │
+│   (Vite + TS)      │                   │  Controllers → Services │
+│   Port: 8080       │     SignalR       │  Port: 5069             │
+│                    │ ◄──────────────► │  Hubs/NotificationHub   │
+└────────────────────┘                   └────────────┬────────────┘
+                                                      │ EF Core
+                                                      ▼
+                                         ┌─────────────────────────┐
+                                         │   Microsoft SQL Server   │
+                                         │   (SQLEXPRESS)           │
+                                         └─────────────────────────┘</code></pre>
+
+<h3>Key Design Decisions</h3>
+<ul>
+  <li><strong>API-First</strong>: Complete REST API with standardized <code>ApiResponse&lt;T&gt;</code> envelope</li>
+  <li><strong>JWT Authentication</strong>: Stateless auth with access + refresh token rotation</li>
+  <li><strong>Multi-Tenant</strong>: All data scoped by <code>CompanyId</code> at the service layer</li>
+  <li><strong>SignalR + Polling</strong>: Real-time notifications with 30-second polling fallback</li>
+  <li><strong>Role-Based</strong>: 18 roles with 7 authorization policies</li>
+</ul>
+
+<!-- SECTION 2 -->
+<h2 id="s2">2. Technology Stack</h2>
+
+<h3>Backend</h3>
+<table>
+  <tr><th>Technology</th><th>Purpose</th><th>Version</th></tr>
+  <tr><td>.NET / ASP.NET Core</td><td>Web API framework</td><td>8.0</td></tr>
+  <tr><td>Entity Framework Core</td><td>ORM / Database access</td><td>8.x</td></tr>
+  <tr><td>SQL Server</td><td>Database</td><td>Express</td></tr>
+  <tr><td>SignalR</td><td>Real-time WebSocket communication</td><td>8.x</td></tr>
+  <tr><td>BCrypt.Net</td><td>Password hashing</td><td>Latest</td></tr>
+  <tr><td>System.IdentityModel.Tokens.Jwt</td><td>JWT token generation/validation</td><td>Latest</td></tr>
+</table>
+
+<h3>Frontend</h3>
+<table>
+  <tr><th>Technology</th><th>Purpose</th><th>Version</th></tr>
+  <tr><td>React</td><td>UI framework</td><td>18.x</td></tr>
+  <tr><td>TypeScript</td><td>Type safety</td><td>5.x</td></tr>
+  <tr><td>Vite</td><td>Build tool / dev server</td><td>5.x</td></tr>
+  <tr><td>Tailwind CSS</td><td>Utility-first styling</td><td>3.x</td></tr>
+  <tr><td>shadcn/ui + Radix UI</td><td>Component library</td><td>Latest</td></tr>
+  <tr><td>TanStack React Query</td><td>Server state management</td><td>5.x</td></tr>
+  <tr><td>React Router DOM</td><td>Client-side routing</td><td>6.x</td></tr>
+  <tr><td>date-fns</td><td>Date formatting (Manila TZ)</td><td>Latest</td></tr>
+  <tr><td>recharts</td><td>Charts (dashboard)</td><td>Latest</td></tr>
+  <tr><td>lucide-react</td><td>Icons</td><td>Latest</td></tr>
+</table>
+
+<!-- SECTION 3 -->
+<h2 id="s3">3. Project Structure</h2>
+
+<h3>Backend Structure</h3>
+<div class="file-tree">
+backend/BuildTrack.API/<br>
+├── Controllers/            &nbsp;# 14 REST API controllers<br>
+│   ├── AuthController.cs<br>
+│   ├── UsersController.cs<br>
+│   ├── CompaniesController.cs<br>
+│   ├── ProjectsController.cs<br>
+│   ├── OrdersController.cs<br>
+│   ├── SkusController.cs<br>
+│   ├── InventoryController.cs<br>
+│   ├── CompanyAssetsController.cs<br>
+│   ├── QuotationsController.cs<br>
+│   ├── TrackingController.cs<br>
+│   ├── DashboardController.cs<br>
+│   ├── NotificationsController.cs<br>
+│   ├── AuditLogsController.cs<br>
+│   └── BaseApiController.cs<br>
+├── DTOs/                   &nbsp;# Data Transfer Objects<br>
+│   ├── Auth/<br>
+│   ├── Users/<br>
+│   ├── Companies/<br>
+│   ├── Projects/<br>
+│   ├── Orders/<br>
+│   ├── Inventory/<br>
+│   ├── SKUs/<br>
+│   ├── Assets/<br>
+│   ├── Quotations/<br>
+│   ├── Notifications/<br>
+│   ├── Dashboard/<br>
+│   ├── Tracking/<br>
+│   └── Common/             &nbsp;# ApiResponse&lt;T&gt;, PaginatedResponse<br>
+├── Models/<br>
+│   ├── Entities/           &nbsp;# 24 EF Core entity models<br>
+│   └── Enums/<br>
+├── Services/<br>
+│   ├── Interfaces/         &nbsp;# Service contracts<br>
+│   └── Implementations/    &nbsp;# Business logic<br>
+├── Data/<br>
+│   └── AppDbContext.cs     &nbsp;# EF Core context<br>
+├── Middleware/<br>
+│   └── ErrorHandlingMiddleware.cs<br>
+├── Hubs/<br>
+│   └── NotificationHub.cs<br>
+└── Program.cs              &nbsp;# App startup, DI, middleware
+</div>
+
+<h3>Frontend Structure</h3>
+<div class="file-tree">
+src/<br>
+├── App.tsx                 &nbsp;# Main router with protected routes<br>
+├── main.tsx                &nbsp;# Entry point<br>
+├── contexts/<br>
+│   └── AuthContext.tsx      &nbsp;# Auth state, roles, login/logout<br>
+├── lib/<br>
+│   ├── apiClient.ts        &nbsp;# REST client with all API endpoints<br>
+│   ├── notificationService.ts<br>
+│   └── activityLogger.ts<br>
+├── pages/                  &nbsp;# 17 page components<br>
+│   ├── Login.tsx<br>
+│   ├── Dashboard.tsx<br>
+│   ├── Projects.tsx<br>
+│   ├── ProjectDetail.tsx<br>
+│   ├── Inventory.tsx<br>
+│   ├── Orders.tsx<br>
+│   ├── SKUs.tsx<br>
+│   ├── CompanyAssets.tsx<br>
+│   ├── QuotationRequests.tsx<br>
+│   ├── Reports.tsx<br>
+│   ├── Companies.tsx<br>
+│   ├── Users.tsx<br>
+│   ├── Settings.tsx<br>
+│   ├── Notifications.tsx<br>
+│   └── Members.tsx<br>
+├── components/<br>
+│   ├── layout/             &nbsp;# AppLayout, AppSidebar<br>
+│   ├── common/             &nbsp;# DataTable, PageHeader, StatusBadge<br>
+│   ├── orders/             &nbsp;# OrderWorkflowBoard, OrderDetailModal<br>
+│   ├── projects/           &nbsp;# ProjectCard, ProgressModal, QuotationModal<br>
+│   ├── equipment/          &nbsp;# BorrowRequestsTab, ReturnRequestsTab<br>
+│   ├── dashboard/          &nbsp;# StatCard<br>
+│   └── ui/                 &nbsp;# 40+ shadcn/ui components<br>
+├── hooks/                  &nbsp;# Custom React hooks<br>
+├── types/<br>
+│   └── database.ts         &nbsp;# All TypeScript interfaces &amp; enums<br>
+└── services/<br>
+    └── api.ts              &nbsp;# Legacy client (deprecated)
+</div>
+
+<!-- SECTION 4 -->
+<h2 id="s4">4. Getting Started &mdash; Setup Tutorial</h2>
+
+<h3>Prerequisites</h3>
+<ul>
+  <li>.NET 8 SDK</li>
+  <li>Node.js 18+ and npm</li>
+  <li>SQL Server Express (or full edition)</li>
+  <li>Git</li>
+</ul>
+
+<h3>Step 1: Clone the Repository</h3>
+<pre><code>git clone &lt;repository-url&gt;
+cd stockwell-build</code></pre>
+
+<h3>Step 2: Configure the Database</h3>
+<p>Edit <code>backend/BuildTrack.API/appsettings.json</code>:</p>
+<pre><code>{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost\\SQLEXPRESS;Database=BuildTrackDB;Trusted_Connection=true;TrustServerCertificate=true;"
+  },
+  "Jwt": {
+    "Key": "YourSecretKeyHere_MustBeAtLeast32Characters!",
+    "Issuer": "BuildTrack.API",
+    "Audience": "BuildTrack.Client",
+    "ExpirationMinutes": 60
+  },
+  "Cors": {
+    "AllowedOrigins": "http://localhost:8080,http://localhost:5173"
+  }
+}</code></pre>
+
+<div class="note">
+  <strong>Note:</strong> The database and tables are created automatically on first run via EF Core auto-migration in <code>Program.cs</code>. A default super_admin user (<code>admin@buildtrack.com</code> / <code>Admin@123456</code>) is seeded if no users exist.
+</div>
+
+<h3>Step 3: Start the Backend</h3>
+<pre><code>cd backend/BuildTrack.API
+dotnet restore
+dotnet run</code></pre>
+<p>The API will start on <code>http://localhost:5069</code>.</p>
+
+<h3>Step 4: Start the Frontend</h3>
+<pre><code># From project root
+npm install
+npm run dev</code></pre>
+<p>The frontend will start on <code>http://localhost:8080</code>.</p>
+
+<h3>Step 5: Verify</h3>
+<ol>
+  <li>Open <code>http://localhost:8080</code> in your browser</li>
+  <li>Log in with <code>admin@buildtrack.com</code> / <code>Admin@123456</code></li>
+  <li>You should see the Dashboard page</li>
+</ol>
+
+<!-- SECTION 5 -->
+<h2 id="s5">5. Database Schema &amp; Entities</h2>
+
+<h3>Entity Relationship Overview</h3>
+<p>The system has <strong>24 entity models</strong> organized into these domain groups:</p>
+
+<h4>Authentication &amp; User Management</h4>
+<table>
+  <tr><th>Entity</th><th>Key Fields</th><th>Purpose</th></tr>
+  <tr><td><code>Company</code></td><td>Id, Name, Address, Phone, Email, IsActive</td><td>Multi-tenant company</td></tr>
+  <tr><td><code>Profile</code></td><td>Id, Email, PasswordHash, FullName, CompanyId, Status</td><td>User account</td></tr>
+  <tr><td><code>UserRole</code></td><td>Id, UserId, Role</td><td>Role assignment (many-to-many)</td></tr>
+  <tr><td><code>RefreshToken</code></td><td>Id, Token, UserId, ExpiresAt, IsRevoked</td><td>JWT refresh tokens</td></tr>
+</table>
+
+<h4>Projects &amp; Inventory</h4>
+<table>
+  <tr><th>Entity</th><th>Key Fields</th><th>Purpose</th></tr>
+  <tr><td><code>Project</code></td><td>Id, Name, Code, Location, Status, CompanyId, ProjectManagerId</td><td>Construction project</td></tr>
+  <tr><td><code>ProjectMember</code></td><td>Id, ProjectId, UserId, Role</td><td>Team assignments</td></tr>
+  <tr><td><code>SKU</code></td><td>Id, SkuCode, Name, Category, UnitOfMeasure, CompanyId</td><td>Stock keeping unit</td></tr>
+  <tr><td><code>ProjectInventory</code></td><td>Id, ProjectId, SkuId, OnHandQty, ReservedQty</td><td>Per-project inventory</td></tr>
+  <tr><td><code>InventoryTransaction</code></td><td>Id, ProjectId, SkuId, Type, Quantity, BeforeQty, AfterQty</td><td>Inventory audit trail</td></tr>
+</table>
+
+<h4>Orders &amp; Delivery</h4>
+<table>
+  <tr><th>Entity</th><th>Key Fields</th><th>Purpose</th></tr>
+  <tr><td><code>Order</code></td><td>Id, OrderNumber, ProjectId, Status, Supplier, ApprovedBy</td><td>Purchase order</td></tr>
+  <tr><td><code>OrderItem</code></td><td>Id, OrderId, SkuId, QuantityOrdered, QuantityReceived, UnitPrice</td><td>Order line item</td></tr>
+  <tr><td><code>Delivery</code></td><td>Id, OrderId, Carrier, TrackingNumber, ReceivedDate</td><td>Physical delivery</td></tr>
+  <tr><td><code>DeliveryItem</code></td><td>Id, DeliveryId, OrderItemId, QuantityReceived, Condition</td><td>Delivery line item</td></tr>
+  <tr><td><code>OrderTrackingAssignment</code></td><td>Id, OrderId, DriverId, PlateNumber, Status</td><td>Driver assignment for logistics</td></tr>
+  <tr><td><code>OrderTrackingMaterial</code></td><td>Id, AssignmentId, OrderItemId, QuantityAssigned</td><td>Materials per driver</td></tr>
+</table>
+
+<h4>Quotations</h4>
+<table>
+  <tr><th>Entity</th><th>Key Fields</th><th>Purpose</th></tr>
+  <tr><td><code>ProjectQuotation</code></td><td>Id, ProjectId, Category, Notes</td><td>Material quotation</td></tr>
+  <tr><td><code>QuotationItem</code></td><td>Id, QuotationId, MaterialName, Unit, Quantity</td><td>Quoted material</td></tr>
+  <tr><td><code>QuotationChangeRequest</code></td><td>Id, QuotationId, ChangeType, Payload, Status</td><td>Change request workflow</td></tr>
+</table>
+
+<h4>Assets &amp; Equipment</h4>
+<table>
+  <tr><th>Entity</th><th>Key Fields</th><th>Purpose</th></tr>
+  <tr><td><code>CompanyAsset</code></td><td>Id, Name, AssetType, AssetCode, TotalQuantity, Condition, CompanyId</td><td>Tools/equipment</td></tr>
+  <tr><td><code>BorrowTransaction</code></td><td>Id, AssetId, BorrowerId, ProjectId, QuantityBorrowed, Status</td><td>Borrow/return tracking</td></tr>
+</table>
+
+<h4>Notifications &amp; Audit</h4>
+<table>
+  <tr><th>Entity</th><th>Key Fields</th><th>Purpose</th></tr>
+  <tr><td><code>Notification</code></td><td>Id, UserId, Title, Message, Type, IsRead</td><td>User notifications</td></tr>
+  <tr><td><code>NotificationSettings</code></td><td>Id, UserId, EmailEnabled, SmsEnabled</td><td>Per-user prefs</td></tr>
+  <tr><td><code>AuditLog</code></td><td>Id, TableName, RecordId, Action, OldValues, NewValues, UserId</td><td>Full audit trail</td></tr>
+</table>
+
+<h3>Key Relationships</h3>
+<pre><code>Company 1──────┬──► N Profile (users)
+               ├──► N Project
+               ├──► N SKU
+               └──► N CompanyAsset
+
+Project 1──────┬──► N Order ──────┬──► N OrderItem ──► 1 SKU
+               ├──► N ProjectMember    ├──► N Delivery ──► N DeliveryItem
+               ├──► N ProjectQuotation └──► N TrackingAssignment ──► N TrackingMaterial
+               └──► N ProjectInventory
+
+Profile 1──────┬──► N UserRole
+               ├──► N RefreshToken
+               ├──► N Notification
+               └──► N BorrowTransaction</code></pre>
+
+<!-- SECTION 6 -->
+<h2 id="s6">6. Backend Architecture</h2>
+
+<h3>Layered Architecture</h3>
+<pre><code>┌─────────────────────────────┐
+│     Controllers (HTTP)       │  ← Route handling, validation, auth policies
+├─────────────────────────────┤
+│     Services (Business)      │  ← Business logic, company scoping, data transformation
+├─────────────────────────────┤
+│     AppDbContext (Data)       │  ← EF Core queries, entity relationships
+├─────────────────────────────┤
+│     SQL Server (Storage)     │  ← Persistent data
+└─────────────────────────────┘</code></pre>
+
+<h3>Response Envelope Pattern</h3>
+<p>All API responses use <code>ApiResponse&lt;T&gt;</code>:</p>
+<pre><code>public class ApiResponse&lt;T&gt;
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public T? Data { get; set; }
+    public Dictionary&lt;string, List&lt;string&gt;&gt;? Errors { get; set; }
+}
+
+// Usage in controllers:
+return Ok(ApiResponse&lt;ProjectDto&gt;.SuccessResponse(project, "Project retrieved"));
+return BadRequest(ApiResponse&lt;object&gt;.ErrorResponse("Validation failed", errors));</code></pre>
+
+<h3>Dependency Injection (Program.cs)</h3>
+<pre><code>// All services registered as scoped (per-request lifetime)
+builder.Services.AddScoped&lt;IJwtService, JwtService&gt;();
+builder.Services.AddScoped&lt;IAuthService, AuthService&gt;();
+builder.Services.AddScoped&lt;IUserService, UserService&gt;();
+builder.Services.AddScoped&lt;ICompanyService, CompanyService&gt;();
+builder.Services.AddScoped&lt;IProjectService, ProjectService&gt;();
+builder.Services.AddScoped&lt;IOrderService, OrderService&gt;();
+builder.Services.AddScoped&lt;ISkuService, SkuService&gt;();
+// ... and more</code></pre>
+
+<h3>Error Handling Middleware</h3>
+<pre><code>// Middleware/ErrorHandlingMiddleware.cs
+// Catches all unhandled exceptions and maps to HTTP status codes
+app.UseMiddleware&lt;ErrorHandlingMiddleware&gt;();
+
+// Exception → Status Code mapping:
+// ArgumentException         → 400 Bad Request
+// UnauthorizedAccessException → 401 Unauthorized
+// KeyNotFoundException      → 404 Not Found
+// InvalidOperationException → 409 Conflict
+// Default                   → 500 Internal Server Error</code></pre>
+
+<h3>Auto-Migration on Startup</h3>
+<pre><code>// Program.cs - Database is created/migrated automatically
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService&lt;AppDbContext&gt;();
+    db.Database.Migrate();  // Apply pending migrations
+
+    // Seed data: creates default company, tables, columns
+    // Seeds super_admin if no users exist
+}</code></pre>
+
+<!-- SECTION 7 -->
+<h2 id="s7">7. API Endpoints Reference</h2>
+
+<h3>Authentication (<code>/api/auth</code>)</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Auth</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/auth/login</code></td><td>No</td><td>Login with email/password + optional companyId</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/auth/refresh</code></td><td>No</td><td>Refresh access token</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/auth/logout</code></td><td>Yes</td><td>Revoke refresh tokens</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/auth/me</code></td><td>Yes</td><td>Get current user session</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/auth/change-password</code></td><td>Yes</td><td>Change password</td></tr>
+</table>
+
+<h3>Users (<code>/api/users</code>)</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Policy</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/users</code></td><td>Authorize</td><td>List users (company-filtered)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/users/{id}</code></td><td>Authorize</td><td>Get user details</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/users</code></td><td>RequireAdmin</td><td>Create user</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/users/{id}</code></td><td>Authorize</td><td>Update user (self or admin)</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/users/{id}</code></td><td>RequireAdmin</td><td>Delete user</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/users/{id}/roles</code></td><td>RequireAdmin</td><td>Assign role</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/users/{id}/roles/{role}</code></td><td>RequireAdmin</td><td>Remove role</td></tr>
+</table>
+
+<h3>Companies (<code>/api/companies</code>)</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Policy</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/companies/list</code></td><td>Anonymous</td><td>List for login dropdown</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/companies</code></td><td>SuperAdmin</td><td>List all companies</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/companies</code></td><td>SuperAdmin</td><td>Create company</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/companies/{id}</code></td><td>SuperAdmin</td><td>Update company</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/companies/{id}</code></td><td>SuperAdmin</td><td>Deactivate company</td></tr>
+</table>
+
+<h3>Projects (<code>/api/projects</code>)</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Policy</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/projects</code></td><td>Authorize</td><td>List projects (filter: status, search, includeHidden)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/projects/{id}</code></td><td>Authorize</td><td>Get project details</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/projects</code></td><td>RequireProjectManager</td><td>Create project</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/projects/{id}</code></td><td>RequireProjectManager</td><td>Update project</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/projects/{id}</code></td><td>RequireAdmin</td><td>Delete project</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/projects/{id}/progress</code></td><td>Authorize</td><td>Material delivery progress</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/projects/{id}/activity</code></td><td>Authorize</td><td>Activity/audit log</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/projects/{id}/members</code></td><td>Authorize</td><td>List team members</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/projects/{id}/members</code></td><td>RequireProjectManager</td><td>Add team member</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/projects/{id}/members/{userId}</code></td><td>RequireProjectManager</td><td>Remove team member</td></tr>
+</table>
+
+<h3>Orders (<code>/api/orders</code>)</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Policy</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/orders</code></td><td>Authorize</td><td>List orders (filter: status, projectId, search)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/orders/{id}</code></td><td>Authorize</td><td>Get order with items</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/orders</code></td><td>Authorize</td><td>Create order</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/orders/{id}</code></td><td>Authorize</td><td>Update order</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/orders/{id}</code></td><td>Authorize</td><td>Delete order</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/orders/{id}/submit</code></td><td>Authorize</td><td>Submit for approval</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/orders/{id}/approve</code></td><td>RequireApprover</td><td>Approve order</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/orders/{id}/reject</code></td><td>RequireApprover</td><td>Reject with reason</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/orders/{id}/status</code></td><td>Authorize</td><td>Update order status</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/orders/project/{projectId}</code></td><td>Authorize</td><td>Orders by project</td></tr>
+</table>
+
+<h3>SKUs (<code>/api/skus</code>)</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Policy</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/skus</code></td><td>Authorize</td><td>List SKUs (filter: search, category, isActive)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/skus/{id}</code></td><td>Authorize</td><td>Get SKU details</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/skus</code></td><td>RequireWarehouseAdmin</td><td>Create SKU</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/skus/{id}</code></td><td>RequireWarehouseAdmin</td><td>Update SKU</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/skus/{id}</code></td><td>RequireWarehouseAdmin</td><td>Delete SKU</td></tr>
+</table>
+
+<h3>Tracking (<code>/api/orders/{orderId}/tracking-assignments</code>)</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Policy</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/tracking-assignments</code></td><td>Authorize</td><td>Get tracking assignments</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/tracking-assignments</code></td><td>Authorize</td><td>Save/update assignments</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/{id}/arrived</code></td><td>Authorize</td><td>Mark driver arrived</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/{id}/hold</code></td><td>Authorize</td><td>Hold with remarks</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/{id}/resume</code></td><td>Authorize</td><td>Resume driver</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/{id}/receiver-evidence</code></td><td>Authorize</td><td>Save receiver evidence</td></tr>
+</table>
+
+<h3>Other Endpoints</h3>
+<table>
+  <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/dashboard/stats</code></td><td>Dashboard statistics</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/notifications</code></td><td>User notifications</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/audit-logs</code></td><td>Audit trail logs</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/inventory</code></td><td>Inventory levels</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/company-assets</code></td><td>Equipment &amp; tools</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/quotations</code></td><td>Project quotations</td></tr>
+</table>
+
+<!-- SECTION 8 -->
+<h2 id="s8">8. Authentication &amp; Authorization</h2>
+
+<h3>JWT Token Flow</h3>
+<pre><code>1. Client → POST /api/auth/login { loginId, password, companyId? }
+2. Server validates credentials, generates tokens
+3. Server → { accessToken (60min), refreshToken (7 days), user session }
+4. Client stores tokens in localStorage (bt_access_token, bt_refresh_token)
+5. Client sends Authorization: Bearer {accessToken} on every request
+6. On 401 → Client calls POST /api/auth/refresh automatically
+7. If refresh fails → Redirect to /login</code></pre>
+
+<h3>JWT Claims</h3>
+<pre><code>// JwtService.cs generates these claims:
+new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+new Claim(ClaimTypes.Email, user.Email),
+new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+new Claim(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString()),
+new Claim(ClaimTypes.Role, role),          // One per role
+new Claim("CompanyId", user.CompanyId.ToString())  // Company scoping</code></pre>
+
+<h3>Authorization Policies</h3>
+<table>
+  <tr><th>Policy</th><th>Roles Allowed</th><th>Used For</th></tr>
+  <tr><td>RequireAdmin</td><td>super_admin, admin</td><td>User CRUD, delete projects</td></tr>
+  <tr><td>RequireOfficeAdmin</td><td>super_admin, admin, office_admin</td><td>Quotation management</td></tr>
+  <tr><td>RequireApprover</td><td>super_admin, admin, office_admin, approver, approval_admin</td><td>Order approval/rejection</td></tr>
+  <tr><td>RequireWarehouseAdmin</td><td>super_admin, admin, warehouse_admin</td><td>SKU/asset management</td></tr>
+  <tr><td>RequireProjectManager</td><td>super_admin, admin, project_manager, project_engineer</td><td>Project CRUD, team management</td></tr>
+  <tr><td>RequireLogistics</td><td>super_admin, admin, logistics_admin, tracking_driver, driver</td><td>Tracking/logistics</td></tr>
+  <tr><td>RequireReceiver</td><td>super_admin, admin, receiver, storekeeper</td><td>Receiving deliveries</td></tr>
+</table>
+
+<h3>Extracting Current User in Services</h3>
+<pre><code>// Common pattern in all services:
+private Guid GetCurrentUserId(ClaimsPrincipal user)
+{
+    var claim = user.FindFirst(ClaimTypes.NameIdentifier);
+    return Guid.Parse(claim!.Value);
+}
+
+private Guid? GetCurrentCompanyId(ClaimsPrincipal user)
+{
+    var claim = user.FindFirst("CompanyId");
+    return claim != null ? Guid.Parse(claim.Value) : null;
+}
+
+private bool IsSuperAdmin(ClaimsPrincipal user)
+{
+    return user.IsInRole("super_admin");
+}</code></pre>
+
+<!-- SECTION 9 -->
+<h2 id="s9">9. Frontend Architecture</h2>
+
+<h3>Routing (App.tsx)</h3>
+<pre><code>&lt;Routes&gt;
+  &lt;Route path="/login" element={&lt;Login /&gt;} /&gt;
+  &lt;Route element={&lt;AppLayout /&gt;}&gt;          {/* Protected layout */}
+    &lt;Route path="/" element={&lt;Navigate to="/dashboard" /&gt;} /&gt;
+    &lt;Route path="/dashboard" element={&lt;Dashboard /&gt;} /&gt;
+    &lt;Route path="/projects" element={&lt;Projects /&gt;} /&gt;
+    &lt;Route path="/projects/:id" element={&lt;ProjectDetail /&gt;} /&gt;
+    &lt;Route path="/inventory" element={&lt;Inventory /&gt;} /&gt;
+    &lt;Route path="/orders" element={&lt;Orders /&gt;} /&gt;
+    &lt;Route path="/skus" element={&lt;SKUs /&gt;} /&gt;
+    &lt;Route path="/company-assets" element={&lt;CompanyAssets /&gt;} /&gt;
+    &lt;Route path="/quotation-requests" element={&lt;QuotationRequests /&gt;} /&gt;
+    &lt;Route path="/reports" element={&lt;Reports /&gt;} /&gt;
+    &lt;Route path="/users" element={&lt;Users /&gt;} /&gt;
+    &lt;Route path="/companies" element={&lt;Companies /&gt;} /&gt;
+    &lt;Route path="/settings" element={&lt;Settings /&gt;} /&gt;
+    &lt;Route path="/notifications" element={&lt;Notifications /&gt;} /&gt;
+    &lt;Route path="/members" element={&lt;Members /&gt;} /&gt;
+  &lt;/Route&gt;
+&lt;/Routes&gt;</code></pre>
+
+<h3>AuthContext Pattern</h3>
+<pre><code>// src/contexts/AuthContext.tsx
+const { user, roles, loading, signIn, signOut,
+        isAdmin, isSuperAdmin, isApprover,
+        canCreateOrders, canApproveOrders, ... } = useAuth();
+
+// Login flow:
+await signIn(email, password, companyId);
+// → calls authApi.login() → stores tokens → fetches /auth/me → sets state
+
+// Token management:
+// Tokens stored: bt_access_token, bt_refresh_token in localStorage
+// Auto-refresh: apiClient intercepts 401, calls /auth/refresh, retries</code></pre>
+
+<h3>Data Fetching Pattern</h3>
+<pre><code>// Most pages use direct API calls (not React Query):
+const [projects, setProjects] = useState&lt;Project[]&gt;([]);
+const [loading, setLoading] = useState(true);
+
+useEffect(() =&gt; {
+  const fetchData = async () =&gt; {
+    try {
+      const result = await projectsApi.getAll({ status: 'active' });
+      setProjects(result.data || []);  // Unwrap ApiResponse envelope
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to load" });
+    } finally {
+      setLoading(false);
+    }
+  };
+  fetchData();
+}, []);</code></pre>
+
+<div class="warning">
+  <strong>Important:</strong> All API responses are wrapped in <code>ApiResponse&lt;T&gt;</code>. Always access <code>result.data</code> to get the actual payload. Using the result directly will cause runtime errors.
+</div>
+
+<!-- SECTION 10 -->
+<h2 id="s10">10. API Client &amp; Data Flow</h2>
+
+<h3>Core API Client (src/lib/apiClient.ts)</h3>
+<pre><code>// Base configuration
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5069';
+
+// Generic request wrapper
+async function request&lt;T&gt;(method, url, data?): Promise&lt;ApiResponse&lt;T&gt;&gt; {
+  const token = localStorage.getItem('bt_access_token');
+  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  const response = await fetch(`${API_BASE}${url}`, { method, headers, body: JSON.stringify(data) });
+
+  if (response.status === 401) {
+    // Auto-refresh token, retry once
+    const refreshed = await refreshAccessToken();
+    if (refreshed) return request(method, url, data); // Retry
+    else window.location.href = '/login';             // Redirect
+  }
+
+  return response.json();
+}
+
+// Convenience methods
+const get = &lt;T&gt;(url) =&gt; request&lt;T&gt;('GET', url);
+const post = &lt;T&gt;(url, data) =&gt; request&lt;T&gt;('POST', url, data);
+const put = &lt;T&gt;(url, data) =&gt; request&lt;T&gt;('PUT', url, data);
+const del = &lt;T&gt;(url) =&gt; request&lt;T&gt;('DELETE', url);</code></pre>
+
+<h3>API Namespaces</h3>
+<pre><code>// Grouped by resource:
+export const authApi = { login, refresh, logout, me, changePassword };
+export const companiesApi = { getList, getAll, getById, create, update, delete };
+export const usersApi = { getAll, getById, getMe, create, update, delete, getRoles, assignRole, removeRole };
+export const projectsApi = { getAll, getById, create, update, delete, getMembers, addMember, removeMember, getProgress, getActivity };
+export const ordersApi = { getAll, getById, getByProject, create, update, delete, submit, approve, reject, updateStatus };
+export const skusApi = { getAll, getById, create, update, delete };
+export const inventoryApi = { getAll, getByProject, getTransactions, createTransaction };
+export const companyAssetsApi = { getAll, getById, create, update, delete, getBorrows, getAllBorrows, borrow, returnAsset };
+export const quotationsApi = { getAll, getById, create, delete, updateItem, getChangeRequests, createChangeRequest, reviewChangeRequest };
+export const notificationsApi = { getAll, markRead, markAllRead, delete };
+export const dashboardApi = { getStats };
+export const trackingApi = { getAssignments, save, markArrived, hold, resume, saveRemarks, saveReceiverEvidence };
+export const auditLogsApi = { log, getForOrder };
+export const filesApi = { upload };</code></pre>
+
+<!-- SECTION 11 -->
+<h2 id="s11">11. Component Architecture</h2>
+
+<h3>Component Hierarchy</h3>
+<pre><code>App
+├── Login (public)
+└── AppLayout (protected)
+    ├── AppSidebar (navigation)
+    └── &lt;Outlet&gt; (page content)
+        ├── Dashboard
+        │   └── StatCard (x4)
+        ├── Projects
+        │   └── ProjectCard → ProjectFormModal
+        ├── ProjectDetail
+        │   ├── ProjectTeamTab
+        │   ├── ProjectActivityTab
+        │   ├── QuotationModal
+        │   ├── ProjectProgressModal
+        │   ├── ActiveOrdersModal
+        │   ├── DeliveredMaterialsModal
+        │   └── CompletedOrdersModal
+        ├── Inventory → OrderWorkflowBoard
+        │   ├── OrderCard
+        │   ├── CreateOrderModal
+        │   └── OrderDetailModal
+        │       └── TrackingAssignmentSection
+        ├── Orders → OrderDetailModal
+        ├── SKUs (DataTable + Modals)
+        ├── CompanyAssets
+        │   ├── BorrowRequestsTab
+        │   ├── ReturnRequestsTab
+        │   └── EquipmentHistoryTab
+        ├── QuotationRequests
+        ├── Reports
+        ├── Users (DataTable + Modals)
+        ├── Companies (DataTable + Modals)
+        ├── Settings
+        ├── Notifications
+        └── Members</code></pre>
+
+<h3>Shared Components</h3>
+<table>
+  <tr><th>Component</th><th>Location</th><th>Purpose</th></tr>
+  <tr><td><code>DataTable</code></td><td>components/common/</td><td>Generic table with columns, loading, empty state</td></tr>
+  <tr><td><code>PageHeader</code></td><td>components/common/</td><td>Title + description + action button</td></tr>
+  <tr><td><code>StatusBadge</code></td><td>components/common/</td><td>Color-coded status indicators</td></tr>
+  <tr><td><code>EmptyState</code></td><td>components/common/</td><td>No-data placeholder with icon + action</td></tr>
+  <tr><td><code>LocationAutocomplete</code></td><td>components/common/</td><td>Auto-completing location input</td></tr>
+  <tr><td><code>ui/*</code></td><td>components/ui/</td><td>40+ shadcn/ui primitives (Button, Dialog, Select, etc.)</td></tr>
+</table>
+
+<!-- SECTION 12 -->
+<h2 id="s12">12. Role-Based Access Control</h2>
+
+<h3>All Available Roles</h3>
+<table>
+  <tr><th>Role</th><th>Description</th><th>Key Permissions</th></tr>
+  <tr><td><code>super_admin</code></td><td>System administrator</td><td>All access, manage companies, cross-company visibility</td></tr>
+  <tr><td><code>admin</code></td><td>Company administrator</td><td>All company-level access, user management</td></tr>
+  <tr><td><code>office_admin</code></td><td>Office management</td><td>Quotations, approvals, settings</td></tr>
+  <tr><td><code>warehouse_admin</code></td><td>Warehouse management</td><td>SKU catalog, assets, inventory</td></tr>
+  <tr><td><code>project_manager</code></td><td>Project management</td><td>Create/manage projects, team</td></tr>
+  <tr><td><code>project_engineer</code></td><td>Project engineering</td><td>Create orders, manage projects, receive</td></tr>
+  <tr><td><code>procurement</code></td><td>Procurement officer</td><td>View orders, basic access</td></tr>
+  <tr><td><code>storekeeper</code></td><td>Storage management</td><td>Receive deliveries</td></tr>
+  <tr><td><code>receiver</code></td><td>Delivery receiver</td><td>Receive and verify deliveries</td></tr>
+  <tr><td><code>site_lead</code></td><td>Site management</td><td>View projects, basic access</td></tr>
+  <tr><td><code>viewer</code></td><td>Read-only access</td><td>View all data, no modifications</td></tr>
+  <tr><td><code>approver</code></td><td>Order approver</td><td>Approve/reject orders</td></tr>
+  <tr><td><code>approval_admin</code></td><td>Approval admin</td><td>Approve/reject orders</td></tr>
+  <tr><td><code>logistics_admin</code></td><td>Logistics management</td><td>Manage tracking, drivers</td></tr>
+  <tr><td><code>tracking_driver</code></td><td>Tracking driver</td><td>Update delivery tracking</td></tr>
+  <tr><td><code>driver</code></td><td>Delivery driver</td><td>Update delivery tracking</td></tr>
+  <tr><td><code>checker</code></td><td>Verification</td><td>Verify deliveries, receive orders</td></tr>
+</table>
+
+<h3>Frontend Permission Checks</h3>
+<pre><code>// AuthContext provides these check functions:
+const { isAdmin, isSuperAdmin, canCreateOrders, canApproveOrders } = useAuth();
+
+// Sidebar items filtered by roles:
+const allNavItems = [
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard, roles: "all" },
+  { title: "Users &amp; Roles", url: "/users", icon: Users,
+    roles: ["super_admin", "admin"] },
+  // ...
+];
+
+// Conditional rendering:
+{canCreateOrders() &amp;&amp; &lt;Button&gt;Create Order&lt;/Button&gt;}
+{isSuperAdmin &amp;&amp; &lt;CompanySelector /&gt;}</code></pre>
+
+<!-- SECTION 13 -->
+<h2 id="s13">13. Real-Time Notifications (SignalR)</h2>
+
+<h3>Backend Hub</h3>
+<pre><code>// Hubs/NotificationHub.cs
+public class NotificationHub : Hub
+{
+    public override async Task OnConnectedAsync()
+    {
+        var userId = Context.UserIdentifier;
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"user-{userId}");
+    }
+}
+
+// Sending notifications from any service:
+await hubContext.Clients.Group($"user-{userId}")
+    .SendAsync("ReceiveNotification", notification);</code></pre>
+
+<h3>Frontend Hook</h3>
+<pre><code>// src/hooks/useNotifications.ts
+const useNotifications = () =&gt; {
+  // 1. Fetch initial notifications via REST
+  // 2. Connect to SignalR hub: /hubs/notifications
+  // 3. Listen for "ReceiveNotification" events
+  // 4. Fallback: poll every 30 seconds if SignalR fails
+
+  return { notifications, unreadCount, loading, markAsRead, markAllAsRead };
+};</code></pre>
+
+<h3>Token Authentication for SignalR</h3>
+<pre><code>// Program.cs - JWT events for SignalR
+options.Events = new JwtBearerEvents
+{
+    OnMessageReceived = context =&gt;
+    {
+        var accessToken = context.Request.Query["access_token"];
+        var path = context.HttpContext.Request.Path;
+        if (!string.IsNullOrEmpty(accessToken) &amp;&amp; path.StartsWithSegments("/hubs"))
+        {
+            context.Token = accessToken;
+        }
+        return Task.CompletedTask;
+    }
+};</code></pre>
+
+<!-- SECTION 14 -->
+<h2 id="s14">14. Key Business Workflows</h2>
+
+<h3>Order Lifecycle</h3>
+<pre><code>   ┌─────────┐    submit     ┌──────────────┐    approve    ┌──────────┐
+   │  Draft   │ ──────────► │ For Approval  │ ────────────► │ Approved │
+   └─────────┘              └──────────────┘               └────┬─────┘
+                                    │                           │ mark ordered
+                                    │ reject                    ▼
+                              ┌─────┴─────┐              ┌──────────┐
+                              │ Rejected  │              │ Ordered  │
+                              └───────────┘              └────┬─────┘
+                                                              │ set in-transit
+                                                              ▼
+                                                        ┌──────────────┐
+                                                        │  In Transit  │
+                                                        └────┬─────────┘
+                                                              │ delivered
+                                                              ▼
+                                                        ┌──────────┐
+                                                        │ Delivered│
+                                                        └────┬─────┘
+                                                              │ receive
+                                                    ┌─────────┴────────┐
+                                                    ▼                  ▼
+                                          ┌────────────────┐  ┌─────────────────┐
+                                          │ Fully Received │  │Partially Received│
+                                          └────────┬───────┘  └─────────────────┘
+                                                   │ close
+                                                   ▼
+                                             ┌──────────┐
+                                             │  Closed  │
+                                             └──────────┘</code></pre>
+
+<h3>Project Progress Calculation</h3>
+<pre><code>// Backend: ProjectService.GetProgressAsync()
+// 1. Fetch project's quotation items (what was quoted)
+// 2. Fetch all DELIVERED order items for this project
+// 3. Match order items to quotation items:
+//    - Primary: by QuotationItemId (FK)
+//    - Fallback: by SKU name matching (case-insensitive)
+// 4. For each quotation item:
+//    receivedQty = sum of matched order items' QuantityOrdered
+//    progressPercent = (receivedQty / quotedQty) * 100, capped at 100
+// 5. Overall = (totalReceived / totalQuoted) * 100</code></pre>
+
+<h3>Quotation Change Request Workflow</h3>
+<pre><code>1. User creates change request (add/modify/remove items)
+   → Payload stored as JSON
+   → Status: "pending"
+
+2. Office Admin reviews
+   → Approve: changes applied to quotation
+   → Reject: remarks returned to requester
+   → Status: "approved" or "rejected"</code></pre>
+
+<h3>Asset Borrowing Flow</h3>
+<pre><code>1. User requests borrow: asset, quantity, expected return date
+2. System checks available qty (total - currently borrowed)
+3. BorrowTransaction created with status "Borrowed"
+4. Asset available count decremented
+
+5. User returns (partial or full):
+   → returnedQty updated
+   → If fully returned → status "Returned"
+   → If partial → status "Partially Returned"</code></pre>
+
+<!-- SECTION 15 -->
+<h2 id="s15">15. Multi-Tenancy Architecture</h2>
+
+<h3>Company-Scoped Entities</h3>
+<p>These entities have a <code>CompanyId</code> foreign key:</p>
+<ul>
+  <li><code>Profile</code> (users)</li>
+  <li><code>Project</code></li>
+  <li><code>SKU</code></li>
+  <li><code>CompanyAsset</code></li>
+</ul>
+
+<h3>Data Scoping Pattern</h3>
+<pre><code>// Service layer pattern (e.g., ProjectService.GetAllAsync):
+public async Task&lt;List&lt;ProjectDto&gt;&gt; GetAllAsync(ClaimsPrincipal user, ...)
+{
+    var companyId = GetCurrentCompanyId(user);
+    var isSuperAdmin = IsSuperAdmin(user);
+
+    var query = _db.Projects.AsQueryable();
+
+    // Company scoping: super_admin sees all, others see own company only
+    if (!isSuperAdmin &amp;&amp; companyId.HasValue)
+    {
+        query = query.Where(p =&gt; p.CompanyId == companyId.Value);
+    }
+
+    // ... apply other filters
+    return await query.Select(p =&gt; MapToDto(p)).ToListAsync();
+}</code></pre>
+
+<h3>Login with Company Selection</h3>
+<pre><code>// AuthService.LoginAsync:
+// 1. If user is super_admin → company selection optional
+// 2. If user is NOT super_admin → company MUST match user's CompanyId
+// 3. CompanyId baked into JWT claims for all subsequent requests
+
+// Frontend: Login.tsx
+// - Loads companies via GET /api/companies/list (anonymous)
+// - Company dropdown shown (auto-selected if only 1)
+// - Super admin can skip company selection</code></pre>
+
+<!-- SECTION 16 -->
+<h2 id="s16">16. Adding New Features &mdash; Tutorial</h2>
+
+<h3>Example: Adding a "Suppliers" Module</h3>
+
+<h4>Step 1: Create the Entity</h4>
+<pre><code>// Models/Entities/Supplier.cs
+public class Supplier
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string? ContactPerson { get; set; }
+    public string? Phone { get; set; }
+    public string? Email { get; set; }
+    public string? Address { get; set; }
+    public Guid? CompanyId { get; set; }        // Multi-tenant
+    public Company? Company { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}</code></pre>
+
+<h4>Step 2: Add to DbContext</h4>
+<pre><code>// Data/AppDbContext.cs
+public DbSet&lt;Supplier&gt; Suppliers { get; set; }
+
+// In OnModelCreating:
+modelBuilder.Entity&lt;Supplier&gt;(e =&gt; {
+    e.HasOne(s =&gt; s.Company).WithMany().HasForeignKey(s =&gt; s.CompanyId)
+     .OnDelete(DeleteBehavior.ClientSetNull);
+});</code></pre>
+
+<h4>Step 3: Create DTOs</h4>
+<pre><code>// DTOs/Suppliers/SupplierDtos.cs
+public class SupplierDto { /* all fields */ }
+public class CreateSupplierRequest { /* required fields */ }
+public class UpdateSupplierRequest { /* optional fields */ }</code></pre>
+
+<h4>Step 4: Create Service Interface + Implementation</h4>
+<pre><code>// Services/Interfaces/ISupplierService.cs
+public interface ISupplierService
+{
+    Task&lt;List&lt;SupplierDto&gt;&gt; GetAllAsync(ClaimsPrincipal user);
+    Task&lt;SupplierDto?&gt; GetByIdAsync(Guid id);
+    Task&lt;SupplierDto&gt; CreateAsync(ClaimsPrincipal user, CreateSupplierRequest req);
+    Task&lt;SupplierDto&gt; UpdateAsync(Guid id, UpdateSupplierRequest req);
+    Task DeleteAsync(Guid id);
+}
+
+// Services/Implementations/SupplierService.cs
+// Implement with company scoping pattern</code></pre>
+
+<h4>Step 5: Register in DI</h4>
+<pre><code>// Program.cs
+builder.Services.AddScoped&lt;ISupplierService, SupplierService&gt;();</code></pre>
+
+<h4>Step 6: Create Controller</h4>
+<pre><code>// Controllers/SuppliersController.cs
+[ApiController]
+[Route("api/[controller]")]
+[Authorize]
+public class SuppliersController : BaseApiController
+{
+    [HttpGet]
+    public async Task&lt;IActionResult&gt; GetAll() { ... }
+    [HttpPost]
+    public async Task&lt;IActionResult&gt; Create([FromBody] CreateSupplierRequest req) { ... }
+    // etc.
+}</code></pre>
+
+<h4>Step 7: Add Frontend API Functions</h4>
+<pre><code>// src/lib/apiClient.ts
+export const suppliersApi = {
+  getAll: () =&gt; get&lt;SupplierDto[]&gt;('/api/suppliers'),
+  getById: (id: string) =&gt; get&lt;SupplierDto&gt;(`/api/suppliers/${id}`),
+  create: (data: CreateSupplierRequest) =&gt; post&lt;SupplierDto&gt;('/api/suppliers', data),
+  update: (id: string, data: UpdateSupplierRequest) =&gt; put&lt;SupplierDto&gt;(`/api/suppliers/${id}`, data),
+  delete: (id: string) =&gt; del&lt;void&gt;(`/api/suppliers/${id}`),
+};</code></pre>
+
+<h4>Step 8: Create the Page</h4>
+<pre><code>// src/pages/Suppliers.tsx
+// Follow existing page patterns (Projects.tsx or SKUs.tsx)
+// Use DataTable, PageHeader, Dialog components</code></pre>
+
+<h4>Step 9: Add Route &amp; Navigation</h4>
+<pre><code>// App.tsx - Add route
+&lt;Route path="/suppliers" element={&lt;Suppliers /&gt;} /&gt;
+
+// AppSidebar.tsx - Add nav item
+{ title: "Suppliers", url: "/suppliers", icon: Store, roles: "all" }</code></pre>
+
+<!-- SECTION 17 -->
+<h2 id="s17">17. Troubleshooting &amp; Common Issues</h2>
+
+<h3>API Response Unwrapping</h3>
+<div class="warning">
+  <strong>Common Bug:</strong> Forgetting to unwrap <code>ApiResponse</code>.<br>
+  <strong>Wrong:</strong> <code>const data = await projectsApi.getAll(); setProjects(data || []);</code><br>
+  <strong>Right:</strong> <code>const result = await projectsApi.getAll(); setProjects(result.data || []);</code>
+</div>
+
+<h3>Null Coalescing vs OR</h3>
+<div class="warning">
+  <strong>Common Bug:</strong> Using <code>??</code> when value can be <code>0</code>.<br>
+  <code>item.quantityReceived ?? item.quantityOrdered</code> returns <code>0</code> if <code>quantityReceived</code> is <code>0</code>.<br>
+  Use <code>||</code> if you want to fall through on <code>0</code>: <code>item.quantityReceived || item.quantityOrdered</code>
+</div>
+
+<h3>CamelCase vs snake_case</h3>
+<div class="warning">
+  <strong>Common Bug:</strong> .NET API returns camelCase (<code>startDate</code>, <code>quantityOrdered</code>), but some code expects snake_case (<code>start_date</code>, <code>quantity_ordered</code>).<br>
+  Always use camelCase when working with API response data.
+</div>
+
+<h3>CORS Issues</h3>
+<div class="tip">
+  <strong>Fix:</strong> Ensure <code>appsettings.json</code> has your frontend URL in <code>Cors:AllowedOrigins</code>. Both <code>http://localhost:8080</code> and <code>http://localhost:5173</code> are configured by default.
+</div>
+
+<h3>SignalR Connection Failures</h3>
+<div class="tip">
+  <strong>Graceful Degradation:</strong> The frontend falls back to 30-second REST polling if SignalR WebSocket connection fails. Check browser console for connection errors.
+</div>
+
+<h3>Database Migration</h3>
+<div class="tip">
+  <strong>Auto-migration:</strong> <code>Program.cs</code> runs <code>db.Database.Migrate()</code> on startup. New columns/tables added via inline migration code in the startup sequence. Check the seeding section in <code>Program.cs</code> for column additions.
+</div>
+
+<h3>Token Refresh Loop</h3>
+<div class="warning">
+  <strong>Issue:</strong> If the refresh token is also expired, the client enters a redirect loop to <code>/login</code>.<br>
+  <strong>Fix:</strong> The API client deduplicates refresh requests and redirects after a single failed refresh attempt.
+</div>
+
+<hr>
+<p style="text-align: center; color: #94a3b8; margin-top: 60px;">
+  <em>BuildTrack Inventory System &mdash; Code-Level Documentation v1.0</em><br>
+  <em>Generated March 2026</em>
+</p>
+
+</body>
+</html>

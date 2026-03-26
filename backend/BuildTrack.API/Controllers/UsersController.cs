@@ -10,15 +10,12 @@ namespace BuildTrack.API.Controllers;
 [ApiController]
 [Route("api/users")]
 [Authorize]
-public class UsersController(IUserService userService) : ControllerBase
+public class UsersController(IUserService userService) : BaseApiController
 {
-    private Guid CurrentUserId =>
-        Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
-
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<UserDto>>>> GetAll()
     {
-        var users = await userService.GetAllAsync();
+        var users = await userService.GetAllAsync(CurrentCompanyId, IsSuperAdmin);
         return Ok(ApiResponse<List<UserDto>>.Ok(users));
     }
 
@@ -42,7 +39,9 @@ public class UsersController(IUserService userService) : ControllerBase
     [Authorize(Policy = "RequireAdmin")]
     public async Task<ActionResult<ApiResponse<UserDto>>> Create([FromBody] CreateUserRequest request)
     {
-        var (user, error) = await userService.CreateAsync(request, CurrentUserId);
+        // Non-super-admin: force CompanyId to their own company
+        var companyId = IsSuperAdmin ? request.CompanyId ?? CurrentCompanyId : CurrentCompanyId;
+        var (user, error) = await userService.CreateAsync(request, CurrentUserId, companyId);
         if (error != null) return BadRequest(ApiResponse<UserDto>.Fail(error));
         return CreatedAtAction(nameof(GetById), new { id = user!.Id }, ApiResponse<UserDto>.Ok(user));
     }
@@ -53,6 +52,10 @@ public class UsersController(IUserService userService) : ControllerBase
         // Non-admins can only update themselves
         if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole(AppRoles.SuperAdmin) && CurrentUserId != id)
             return Forbid();
+
+        // Only super_admin can change CompanyId — strip it for everyone else
+        if (!IsSuperAdmin)
+            request.CompanyId = null;
 
         var user = await userService.UpdateAsync(id, request);
         if (user == null) return NotFound(ApiResponse<UserDto>.Fail("User not found."));

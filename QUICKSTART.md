@@ -352,6 +352,7 @@ Open [.env](.env) in the project root and confirm it contains:
 VITE_API_BASE_URL=http://localhost:5069
 ```
 
+
 > This tells the frontend where to find the backend API.
 > If your backend runs on a different port, update this value.
 

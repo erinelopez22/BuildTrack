@@ -9,10 +9,8 @@ namespace BuildTrack.API.Controllers;
 [ApiController]
 [Route("api/skus")]
 [Authorize]
-public class SkusController(ISkuService skuService) : ControllerBase
+public class SkusController(ISkuService skuService) : BaseApiController
 {
-    private Guid CurrentUserId =>
-        Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
 
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<SkuDto>>>> GetAll(
@@ -22,7 +20,7 @@ public class SkusController(ISkuService skuService) : ControllerBase
         [FromQuery] string? sortBy = "name",
         [FromQuery] string? sortOrder = "asc")
     {
-        var skus = await skuService.GetAllAsync(search, isActive, category, sortBy, sortOrder);
+        var skus = await skuService.GetAllAsync(search, isActive, category, sortBy, sortOrder, CurrentCompanyId, IsSuperAdmin);
         return Ok(ApiResponse<List<SkuDto>>.Ok(skus));
     }
 
@@ -38,7 +36,7 @@ public class SkusController(ISkuService skuService) : ControllerBase
     [Authorize(Policy = "RequireWarehouseAdmin")]
     public async Task<ActionResult<ApiResponse<SkuDto>>> Create([FromBody] CreateSkuRequest request)
     {
-        var (sku, error) = await skuService.CreateAsync(request, CurrentUserId);
+        var (sku, error) = await skuService.CreateAsync(request, CurrentUserId, CurrentCompanyId);
         if (error != null) return BadRequest(ApiResponse<SkuDto>.Fail(error));
         return CreatedAtAction(nameof(GetById), new { id = sku!.Id }, ApiResponse<SkuDto>.Ok(sku));
     }

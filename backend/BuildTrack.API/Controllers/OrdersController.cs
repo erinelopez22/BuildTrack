@@ -9,10 +9,8 @@ namespace BuildTrack.API.Controllers;
 [ApiController]
 [Route("api/orders")]
 [Authorize]
-public class OrdersController(IOrderService orderService) : ControllerBase
+public class OrdersController(IOrderService orderService) : BaseApiController
 {
-    private Guid CurrentUserId =>
-        Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
 
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<OrderDto>>>> GetAll(
@@ -20,7 +18,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
         [FromQuery] Guid? projectId = null,
         [FromQuery] string? search = null)
     {
-        var orders = await orderService.GetAllAsync(status, projectId, search, CurrentUserId);
+        var orders = await orderService.GetAllAsync(status, projectId, search, CurrentUserId, CurrentCompanyId, IsSuperAdmin);
         return Ok(ApiResponse<List<OrderDto>>.Ok(orders));
     }
 
@@ -94,7 +92,7 @@ public class OrdersController(IOrderService orderService) : ControllerBase
     public async Task<ActionResult<ApiResponse<List<OrderDto>>>> GetByProject(
         Guid projectId, [FromQuery] string? status = null)
     {
-        var orders = await orderService.GetAllAsync(status, projectId, null, CurrentUserId);
+        var orders = await orderService.GetAllAsync(status, projectId, null, CurrentUserId, CurrentCompanyId, IsSuperAdmin);
         return Ok(ApiResponse<List<OrderDto>>.Ok(orders));
     }
 }

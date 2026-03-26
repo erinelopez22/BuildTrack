@@ -8,12 +8,18 @@ namespace BuildTrack.API.Services.Implementations;
 
 public class UserService(AppDbContext db) : IUserService
 {
-    public async Task<List<UserDto>> GetAllAsync()
+    public async Task<List<UserDto>> GetAllAsync(Guid? companyId = null, bool isSuperAdmin = false)
     {
-        var profiles = await db.Profiles
+        var query = db.Profiles
             .Include(p => p.UserRoles)
-            .OrderBy(p => p.FullName)
-            .ToListAsync();
+            .Include(p => p.Company)
+            .AsQueryable();
+
+        // Super admin sees all; others see only their company
+        if (!isSuperAdmin && companyId.HasValue)
+            query = query.Where(p => p.CompanyId == companyId.Value);
+
+        var profiles = await query.OrderBy(p => p.FullName).ToListAsync();
         return profiles.Select(Map).ToList();
     }
 
@@ -21,11 +27,12 @@ public class UserService(AppDbContext db) : IUserService
     {
         var profile = await db.Profiles
             .Include(p => p.UserRoles)
+            .Include(p => p.Company)
             .FirstOrDefaultAsync(p => p.Id == id);
         return profile == null ? null : Map(profile);
     }
 
-    public async Task<(UserDto? user, string? error)> CreateAsync(CreateUserRequest request, Guid createdBy)
+    public async Task<(UserDto? user, string? error)> CreateAsync(CreateUserRequest request, Guid createdBy, Guid? companyId = null)
     {
         if (await db.Profiles.AnyAsync(p => p.Email.ToLower() == request.Email.ToLower()))
             return (null, "Email already in use.");
@@ -43,6 +50,7 @@ public class UserService(AppDbContext db) : IUserService
             Phone = request.Phone,
             Address = request.Address,
             SmsOptIn = request.SmsOptIn,
+            CompanyId = request.CompanyId ?? companyId,
             CreatedBy = createdBy
         };
         db.Profiles.Add(profile);
@@ -59,6 +67,7 @@ public class UserService(AppDbContext db) : IUserService
 
         await db.SaveChangesAsync();
         await db.Entry(profile).Collection(p => p.UserRoles).LoadAsync();
+        await db.Entry(profile).Reference(p => p.Company).LoadAsync();
         return (Map(profile), null);
     }
 
@@ -66,6 +75,7 @@ public class UserService(AppDbContext db) : IUserService
     {
         var profile = await db.Profiles
             .Include(p => p.UserRoles)
+            .Include(p => p.Company)
             .FirstOrDefaultAsync(p => p.Id == id);
         if (profile == null) return null;
 
@@ -76,6 +86,7 @@ public class UserService(AppDbContext db) : IUserService
         if (request.AvatarUrl != null) profile.AvatarUrl = request.AvatarUrl;
         if (request.SmsOptIn.HasValue) profile.SmsOptIn = request.SmsOptIn.Value;
         if (request.IsActive.HasValue) profile.IsActive = request.IsActive.Value;
+        if (request.CompanyId.HasValue) profile.CompanyId = request.CompanyId.Value;
         profile.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
@@ -140,6 +151,8 @@ public class UserService(AppDbContext db) : IUserService
         CreatedAt = p.CreatedAt,
         UpdatedAt = p.UpdatedAt,
         CreatedBy = p.CreatedBy,
-        Roles = p.UserRoles.Select(r => r.Role).ToList()
+        Roles = p.UserRoles.Select(r => r.Role).ToList(),
+        CompanyId = p.CompanyId,
+        CompanyName = p.Company?.Name
     };
 }

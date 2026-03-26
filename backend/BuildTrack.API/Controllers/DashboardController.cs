@@ -9,15 +9,13 @@ namespace BuildTrack.API.Controllers;
 [ApiController]
 [Route("api/dashboard")]
 [Authorize]
-public class DashboardController(IDashboardService dashboardService) : ControllerBase
+public class DashboardController(IDashboardService dashboardService) : BaseApiController
 {
-    private Guid CurrentUserId =>
-        Guid.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value);
 
     [HttpGet("stats")]
     public async Task<ActionResult<ApiResponse<DashboardStatsDto>>> GetStats()
     {
-        var stats = await dashboardService.GetStatsAsync(CurrentUserId);
+        var stats = await dashboardService.GetStatsAsync(CurrentUserId, CurrentCompanyId, IsSuperAdmin);
         return Ok(ApiResponse<DashboardStatsDto>.Ok(stats));
     }
 }
