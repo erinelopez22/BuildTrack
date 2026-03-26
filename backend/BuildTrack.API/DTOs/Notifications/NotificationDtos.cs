@@ -27,7 +27,7 @@ public class DashboardStatsDto
 {
     public int ActiveProjects { get; set; }
     public int PendingOrders { get; set; }
-    public int LowStockItems { get; set; }
+    public int StockItems { get; set; }
     public int TotalUsers { get; set; }
     public List<OrderStatusCountDto> OrdersByStatus { get; set; } = [];
     public List<RecentOrderDto> RecentOrders { get; set; } = [];

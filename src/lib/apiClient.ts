@@ -762,7 +762,7 @@ export interface Notification {
 export interface DashboardStats {
   activeProjects: number;
   pendingOrders: number;
-  lowStockItems: number;
+  stockItems: number;
   totalUsers: number;
   ordersByStatus: { status: string; count: number }[];
   recentOrders: {

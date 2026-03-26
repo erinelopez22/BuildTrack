@@ -639,15 +639,16 @@ public class DashboardService(AppDbContext db) : IDashboardService
             })
             .ToListAsync();
 
-        // Low stock = project inventory below threshold
-        var lowStockItems = await db.ProjectInventory
-            .CountAsync(pi => pi.OnHand < pi.MinThreshold && pi.MinThreshold > 0);
+        var skuQuery = db.SKUs.Where(s => s.IsActive);
+        if (!isSuperAdmin && companyId.HasValue)
+            skuQuery = skuQuery.Where(s => s.CompanyId == companyId.Value);
+        var stockItems = await skuQuery.CountAsync();
 
         return new DashboardStatsDto
         {
             ActiveProjects = activeProjects,
             PendingOrders = pendingOrders,
-            LowStockItems = lowStockItems,
+            StockItems = stockItems,
             TotalUsers = totalUsers,
             OrdersByStatus = ordersByStatus,
             RecentOrders = recentOrders

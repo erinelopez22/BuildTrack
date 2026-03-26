@@ -96,8 +96,8 @@ export default function Dashboard() {
           href="/orders"
         />
         <StatCard
-          title="Low Stock Items"
-          value={loading ? "..." : stats?.lowStockItems ?? 0}
+          title="Stock Items"
+          value={loading ? "..." : stats?.stockItems ?? 0}
           icon={Package}
           variant="default"
           href="/skus"

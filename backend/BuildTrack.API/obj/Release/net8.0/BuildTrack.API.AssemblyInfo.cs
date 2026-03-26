@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("BuildTrack.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+704267ce633898e7014f80d66786419825f2c779")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+eb8f30d55449eb1c85c95ba264726d7a7c87f631")]
 [assembly: System.Reflection.AssemblyProductAttribute("BuildTrack.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("BuildTrack.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
