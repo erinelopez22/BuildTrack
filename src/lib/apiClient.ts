@@ -727,6 +727,7 @@ export interface CreateQuotationRequest {
 export interface QuotationChangeRequest {
   id: string;
   projectId: string;
+  projectName?: string;
   quotationId?: string;
   changeType?: string;
   status: string;
@@ -734,6 +735,7 @@ export interface QuotationChangeRequest {
   requestedByName?: string;
   reviewedBy?: string;
   reviewedByName?: string;
+  reviewedAt?: string;
   reviewRemarks?: string;
   payload?: string;
   createdAt: string;
@@ -764,6 +766,9 @@ export interface DashboardStats {
   pendingOrders: number;
   stockItems: number;
   totalUsers: number;
+  totalAssets: number;
+  pendingQuotationRequests: number;
+  pendingBorrowReturnRequests: number;
   ordersByStatus: { status: string; count: number }[];
   recentOrders: {
     id: string;

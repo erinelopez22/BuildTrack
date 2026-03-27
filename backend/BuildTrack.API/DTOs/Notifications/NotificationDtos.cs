@@ -29,6 +29,9 @@ public class DashboardStatsDto
     public int PendingOrders { get; set; }
     public int StockItems { get; set; }
     public int TotalUsers { get; set; }
+    public int TotalAssets { get; set; }
+    public int PendingQuotationRequests { get; set; }
+    public int PendingBorrowReturnRequests { get; set; }
     public List<OrderStatusCountDto> OrdersByStatus { get; set; } = [];
     public List<RecentOrderDto> RecentOrders { get; set; } = [];
 }

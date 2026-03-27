@@ -112,6 +112,7 @@ type SortField = "created_at" | "expected_delivery_date" | "total_amount";
 type SortDirection = "asc" | "desc";
 
 const ACTIVE_STATUSES: OrderStatus[] = [
+  "draft",
   "for_approval",
   "approved",
   "submitted",
@@ -163,7 +164,7 @@ export default function Orders() {
     // Fetch all active-workflow orders
     const ordersRes = await ordersApi.getAll();
     const activeStatuses = new Set([
-      "for_approval", "approved", "submitted", "preparing",
+      "draft", "for_approval", "approved", "submitted", "preparing",
       "in_transit", "delivered", "on_hold", "closed",
     ]);
 
@@ -319,6 +320,8 @@ export default function Orders() {
         matchesStatus = true;
       } else if (statusFilter === "active") {
         matchesStatus = ACTIVE_STATUSES.includes(order.status);
+      } else if (statusFilter === "pending") {
+        matchesStatus = order.status === "draft" || order.status === "for_approval";
       } else {
         matchesStatus = order.status === statusFilter;
       }
@@ -397,6 +400,7 @@ export default function Orders() {
   const statusOptions: { value: string; label: string }[] = [
     { value: "all", label: "All Statuses" },
     { value: "active", label: "Active Orders" },
+    { value: "pending", label: "Pending Orders" },
     { value: "for_approval", label: "Order Request" },
     { value: "approved", label: "Approved" },
     { value: "submitted", label: "Ordered" },

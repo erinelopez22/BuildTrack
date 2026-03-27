@@ -19,4 +19,6 @@ public abstract class BaseApiController : ControllerBase
     }
 
     protected bool IsSuperAdmin => User.IsInRole("super_admin");
+
+    protected bool IsAdmin => User.IsInRole("super_admin") || User.IsInRole("admin");
 }

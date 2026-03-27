@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using BuildTrack.API.Data;
 using BuildTrack.API.DTOs.Assets;
 using BuildTrack.API.DTOs.Inventory;
@@ -470,6 +472,7 @@ public class QuotationService(AppDbContext db) : IQuotationService
         var cr = await db.QuotationChangeRequests
             .Include(qcr => qcr.Requester)
             .Include(qcr => qcr.Reviewer)
+            .Include(qcr => qcr.Project)
             .FirstOrDefaultAsync(qcr => qcr.Id == id);
         if (cr == null) return null;
 
@@ -478,9 +481,106 @@ public class QuotationService(AppDbContext db) : IQuotationService
         cr.ReviewRemarks = request.ReviewRemarks;
         cr.UpdatedAt = DateTime.UtcNow;
 
+        // Apply changes when approved
+        if (request.Status == "approved" && !string.IsNullOrEmpty(cr.Payload))
+        {
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var payload = JsonSerializer.Deserialize<ChangeRequestPayload>(cr.Payload, opts);
+
+            if (cr.ChangeType == "create" && payload?.Items != null)
+            {
+                var quotation = new ProjectQuotation
+                {
+                    ProjectId = cr.ProjectId,
+                    CreatedBy = cr.RequestedBy,
+                    Notes = payload.Notes,
+                    Category = payload.Category ?? "initial"
+                };
+                db.ProjectQuotations.Add(quotation);
+
+                foreach (var item in payload.Items)
+                {
+                    db.QuotationItems.Add(new QuotationItem
+                    {
+                        QuotationId = quotation.Id,
+                        MaterialName = item.MaterialName,
+                        Unit = item.Unit,
+                        Quantity = item.Quantity
+                    });
+                }
+
+                cr.QuotationId = quotation.Id;
+            }
+            else if (cr.ChangeType == "update" && cr.QuotationId.HasValue && payload?.Items != null)
+            {
+                // Remove existing items and replace with updated ones
+                var existingItems = await db.QuotationItems
+                    .Where(qi => qi.QuotationId == cr.QuotationId.Value)
+                    .ToListAsync();
+                db.QuotationItems.RemoveRange(existingItems);
+
+                foreach (var item in payload.Items)
+                {
+                    db.QuotationItems.Add(new QuotationItem
+                    {
+                        QuotationId = cr.QuotationId.Value,
+                        MaterialName = item.MaterialName,
+                        Unit = item.Unit,
+                        Quantity = item.Quantity
+                    });
+                }
+
+                var quotation = await db.ProjectQuotations.FindAsync(cr.QuotationId.Value);
+                if (quotation != null)
+                {
+                    if (payload.Notes != null) quotation.Notes = payload.Notes;
+                    if (payload.Category != null) quotation.Category = payload.Category;
+                    quotation.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            else if (cr.ChangeType == "delete")
+            {
+                var quotationId = cr.QuotationId ?? payload?.QuotationId;
+                if (quotationId.HasValue)
+                {
+                    var quotation = await db.ProjectQuotations.FindAsync(quotationId.Value);
+                    if (quotation != null)
+                        db.ProjectQuotations.Remove(quotation);
+                }
+            }
+        }
+
         await db.SaveChangesAsync();
         await db.Entry(cr).Reference(c => c.Reviewer).LoadAsync();
         return MapChangeRequest(cr);
+    }
+
+    // Payload model for deserializing change request JSON (snake_case keys from frontend)
+    private class ChangeRequestPayload
+    {
+        [JsonPropertyName("items")]
+        public List<ChangeRequestItem>? Items { get; set; }
+
+        [JsonPropertyName("notes")]
+        public string? Notes { get; set; }
+
+        [JsonPropertyName("category")]
+        public string? Category { get; set; }
+
+        [JsonPropertyName("quotation_id")]
+        public Guid? QuotationId { get; set; }
+    }
+
+    private class ChangeRequestItem
+    {
+        [JsonPropertyName("material_name")]
+        public string MaterialName { get; set; } = string.Empty;
+
+        [JsonPropertyName("unit")]
+        public string? Unit { get; set; }
+
+        [JsonPropertyName("quantity")]
+        public decimal Quantity { get; set; }
     }
 
     private static ProjectQuotationDto MapQuotation(ProjectQuotation q) => new()
@@ -510,6 +610,7 @@ public class QuotationService(AppDbContext db) : IQuotationService
     {
         Id = cr.Id,
         ProjectId = cr.ProjectId,
+        ProjectName = cr.Project?.Name,
         QuotationId = cr.QuotationId,
         ChangeType = cr.ChangeType,
         Status = cr.Status,
@@ -517,6 +618,7 @@ public class QuotationService(AppDbContext db) : IQuotationService
         RequestedByName = cr.Requester?.FullName,
         ReviewedBy = cr.ReviewedBy,
         ReviewedByName = cr.Reviewer?.FullName,
+        ReviewedAt = cr.ReviewedBy != null ? cr.UpdatedAt : null,
         ReviewRemarks = cr.ReviewRemarks,
         Payload = cr.Payload,
         CreatedAt = cr.CreatedAt,
@@ -644,12 +746,30 @@ public class DashboardService(AppDbContext db) : IDashboardService
             skuQuery = skuQuery.Where(s => s.CompanyId == companyId.Value);
         var stockItems = await skuQuery.CountAsync();
 
+        // Equipment & Tools (company assets)
+        var assetQuery = db.CompanyAssets.AsQueryable();
+        if (!isSuperAdmin && companyId.HasValue)
+            assetQuery = assetQuery.Where(a => a.CompanyId == companyId.Value);
+        var totalAssets = await assetQuery.CountAsync();
+
+        // Pending quotation change requests (add/update/delete awaiting approval)
+        var pendingQuotationRequests = await db.QuotationChangeRequests
+            .CountAsync(cr => cr.Status == "pending");
+
+        // Pending borrow & return requests (items currently borrowed or partially returned)
+        var borrowReturnQuery = db.BorrowTransactions
+            .Where(bt => bt.Status == "Borrowed" || bt.Status == "Partially Returned");
+        var pendingBorrowReturnRequests = await borrowReturnQuery.CountAsync();
+
         return new DashboardStatsDto
         {
             ActiveProjects = activeProjects,
             PendingOrders = pendingOrders,
             StockItems = stockItems,
             TotalUsers = totalUsers,
+            TotalAssets = totalAssets,
+            PendingQuotationRequests = pendingQuotationRequests,
+            PendingBorrowReturnRequests = pendingBorrowReturnRequests,
             OrdersByStatus = ordersByStatus,
             RecentOrders = recentOrders
         };

@@ -17,14 +17,14 @@ public class ProjectsController(IProjectService projectService) : BaseApiControl
         [FromQuery] string? status = null,
         [FromQuery] string? search = null)
     {
-        var projects = await projectService.GetAllAsync(includeHidden, status, search, CurrentUserId, CurrentCompanyId, IsSuperAdmin);
+        var projects = await projectService.GetAllAsync(includeHidden, status, search, CurrentUserId, CurrentCompanyId, IsSuperAdmin, IsAdmin);
         return Ok(ApiResponse<List<ProjectDto>>.Ok(projects));
     }
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<ApiResponse<ProjectDto>>> GetById(Guid id)
     {
-        var project = await projectService.GetByIdAsync(id);
+        var project = await projectService.GetByIdAsync(id, CurrentUserId, IsAdmin);
         if (project == null) return NotFound(ApiResponse<ProjectDto>.Fail("Project not found."));
         return Ok(ApiResponse<ProjectDto>.Ok(project));
     }

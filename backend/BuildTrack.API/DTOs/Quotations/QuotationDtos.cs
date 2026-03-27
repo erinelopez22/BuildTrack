@@ -61,6 +61,7 @@ public class QuotationChangeRequestDto
 {
     public Guid Id { get; set; }
     public Guid ProjectId { get; set; }
+    public string? ProjectName { get; set; }
     public Guid? QuotationId { get; set; }
     public string? ChangeType { get; set; }
     public string Status { get; set; } = string.Empty;
@@ -68,6 +69,7 @@ public class QuotationChangeRequestDto
     public string? RequestedByName { get; set; }
     public Guid? ReviewedBy { get; set; }
     public string? ReviewedByName { get; set; }
+    public DateTime? ReviewedAt { get; set; }
     public string? ReviewRemarks { get; set; }
     public string? Payload { get; set; }
     public DateTime CreatedAt { get; set; }

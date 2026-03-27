@@ -10,7 +10,7 @@ public class ProjectService(AppDbContext db) : IProjectService
 {
     public async Task<List<ProjectDto>> GetAllAsync(
         bool includeHidden, string? status, string? search, Guid currentUserId,
-        Guid? companyId = null, bool isSuperAdmin = false)
+        Guid? companyId = null, bool isSuperAdmin = false, bool isAdmin = false)
     {
         var query = db.Projects
             .Include(p => p.ProjectManager)
@@ -20,6 +20,10 @@ public class ProjectService(AppDbContext db) : IProjectService
         // Company scoping
         if (!isSuperAdmin && companyId.HasValue)
             query = query.Where(p => p.CompanyId == companyId.Value);
+
+        // Team-member scoping: non-admin users can only see projects they belong to
+        if (!isAdmin)
+            query = query.Where(p => p.Members.Any(m => m.UserId == currentUserId));
 
         if (!includeHidden)
             query = query.Where(p => !p.IsHidden);
@@ -40,13 +44,19 @@ public class ProjectService(AppDbContext db) : IProjectService
         return projects.Select(Map).ToList();
     }
 
-    public async Task<ProjectDto?> GetByIdAsync(Guid id)
+    public async Task<ProjectDto?> GetByIdAsync(Guid id, Guid currentUserId, bool isAdmin = false)
     {
         var project = await db.Projects
             .Include(p => p.ProjectManager)
             .Include(p => p.Members)
             .FirstOrDefaultAsync(p => p.Id == id);
-        return project == null ? null : Map(project);
+        if (project == null) return null;
+
+        // Non-admin users can only view projects they are a member of
+        if (!isAdmin && !project.Members.Any(m => m.UserId == currentUserId))
+            return null;
+
+        return Map(project);
     }
 
     public async Task<ProjectDto> CreateAsync(CreateProjectRequest request, Guid createdBy, Guid? companyId = null)

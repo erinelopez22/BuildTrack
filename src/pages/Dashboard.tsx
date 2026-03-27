@@ -5,7 +5,7 @@ import { StatCard } from "@/components/dashboard/StatCard";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
-import { ClipboardList, FolderKanban, Package, Users } from "lucide-react";
+import { ClipboardList, FolderKanban, Package, Users, Wrench, FileCheck, ArrowLeftRight } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { DashboardStats } from "@/lib/apiClient";
 
@@ -21,7 +21,7 @@ const formatPHP = (amount: number | null | undefined) => {
 };
 
 export default function Dashboard() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isOfficeAdmin } = useAuth();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [ordersByStatus, setOrdersByStatus] = useState<{ name: string; value: number; status: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +93,7 @@ export default function Dashboard() {
           value={loading ? "..." : stats?.pendingOrders ?? 0}
           icon={ClipboardList}
           variant="default"
-          href="/orders"
+          href="/orders?status=pending"
         />
         <StatCard
           title="Stock Items"
@@ -112,6 +112,33 @@ export default function Dashboard() {
           />
         )}
       </div>
+
+      {/* Admin cards — visible to super_admin, admin, office_admin */}
+      {(isAdmin() || isOfficeAdmin()) && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            title="Equipments & Tools"
+            value={loading ? "..." : stats?.totalAssets ?? 0}
+            icon={Wrench}
+            variant="default"
+            href="/company-assets"
+          />
+          <StatCard
+            title="Pending Quotation Requests"
+            value={loading ? "..." : stats?.pendingQuotationRequests ?? 0}
+            icon={FileCheck}
+            variant="warning"
+            href="/quotation-requests"
+          />
+          <StatCard
+            title="Pending Borrow & Return"
+            value={loading ? "..." : stats?.pendingBorrowReturnRequests ?? 0}
+            icon={ArrowLeftRight}
+            variant="warning"
+            href="/company-assets"
+          />
+        </div>
+      )}
 
       {/* Orders by Status Chart */}
       <Card>

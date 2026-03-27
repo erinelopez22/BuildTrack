@@ -160,3 +160,9 @@ C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\obj\Debug\net
 C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\obj\Debug\net8.0\BuildTrack.API.genruntimeconfig.cache
 C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\obj\Debug\net8.0\ref\BuildTrack.API.dll
 c:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\bin\Debug\net8.0\BuildTrack.API.staticwebassets.runtime.json
+C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\bin\Debug\net8.0\publish\web.config
+C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\bin\Debug\net8.0\publish\appsettings.Development.json
+C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\bin\Debug\net8.0\publish\appsettings.json
+C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\bin\Debug\net8.0\publish\BuildTrack.API.deps.json
+C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\bin\Debug\net8.0\publish\BuildTrack.API.runtimeconfig.json
+C:\Users\elopez24\Documents\stockwell-build\backend\BuildTrack.API\bin\Debug\net8.0\publish\BuildTrack.API.staticwebassets.endpoints.json

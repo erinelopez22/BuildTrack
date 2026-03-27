@@ -164,18 +164,18 @@ export default function QuotationRequests() {
           return {
             id: r.id,
             project_id: r.projectId,
-            project_name: (r as any).projectName || "Unknown",
+            project_name: r.projectName || "Unknown",
             quotation_id: r.quotationId || null,
             change_type: r.changeType || "",
             status: r.status,
             payload: parsedPayload,
             requested_by: r.requestedBy || "",
             requester_name: r.requestedByName || "Unknown",
-            requester_role: (r as any).requestedByRole || "member",
+            requester_role: "member",
             created_at: r.createdAt,
             reviewed_by: r.reviewedBy || null,
             reviewer_name: r.reviewedByName || null,
-            reviewed_at: (r as any).reviewedAt || null,
+            reviewed_at: r.reviewedAt || null,
             review_remarks: r.reviewRemarks || null,
           };
         })
