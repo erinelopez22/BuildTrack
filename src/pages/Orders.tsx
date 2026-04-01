@@ -1,9 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { ordersApi, projectsApi } from "@/lib/apiClient";
+import { ordersApi, projectsApi, truncateApi } from "@/lib/apiClient";
 import type { Order as ApiOrder, Project as ApiProject } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrderStatusUpdates } from "@/hooks/useOrderStatusUpdates";
 import { PageHeader } from "@/components/common/PageHeader";
+import { TruncateButton } from "@/components/common/TruncateButton";
 import { DataTable, Column } from "@/components/common/DataTable";
 import { StatusBadge } from "@/components/common/StatusBadge";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -279,6 +281,15 @@ export default function Orders() {
     fetchData();
   }, []);
 
+  // Real-time order status updates via SignalR
+  useOrderStatusUpdates((update) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === update.id ? { ...o, status: update.status as any } : o
+      )
+    );
+  });
+
   const formatManilaTimeLocal = (dateStr: string) => {
     try {
       const zonedDate = toZonedTime(new Date(dateStr), "Asia/Manila");
@@ -423,7 +434,18 @@ export default function Orders() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <PageHeader title="Orders" description="Manage purchase orders and track deliveries" />
+      <PageHeader
+        title="Orders"
+        description="Manage purchase orders and track deliveries"
+        action={
+          <TruncateButton
+            label="Orders"
+            description="This will permanently delete ALL orders and their related data including order items, deliveries, and tracking assignments."
+            onTruncate={truncateApi.orders}
+            onSuccess={() => window.location.reload()}
+          />
+        }
+      />
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1 max-w-sm">

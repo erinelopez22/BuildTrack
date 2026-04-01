@@ -58,4 +58,12 @@ public class SkusController(ISkuService skuService) : BaseApiController
         if (!success) return NotFound(ApiResponse<object>.Fail("SKU not found."));
         return Ok(ApiResponse<object>.Ok(null, "SKU deleted."));
     }
+
+    [HttpPost("seed")]
+    [Authorize(Roles = "super_admin")]
+    public async Task<ActionResult<ApiResponse<object>>> Seed()
+    {
+        var count = await skuService.SeedConstructionMaterialsAsync(CurrentUserId, CurrentCompanyId);
+        return Ok(ApiResponse<object>.Ok(new { count }, $"{count} materials seeded."));
+    }
 }

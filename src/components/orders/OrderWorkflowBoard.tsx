@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ordersApi } from "@/lib/apiClient";
 import type { Order as ApiOrder } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
+import { useOrderStatusUpdates } from "@/hooks/useOrderStatusUpdates";
 import { OrderCard } from "./OrderCard";
 import { OrderDetailModal } from "./OrderDetailModal";
 import { RejectOrderDialog } from "./RejectOrderDialog";
@@ -173,6 +174,15 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
   useEffect(() => {
     fetchOrders();
   }, [project.id]);
+
+  // Real-time order status updates via SignalR
+  useOrderStatusUpdates((update) => {
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === update.id ? { ...o, status: update.status as OrderStatus } : o
+      )
+    );
+  });
 
   const handleCreateOrder = async (data: {
     materials: { materialId: string; name: string; unit: string; quantity: number }[];

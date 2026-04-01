@@ -9,4 +9,5 @@ public interface ISkuService
     Task<(SkuDto? sku, string? error)> CreateAsync(CreateSkuRequest request, Guid createdBy, Guid? companyId = null);
     Task<SkuDto?> UpdateAsync(Guid id, UpdateSkuRequest request);
     Task<bool> DeleteAsync(Guid id);
+    Task<int> SeedConstructionMaterialsAsync(Guid createdBy, Guid? companyId = null);
 }

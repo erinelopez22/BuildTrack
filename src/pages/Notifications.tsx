@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '@/hooks/useNotifications';
+import { truncateApi } from '@/lib/apiClient';
 import { PageHeader } from '@/components/common/PageHeader';
+import { TruncateButton } from '@/components/common/TruncateButton';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -63,12 +65,20 @@ export default function Notifications() {
         title="Notifications"
         description="Stay updated on important events"
         action={
-          unreadCount > 0 && (
-            <Button variant="outline" onClick={markAllAsRead}>
-              <CheckCheck className="mr-2 h-4 w-4" />
-              Mark all as read
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <Button variant="outline" onClick={markAllAsRead}>
+                <CheckCheck className="mr-2 h-4 w-4" />
+                Mark all as read
+              </Button>
+            )}
+            <TruncateButton
+              label="Notifications"
+              description="This will permanently delete ALL notifications for all users."
+              onTruncate={truncateApi.notifications}
+              onSuccess={() => window.location.reload()}
+            />
+          </div>
         }
       />
 

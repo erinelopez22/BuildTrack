@@ -23,8 +23,10 @@ public interface ICompanyAssetService
     Task<bool> DeleteAsync(Guid id);
     Task<List<BorrowTransactionDto>> GetBorrowsAsync(Guid assetId);
     Task<List<BorrowTransactionDto>> GetAllBorrowsAsync(Guid? projectId);
-    Task<(BorrowTransactionDto? txn, string? error)> BorrowAsync(BorrowAssetRequest request, Guid userId);
-    Task<(BorrowTransactionDto? txn, string? error)> ReturnAsync(Guid txnId, ReturnAssetRequest request, Guid userId);
+    Task<(BorrowTransactionDto? txn, string? error)> BorrowAsync(BorrowAssetRequest request, Guid userId, bool isAdmin = false);
+    Task<(BorrowTransactionDto? txn, string? error)> ReturnAsync(Guid txnId, ReturnAssetRequest request, Guid userId, bool isAdmin = false);
+    Task<(BorrowTransactionDto? txn, string? error)> ApproveBorrowRequestAsync(Guid txnId, Guid approvedBy);
+    Task<(BorrowTransactionDto? txn, string? error)> RejectBorrowRequestAsync(Guid txnId, Guid rejectedBy, string? remarks);
 }
 
 public interface IQuotationService

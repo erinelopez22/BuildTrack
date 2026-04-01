@@ -1,13 +1,15 @@
 using System.Text.RegularExpressions;
 using BuildTrack.API.Data;
 using BuildTrack.API.DTOs.Orders;
+using BuildTrack.API.Hubs;
 using BuildTrack.API.Models.Entities;
 using BuildTrack.API.Services.Interfaces;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace BuildTrack.API.Services.Implementations;
 
-public class OrderService(AppDbContext db) : IOrderService
+public class OrderService(AppDbContext db, IHubContext<NotificationHub> hubContext) : IOrderService
 {
     private static int _orderCounter = 0;
 
@@ -202,7 +204,9 @@ public class OrderService(AppDbContext db) : IOrderService
         order.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
-        return await GetByIdAsync(id);
+        var dto = await GetByIdAsync(id);
+        if (dto != null) await BroadcastOrderStatusAsync(dto);
+        return dto;
     }
 
     public async Task<OrderDto?> RejectAsync(Guid id, string reason, Guid rejectedBy)
@@ -217,7 +221,9 @@ public class OrderService(AppDbContext db) : IOrderService
         order.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
-        return await GetByIdAsync(id);
+        var dto = await GetByIdAsync(id);
+        if (dto != null) await BroadcastOrderStatusAsync(dto);
+        return dto;
     }
 
     public async Task<OrderDto?> UpdateStatusAsync(Guid id, string status, string? notes, Guid userId)
@@ -242,10 +248,23 @@ public class OrderService(AppDbContext db) : IOrderService
             order.DeliveredAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
-        return await GetByIdAsync(id);
+        var dto = await GetByIdAsync(id);
+        if (dto != null) await BroadcastOrderStatusAsync(dto);
+        return dto;
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private async Task BroadcastOrderStatusAsync(OrderDto order)
+    {
+        await hubContext.Clients.All.SendAsync("OrderStatusChanged", new
+        {
+            order.Id,
+            order.OrderNumber,
+            order.Status,
+            order.ProjectName
+        });
+    }
 
     private async Task<OrderDto?> TransitionStatusAsync(
         Guid id, string fromStatus, string toStatus, Guid userId)
@@ -256,7 +275,9 @@ public class OrderService(AppDbContext db) : IOrderService
         order.Status = toStatus;
         order.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return await GetByIdAsync(id);
+        var dto = await GetByIdAsync(id);
+        if (dto != null) await BroadcastOrderStatusAsync(dto);
+        return dto;
     }
 
     private static OrderDto Map(Order o) => new()

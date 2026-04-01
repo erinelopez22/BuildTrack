@@ -29,7 +29,8 @@ import type { AssetType, AssetCondition } from "@/types/database";
 import { EquipmentHistoryTab } from "@/components/equipment/EquipmentHistoryTab";
 import { BorrowRequestsTab } from "@/components/equipment/BorrowRequestsTab";
 import { ReturnRequestsTab } from "@/components/equipment/ReturnRequestsTab";
-import { companyAssetsApi, projectsApi, type CompanyAsset as CompanyAssetDTO, type BorrowTransaction as BorrowTransactionDTO } from "@/lib/apiClient";
+import { companyAssetsApi, projectsApi, truncateApi, type CompanyAsset as CompanyAssetDTO, type BorrowTransaction as BorrowTransactionDTO } from "@/lib/apiClient";
+import { TruncateButton } from "@/components/common/TruncateButton";
 
 interface BorrowWithDetails extends BorrowTransactionDTO {
   // projectName and borrowedByName are already on BorrowTransactionDTO
@@ -333,6 +334,14 @@ export default function CompanyAssets() {
       <PageHeader
         title="Equipments & Tools"
         description="Manage company-owned assets that can be borrowed by projects"
+        action={
+          <TruncateButton
+            label="Equipment"
+            description="This will permanently delete ALL equipment/tools and their borrow transaction records."
+            onTruncate={truncateApi.equipment}
+            onSuccess={() => window.location.reload()}
+          />
+        }
       />
 
       <Tabs value={activeTopTab} onValueChange={setActiveTopTab}>

@@ -82,9 +82,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("FrontendPolicy", policy =>
     {
-        policy.WithOrigins(
-                builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
-                ?? ["http://localhost:8080", "http://localhost:5173"])
+        var configOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        var origins = new HashSet<string>(configOrigins ?? [])
+        {
+            "http://localhost:8080",
+            "http://localhost:5173",
+            "https://brave-mushroom-0725c8e00.2.azurestaticapps.net"
+        };
+        policy.WithOrigins(origins.ToArray())
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials(); // required for SignalR

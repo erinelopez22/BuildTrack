@@ -61,6 +61,12 @@ public class BorrowTransactionDto
     public DateTime? ReturnedAt { get; set; }
     public string? ReturnRemarks { get; set; }
     public string Status { get; set; } = string.Empty;
+    public string? RequestType { get; set; }
+    public string ApprovalStatus { get; set; } = "approved";
+    public Guid? ApprovedBy { get; set; }
+    public string? ApprovedByName { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public string? RejectionRemarks { get; set; }
     public DateTime CreatedAt { get; set; }
 }
 
@@ -81,5 +87,10 @@ public class ReturnAssetRequest
 {
     [Range(0.0001, double.MaxValue)]
     public decimal ReturnedQty { get; set; }
+    public string? Remarks { get; set; }
+}
+
+public class RejectBorrowRequest
+{
     public string? Remarks { get; set; }
 }

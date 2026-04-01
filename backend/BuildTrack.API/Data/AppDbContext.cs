@@ -237,6 +237,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
              .WithMany()
              .HasForeignKey(bt => bt.BorrowedBy)
              .OnDelete(DeleteBehavior.ClientSetNull);
+            e.HasOne(bt => bt.Approver)
+             .WithMany()
+             .HasForeignKey(bt => bt.ApprovedBy)
+             .OnDelete(DeleteBehavior.ClientSetNull);
         });
 
         // ── ProjectQuotation ──────────────────────────────────────────────────

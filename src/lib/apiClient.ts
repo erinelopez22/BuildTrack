@@ -256,6 +256,10 @@ export const companyAssetsApi = {
   borrow: (data: BorrowRequest) => post<BorrowTransaction>('/api/company-assets/borrow', data),
   returnAsset: (txnId: string, data: ReturnRequest) =>
     post<BorrowTransaction>(`/api/company-assets/borrow-transactions/${txnId}/return`, data),
+  approveBorrow: (txnId: string) =>
+    post<BorrowTransaction>(`/api/company-assets/borrow-transactions/${txnId}/approve`),
+  rejectBorrow: (txnId: string, remarks?: string) =>
+    post<BorrowTransaction>(`/api/company-assets/borrow-transactions/${txnId}/reject`, { remarks }),
 };
 
 // ── Quotations ────────────────────────────────────────────────────────────────
@@ -298,6 +302,18 @@ export const notificationsApi = {
 
 export const dashboardApi = {
   getStats: () => get<DashboardStats>('/api/dashboard/stats'),
+};
+
+// ── Truncate ──────────────────────────────────────────────────────────────────
+
+export const truncateApi = {
+  projects: () => del('/api/truncate/projects'),
+  orders: () => del('/api/truncate/orders'),
+  skus: () => del('/api/truncate/skus'),
+  equipment: () => del('/api/truncate/equipment'),
+  quotations: () => del('/api/truncate/quotations'),
+  inventory: () => del('/api/truncate/inventory'),
+  notifications: () => del('/api/truncate/notifications'),
 };
 
 // ── File Upload ───────────────────────────────────────────────────────────────
@@ -679,6 +695,12 @@ export interface BorrowTransaction {
   returnedAt?: string;
   returnRemarks?: string;
   status: string;
+  requestType?: string;
+  approvalStatus: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string;
+  rejectionRemarks?: string;
   createdAt: string;
 }
 

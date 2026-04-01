@@ -229,6 +229,7 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
             .Include(bt => bt.Asset)
             .Include(bt => bt.Project)
             .Include(bt => bt.Borrower)
+            .Include(bt => bt.Approver)
             .Where(bt => bt.AssetId == assetId)
             .OrderByDescending(bt => bt.BorrowedAt)
             .ToListAsync();
@@ -241,6 +242,7 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
             .Include(bt => bt.Asset)
             .Include(bt => bt.Project)
             .Include(bt => bt.Borrower)
+            .Include(bt => bt.Approver)
             .AsQueryable();
 
         if (projectId.HasValue)
@@ -251,7 +253,7 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
     }
 
     public async Task<(BorrowTransactionDto? txn, string? error)> BorrowAsync(
-        BorrowAssetRequest request, Guid userId)
+        BorrowAssetRequest request, Guid userId, bool isAdmin = false)
     {
         var asset = await db.CompanyAssets
             .Include(a => a.BorrowTransactions)
@@ -259,13 +261,26 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
 
         if (asset == null) return (null, "Asset not found.");
 
+        // Check for pending borrow request on this asset
+        if (!isAdmin)
+        {
+            var hasPending = await db.BorrowTransactions.AnyAsync(bt =>
+                bt.AssetId == request.AssetId &&
+                bt.ApprovalStatus == "pending" &&
+                bt.RequestType == "borrow");
+            if (hasPending)
+                return (null, "A request for this asset is already pending approval.");
+        }
+
         var borrowed = asset.BorrowTransactions
-            .Where(bt => bt.Status != "Returned")
+            .Where(bt => bt.Status != "Returned" && bt.ApprovalStatus == "approved")
             .Sum(bt => bt.BorrowedQty - bt.ReturnedQty);
 
         var available = asset.TotalQuantity - borrowed;
         if (request.Quantity > available)
             return (null, $"Only {available} units available.");
+
+        var needsApproval = !isAdmin;
 
         var txn = new BorrowTransaction
         {
@@ -275,7 +290,11 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
             BorrowedBy = userId,
             BorrowedAt = DateTime.UtcNow,
             ExpectedReturnDate = request.ExpectedReturnDate,
-            Status = "Borrowed"
+            Status = needsApproval ? "Pending" : "Borrowed",
+            RequestType = "borrow",
+            ApprovalStatus = needsApproval ? "pending" : "approved",
+            ApprovedBy = needsApproval ? null : userId,
+            ApprovedAt = needsApproval ? null : DateTime.UtcNow
         };
         db.BorrowTransactions.Add(txn);
         await db.SaveChangesAsync();
@@ -287,7 +306,7 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
     }
 
     public async Task<(BorrowTransactionDto? txn, string? error)> ReturnAsync(
-        Guid txnId, ReturnAssetRequest request, Guid userId)
+        Guid txnId, ReturnAssetRequest request, Guid userId, bool isAdmin = false)
     {
         var txn = await db.BorrowTransactions
             .Include(bt => bt.Asset)
@@ -296,20 +315,127 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
 
         if (txn == null) return (null, "Borrow transaction not found.");
 
-        txn.ReturnedQty += request.ReturnedQty;
-        txn.ReturnRemarks = request.Remarks;
-        txn.ReturnedAt = DateTime.UtcNow;
-        txn.Status = txn.ReturnedQty >= txn.BorrowedQty ? "Returned" : "Partially Returned";
+        // Check for pending return request on this asset
+        if (!isAdmin)
+        {
+            var hasPending = await db.BorrowTransactions.AnyAsync(bt =>
+                bt.AssetId == txn.AssetId &&
+                bt.ApprovalStatus == "pending" &&
+                bt.RequestType == "return");
+            if (hasPending)
+                return (null, "A return request for this asset is already pending approval.");
+        }
+
+        if (isAdmin)
+        {
+            // Admin: apply return immediately
+            txn.ReturnedQty += request.ReturnedQty;
+            txn.ReturnRemarks = request.Remarks;
+            txn.ReturnedAt = DateTime.UtcNow;
+            txn.Status = txn.ReturnedQty >= txn.BorrowedQty ? "Returned" : "Partially Returned";
+            txn.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return (MapBorrow(txn), null);
+        }
+        else
+        {
+            // Non-admin: create a pending return request
+            var returnTxn = new BorrowTransaction
+            {
+                AssetId = txn.AssetId,
+                ProjectId = txn.ProjectId,
+                BorrowedQty = request.ReturnedQty,
+                BorrowedBy = userId,
+                BorrowedAt = txn.BorrowedAt,
+                ReturnRemarks = request.Remarks,
+                Status = "Pending",
+                RequestType = "return",
+                ApprovalStatus = "pending"
+            };
+            db.BorrowTransactions.Add(returnTxn);
+            await db.SaveChangesAsync();
+            await db.Entry(returnTxn).Reference(t => t.Asset).LoadAsync();
+            await db.Entry(returnTxn).Reference(t => t.Borrower).LoadAsync();
+            return (MapBorrow(returnTxn), null);
+        }
+    }
+
+    public async Task<(BorrowTransactionDto? txn, string? error)> ApproveBorrowRequestAsync(Guid txnId, Guid approvedBy)
+    {
+        var txn = await db.BorrowTransactions
+            .Include(bt => bt.Asset).ThenInclude(a => a.BorrowTransactions)
+            .Include(bt => bt.Borrower)
+            .FirstOrDefaultAsync(bt => bt.Id == txnId);
+
+        if (txn == null) return (null, "Request not found.");
+        if (txn.ApprovalStatus != "pending") return (null, "Request is already processed.");
+
+        if (txn.RequestType == "borrow")
+        {
+            // Check availability before approving
+            var borrowed = txn.Asset.BorrowTransactions
+                .Where(bt => bt.Status != "Returned" && bt.ApprovalStatus == "approved" && bt.Id != txn.Id)
+                .Sum(bt => bt.BorrowedQty - bt.ReturnedQty);
+            var available = txn.Asset.TotalQuantity - borrowed;
+            if (txn.BorrowedQty > available)
+                return (null, $"Only {available} units available. Cannot approve.");
+
+            txn.Status = "Borrowed";
+        }
+        else if (txn.RequestType == "return")
+        {
+            // Find the original borrow transaction and apply the return
+            var originalBorrow = await db.BorrowTransactions
+                .Where(bt => bt.AssetId == txn.AssetId && bt.ApprovalStatus == "approved"
+                    && (bt.Status == "Borrowed" || bt.Status == "Partially Returned"))
+                .FirstOrDefaultAsync();
+            if (originalBorrow != null)
+            {
+                originalBorrow.ReturnedQty += txn.BorrowedQty;
+                originalBorrow.ReturnRemarks = txn.ReturnRemarks;
+                originalBorrow.ReturnedAt = DateTime.UtcNow;
+                originalBorrow.Status = originalBorrow.ReturnedQty >= originalBorrow.BorrowedQty ? "Returned" : "Partially Returned";
+                originalBorrow.UpdatedAt = DateTime.UtcNow;
+            }
+            txn.Status = "Returned";
+        }
+
+        txn.ApprovalStatus = "approved";
+        txn.ApprovedBy = approvedBy;
+        txn.ApprovedAt = DateTime.UtcNow;
         txn.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
+        await db.Entry(txn).Reference(t => t.Approver).LoadAsync();
+        return (MapBorrow(txn), null);
+    }
+
+    public async Task<(BorrowTransactionDto? txn, string? error)> RejectBorrowRequestAsync(Guid txnId, Guid rejectedBy, string? remarks)
+    {
+        var txn = await db.BorrowTransactions
+            .Include(bt => bt.Asset)
+            .Include(bt => bt.Borrower)
+            .FirstOrDefaultAsync(bt => bt.Id == txnId);
+
+        if (txn == null) return (null, "Request not found.");
+        if (txn.ApprovalStatus != "pending") return (null, "Request is already processed.");
+
+        txn.ApprovalStatus = "rejected";
+        txn.ApprovedBy = rejectedBy;
+        txn.ApprovedAt = DateTime.UtcNow;
+        txn.RejectionRemarks = remarks;
+        txn.Status = "Rejected";
+        txn.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        await db.Entry(txn).Reference(t => t.Approver).LoadAsync();
         return (MapBorrow(txn), null);
     }
 
     private static CompanyAssetDto MapAsset(CompanyAsset a)
     {
         var borrowed = a.BorrowTransactions
-            .Where(bt => bt.Status != "Returned")
+            .Where(bt => bt.Status != "Returned" && bt.ApprovalStatus == "approved")
             .Sum(bt => bt.BorrowedQty - bt.ReturnedQty);
         return new CompanyAssetDto
         {
@@ -344,6 +470,12 @@ public class CompanyAssetService(AppDbContext db) : ICompanyAssetService
         ReturnedAt = bt.ReturnedAt,
         ReturnRemarks = bt.ReturnRemarks,
         Status = bt.Status,
+        RequestType = bt.RequestType,
+        ApprovalStatus = bt.ApprovalStatus,
+        ApprovedBy = bt.ApprovedBy,
+        ApprovedByName = bt.Approver?.FullName,
+        ApprovedAt = bt.ApprovedAt,
+        RejectionRemarks = bt.RejectionRemarks,
         CreatedAt = bt.CreatedAt
     };
 }

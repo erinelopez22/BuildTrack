@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { skusApi } from '@/lib/apiClient';
+import { skusApi, truncateApi } from '@/lib/apiClient';
 import type { SKU as ApiSKU } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
+import { TruncateButton } from '@/components/common/TruncateButton';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -379,9 +380,10 @@ export default function SKUs() {
                 {formUnit === 'custom' && (
                   <Input
                     value={formCustomUnit}
-                    onChange={(e) => setFormCustomUnit(e.target.value)}
+                    onChange={(e) => setFormCustomUnit(e.target.value.toLowerCase())}
                     placeholder="Enter custom unit"
                     required
+                    style={{ textTransform: 'lowercase' }}
                   />
                 )}
               </div>
@@ -390,9 +392,10 @@ export default function SKUs() {
                 <Label>Description</Label>
                 <Textarea
                   value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
+                  onChange={(e) => setFormDescription(e.target.value.toUpperCase())}
                   placeholder="Optional description"
                   rows={3}
+                  style={{ textTransform: 'uppercase' }}
                 />
               </div>
 
@@ -433,12 +436,20 @@ export default function SKUs() {
         title="SKU Catalogue"
         description="Manage construction materials master list"
         action={
-          isAdmin() && (
-            <Button onClick={openAddModal}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Material
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            {isAdmin() && (
+              <Button onClick={openAddModal}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Material
+              </Button>
+            )}
+            <TruncateButton
+              label="SKUs"
+              description="This will permanently delete ALL SKUs and their related data including order items, deliveries, and inventory records."
+              onTruncate={truncateApi.skus}
+              onSuccess={() => window.location.reload()}
+            />
+          </div>
         }
       />
 

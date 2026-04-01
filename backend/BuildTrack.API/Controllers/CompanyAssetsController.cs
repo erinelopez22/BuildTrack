@@ -65,7 +65,7 @@ public class CompanyAssetsController(ICompanyAssetService assetService) : BaseAp
     [HttpPost("borrow")]
     public async Task<ActionResult<ApiResponse<BorrowTransactionDto>>> Borrow([FromBody] BorrowAssetRequest request)
     {
-        var (txn, error) = await assetService.BorrowAsync(request, CurrentUserId);
+        var (txn, error) = await assetService.BorrowAsync(request, CurrentUserId, IsAdmin);
         if (error != null) return BadRequest(ApiResponse<BorrowTransactionDto>.Fail(error));
         return Ok(ApiResponse<BorrowTransactionDto>.Ok(txn!));
     }
@@ -74,7 +74,26 @@ public class CompanyAssetsController(ICompanyAssetService assetService) : BaseAp
     public async Task<ActionResult<ApiResponse<BorrowTransactionDto>>> Return(
         Guid id, [FromBody] ReturnAssetRequest request)
     {
-        var (txn, error) = await assetService.ReturnAsync(id, request, CurrentUserId);
+        var (txn, error) = await assetService.ReturnAsync(id, request, CurrentUserId, IsAdmin);
+        if (error != null) return BadRequest(ApiResponse<BorrowTransactionDto>.Fail(error));
+        return Ok(ApiResponse<BorrowTransactionDto>.Ok(txn!));
+    }
+
+    [HttpPost("borrow-transactions/{id:guid}/approve")]
+    [Authorize(Policy = "RequireAdmin")]
+    public async Task<ActionResult<ApiResponse<BorrowTransactionDto>>> Approve(Guid id)
+    {
+        var (txn, error) = await assetService.ApproveBorrowRequestAsync(id, CurrentUserId);
+        if (error != null) return BadRequest(ApiResponse<BorrowTransactionDto>.Fail(error));
+        return Ok(ApiResponse<BorrowTransactionDto>.Ok(txn!));
+    }
+
+    [HttpPost("borrow-transactions/{id:guid}/reject")]
+    [Authorize(Policy = "RequireAdmin")]
+    public async Task<ActionResult<ApiResponse<BorrowTransactionDto>>> Reject(
+        Guid id, [FromBody] RejectBorrowRequest? request)
+    {
+        var (txn, error) = await assetService.RejectBorrowRequestAsync(id, CurrentUserId, request?.Remarks);
         if (error != null) return BadRequest(ApiResponse<BorrowTransactionDto>.Fail(error));
         return Ok(ApiResponse<BorrowTransactionDto>.Ok(txn!));
     }

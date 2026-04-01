@@ -12,7 +12,6 @@ import {
   LogOut,
   HardHat,
   Wrench,
-  RotateCcw,
   FileCheck,
   BarChart3,
   Building2,
@@ -30,21 +29,9 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogCancel,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
-import { useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -105,30 +92,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { signOut, isAdmin, isSuperAdmin, profile, roles, user } = useAuth();
   const { unreadCount } = useNotifications();
-  const [showResetDialog, setShowResetDialog] = useState(false);
-  const [resetConfirmText, setResetConfirmText] = useState("");
-  const [resetting, setResetting] = useState(false);
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
   const isMobile = useIsMobile();
-
-  const handleResetData = async () => {
-    if (resetConfirmText !== "RESET") return;
-    setResetting(true);
-    try {
-      toast({ title: "Not available", description: "Data reset is not available in this version." });
-      setShowResetDialog(false);
-      setResetConfirmText("");
-    } catch (err: any) {
-      toast({
-        title: "Reset failed",
-        description: err.message || "An error occurred during reset.",
-        variant: "destructive",
-      });
-    } finally {
-      setResetting(false);
-    }
-  };
 
   const isActive = (path: string) => location.pathname.startsWith(path);
 
@@ -290,17 +254,6 @@ export function AppSidebar() {
             </div>
           )}
           <div className="flex items-center gap-1">
-            {isSuperAdmin() && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowResetDialog(true)}
-                className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                title="Reset Data"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
-            )}
             <Button
               variant="ghost"
               size="icon"
@@ -313,39 +266,6 @@ export function AppSidebar() {
         </div>
       </SidebarFooter>
 
-      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset all data?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will delete ALL data except users and roles. This cannot be undone. Type <strong>RESET</strong> to
-              confirm.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <Input
-            placeholder='Type "RESET" to confirm'
-            value={resetConfirmText}
-            onChange={(e) => setResetConfirmText(e.target.value)}
-            className="mt-2"
-          />
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setResetConfirmText("");
-              }}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <Button
-              variant="destructive"
-              disabled={resetConfirmText !== "RESET" || resetting}
-              onClick={handleResetData}
-            >
-              {resetting ? "Resetting..." : "Confirm Reset"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Sidebar>
   );
 }

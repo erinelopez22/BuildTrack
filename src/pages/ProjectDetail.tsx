@@ -163,10 +163,7 @@ export default function ProjectDetail() {
   }, [id]);
 
   const canEditQuotation =
-    isAdmin() ||
-    userProjectRole === "project_manager" ||
-    userProjectRole === "site_lead" ||
-    userProjectRole === "project_engineer";
+    isSuperAdmin() || isAdmin() || isOfficeAdmin() || isProjectEngineer();
 
   const handleQuotationChange = () => {
     setProgressKey((prev) => prev + 1);
@@ -426,17 +423,35 @@ export default function ProjectDetail() {
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-3">
         {(() => {
-          const isNonAdmin = !isAdmin();
-          const isQuotationPendingForRole = isNonAdmin && hasPendingQuotationRequest;
+          // Non-admin/OA/PE roles can only view existing quotations
+          const canAccessQuotation = canEditQuotation || hasQuotation;
+          if (!canAccessQuotation) return null;
+
+          // Admin lock: if pending approval exists, admin (non-super) cannot create new
+          const isAdminLocked = isAdmin() && !isSuperAdmin() && hasPendingQuotationRequest && !hasQuotation;
+          // Non-admin roles: blocked if pending approval
+          const isNonAdminLocked = !isAdmin() && hasPendingQuotationRequest;
+          const isLocked = isAdminLocked || isNonAdminLocked;
+
           return (
             <Button
               variant="outline"
-              onClick={() => setIsQuotationOpen(true)}
-              disabled={isQuotationPendingForRole}
-              title={isQuotationPendingForRole ? "Quotation is for approval" : undefined}
+              onClick={() => {
+                if (isAdminLocked) {
+                  toast({
+                    title: "Pending Approval",
+                    description: "You have a quotation pending approval. Please approve or reject it before creating a new one.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                setIsQuotationOpen(true);
+              }}
+              disabled={isNonAdminLocked}
+              title={isLocked ? "Quotation is pending approval" : undefined}
             >
               <ClipboardList className="mr-2 h-4 w-4" />
-              {isQuotationPendingForRole
+              {isLocked
                 ? "Quotation is for approval"
                 : hasQuotation
                   ? "View Quotation"

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { projectsApi } from '@/lib/apiClient';
+import { projectsApi, truncateApi } from '@/lib/apiClient';
 import type { Project as ApiProject } from '@/lib/apiClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { PageHeader } from '@/components/common/PageHeader';
+import { TruncateButton } from '@/components/common/TruncateButton';
 import { EmptyState } from '@/components/common/EmptyState';
 import { ProjectCard } from '@/components/projects/ProjectCard';
 import { ProjectFormModal } from '@/components/projects/ProjectFormModal';
@@ -237,12 +238,20 @@ export default function Projects() {
         title="Projects"
         description="Manage your construction projects"
         action={
-          canCreateProjects() && (
-            <Button onClick={() => setIsDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Project
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            {canCreateProjects() && (
+              <Button onClick={() => setIsDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Project
+              </Button>
+            )}
+            <TruncateButton
+              label="Projects"
+              description="This will permanently delete ALL projects and their related data including orders, quotations, inventory, deliveries, and tracking assignments."
+              onTruncate={truncateApi.projects}
+              onSuccess={() => window.location.reload()}
+            />
+          </div>
         }
       />
 

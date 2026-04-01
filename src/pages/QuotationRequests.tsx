@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { quotationsApi, projectsApi } from "@/lib/apiClient";
+import { quotationsApi, projectsApi, truncateApi } from "@/lib/apiClient";
 import type { QuotationChangeRequest as ApiChangeRequest } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { logActivity } from "@/lib/activityLogger";
 import { notifyProjectMembers, formatManilaTime } from "@/lib/notificationService";
 import { PageHeader } from "@/components/common/PageHeader";
+import { TruncateButton } from "@/components/common/TruncateButton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -311,6 +312,14 @@ export default function QuotationRequests() {
       <PageHeader
         title="Quotation Request"
         description="View all project quotations and manage approval requests"
+        action={
+          <TruncateButton
+            label="Quotations"
+            description="This will permanently delete ALL quotations, quotation items, and change requests."
+            onTruncate={truncateApi.quotations}
+            onSuccess={() => window.location.reload()}
+          />
+        }
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>

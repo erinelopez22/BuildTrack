@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Search, Check } from "lucide-react";
+import { Loader2, Search, Check, X, Clock } from "lucide-react";
 import { companyAssetsApi, type BorrowTransaction as BorrowTransactionDTO } from "@/lib/apiClient";
 
 export function BorrowRequestsTab() {
@@ -30,8 +30,10 @@ export function BorrowRequestsTab() {
     setLoading(true);
     try {
       const data = await companyAssetsApi.getAllBorrows();
-      // Show only borrow transactions (Borrowed / Partially Returned)
-      setTransactions((data.data || []).filter((t) => t.status === "Borrowed" || t.status === "Partially Returned"));
+      // Show active borrows + pending approval requests
+      setTransactions((data.data || []).filter((t) =>
+        t.status === "Borrowed" || t.status === "Partially Returned" || t.approvalStatus === "pending"
+      ));
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
@@ -87,14 +89,37 @@ export function BorrowRequestsTab() {
     setReturning(false);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const handleApprove = async (txnId: string) => {
+    try {
+      await companyAssetsApi.approveBorrow(txnId);
+      toast({ title: "Approved", description: "Request has been approved." });
+      fetchTransactions();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleReject = async (txnId: string) => {
+    try {
+      await companyAssetsApi.rejectBorrow(txnId);
+      toast({ title: "Rejected", description: "Request has been rejected." });
+      fetchTransactions();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const getStatusBadge = (txn: BorrowTransactionDTO) => {
+    if (txn.approvalStatus === "pending") {
+      return <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300"><Clock className="h-3 w-3 mr-1" />Pending {txn.requestType === "return" ? "Return" : "Borrow"}</Badge>;
+    }
+    switch (txn.status) {
       case "Borrowed":
         return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">Borrowed</Badge>;
       case "Partially Returned":
         return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Partially Returned</Badge>;
       default:
-        return <Badge variant="secondary">{status}</Badge>;
+        return <Badge variant="secondary">{txn.status}</Badge>;
     }
   };
 
@@ -171,21 +196,32 @@ export function BorrowRequestsTab() {
                     </td>
                     <td className="p-3">{txn.borrowedQty}</td>
                     <td className="p-3">{txn.borrowedQty - txn.returnedQty}</td>
-                    <td className="p-3">{getStatusBadge(txn.status)}</td>
+                    <td className="p-3">{getStatusBadge(txn)}</td>
                     {canManage && (
                       <td className="p-3" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-7 text-xs gap-1 text-success border-success/30"
-                          onClick={() => {
-                            setSelectedTxn(txn);
-                            setReturnQty(txn.borrowedQty - txn.returnedQty);
-                            setReturnRemarks("");
-                          }}
-                        >
-                          <Check className="h-3 w-3" /> Return
-                        </Button>
+                        {txn.approvalStatus === "pending" ? (
+                          <div className="flex gap-1">
+                            <Button size="sm" className="h-7 text-xs gap-1" onClick={() => handleApprove(txn.id)}>
+                              <Check className="h-3 w-3" /> Approve
+                            </Button>
+                            <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={() => handleReject(txn.id)}>
+                              <X className="h-3 w-3" /> Reject
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs gap-1 text-success border-success/30"
+                            onClick={() => {
+                              setSelectedTxn(txn);
+                              setReturnQty(txn.borrowedQty - txn.returnedQty);
+                              setReturnRemarks("");
+                            }}
+                          >
+                            <Check className="h-3 w-3" /> Return
+                          </Button>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -211,7 +247,7 @@ export function BorrowRequestsTab() {
                     <p className="font-medium">{txn.assetName || "Unknown Asset"}</p>
                     <p className="text-xs text-muted-foreground">{txn.projectName || "Unknown Project"}</p>
                   </div>
-                  {getStatusBadge(txn.status)}
+                  {getStatusBadge(txn)}
                 </div>
                 <div className="text-xs text-muted-foreground space-y-0.5">
                   <p>By: {txn.borrowedByName || "Unknown"} • Qty: {txn.borrowedQty} • Remaining: {txn.borrowedQty - txn.returnedQty}</p>
@@ -219,18 +255,29 @@ export function BorrowRequestsTab() {
                 </div>
                 {canManage && (
                   <div className="flex gap-2 pt-1" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 text-xs gap-1 text-success border-success/30"
-                      onClick={() => {
-                        setSelectedTxn(txn);
-                        setReturnQty(txn.borrowedQty - txn.returnedQty);
-                        setReturnRemarks("");
-                      }}
-                    >
-                      <Check className="h-3 w-3" /> Process Return
-                    </Button>
+                    {txn.approvalStatus === "pending" ? (
+                      <>
+                        <Button size="sm" className="h-7 text-xs gap-1" onClick={() => handleApprove(txn.id)}>
+                          <Check className="h-3 w-3" /> Approve
+                        </Button>
+                        <Button size="sm" variant="destructive" className="h-7 text-xs gap-1" onClick={() => handleReject(txn.id)}>
+                          <X className="h-3 w-3" /> Reject
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1 text-success border-success/30"
+                        onClick={() => {
+                          setSelectedTxn(txn);
+                          setReturnQty(txn.borrowedQty - txn.returnedQty);
+                          setReturnRemarks("");
+                        }}
+                      >
+                        <Check className="h-3 w-3" /> Process Return
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>

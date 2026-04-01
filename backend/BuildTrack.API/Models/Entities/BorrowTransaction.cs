@@ -30,6 +30,18 @@ public class BorrowTransaction
     [Required, MaxLength(50)]
     public string Status { get; set; } = "Borrowed"; // Borrowed, Partially Returned, Returned
 
+    [MaxLength(50)]
+    public string? RequestType { get; set; } // "borrow" or "return"
+
+    [MaxLength(50)]
+    public string ApprovalStatus { get; set; } = "approved"; // pending, approved, rejected
+
+    public Guid? ApprovedBy { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+
+    [MaxLength(1000)]
+    public string? RejectionRemarks { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -42,4 +54,7 @@ public class BorrowTransaction
 
     [ForeignKey(nameof(BorrowedBy))]
     public Profile? Borrower { get; set; }
+
+    [ForeignKey(nameof(ApprovedBy))]
+    public Profile? Approver { get; set; }
 }

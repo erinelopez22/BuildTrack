@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { projectsApi } from "@/lib/apiClient";
+import { projectsApi, truncateApi } from "@/lib/apiClient";
 import type { Project } from "@/lib/apiClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { PageHeader } from "@/components/common/PageHeader";
+import { TruncateButton } from "@/components/common/TruncateButton";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ProjectCard } from "@/components/projects/ProjectCard";
 import { OrderWorkflowBoard } from "@/components/orders/OrderWorkflowBoard";
@@ -74,7 +75,18 @@ export default function Inventory() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <PageHeader title="Order & Tracking" description="Select a project to view and manage orders" />
+      <PageHeader
+        title="Order & Tracking"
+        description="Select a project to view and manage orders"
+        action={
+          <TruncateButton
+            label="Inventory"
+            description="This will permanently delete ALL inventory records and transaction history."
+            onTruncate={truncateApi.inventory}
+            onSuccess={() => window.location.reload()}
+          />
+        }
+      />
 
       {/* Search */}
       <div className="relative max-w-sm">
