@@ -15,7 +15,7 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7069';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:7069';
 
 class ApiClient {
   private baseUrl: string;

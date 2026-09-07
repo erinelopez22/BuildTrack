@@ -1,7 +1,9 @@
 // BuildTrack REST API Client
 // Replaces all Supabase direct calls
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5069';
+// Empty string = same-origin (`/api`), used in the Vercel production build.
+// Only fall back to the local dev API when the var is genuinely undefined.
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5069';
 
 export interface ApiResponse<T> {
   success: boolean;
