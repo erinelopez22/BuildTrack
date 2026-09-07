@@ -251,6 +251,18 @@ Useful scripts:
 | Uploads fail with a 500 | `BLOB_READ_WRITE_TOKEN` not connected. Redo step 5, redeploy. |
 | 404 for every `/api/*` route on Vercel | `vercel.json` not picked up. Confirm it's at the repo root and the deployment is from this branch. |
 | Build fails on Vercel | Run `npm run build` locally; fix errors; commit; push. |
+| Every `/api/*` request **hangs** (no response) | The function's default export returns a `Response` that Vercel's Node runtime ignores. `api/index.ts` must use **named method exports** (`export const GET/POST/... = (req) => app.fetch(req)`), not `hono/vercel`'s `handle()`. |
+| `/api/*` 500s with `ERR_MODULE_NOT_FOUND: .../server/app` | A relative import in `api/` or `server/` is missing its `.js` extension. Vercel compiles in NodeNext ESM mode. Run `npm run typecheck:server` — it's set to NodeNext and will flag every missing extension. |
+
+### How the API function is wired (so you don't re-break it)
+
+- One serverless function: `api/index.ts` → imports `createApp()` from `server/app.ts`.
+- It exports **named HTTP methods** (`GET`, `POST`, …) that each call `app.fetch(req)`.
+  This is the only form Vercel's Node runtime handles correctly for a Hono app —
+  `hono/vercel` is Edge-only and `@hono/node-server/vercel` hangs on request bodies.
+- Because `package.json` is `"type": "module"`, **all relative imports in `api/` and
+  `server/` end in `.js`** (even though the files are `.ts`). This is NodeNext ESM.
+- `server/db/index.ts` connects to Neon lazily, so `/api/health` works even with no DB.
 
 **Reading function logs:** Vercel dashboard → your project → **Deployments** → click the
 deployment → **Functions** tab → click `api/index.ts` → **Logs**. `console.error` from
