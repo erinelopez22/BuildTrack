@@ -281,7 +281,7 @@ export default function Orders() {
     fetchData();
   }, []);
 
-  // Real-time order status updates via SignalR
+  // Order status updates via polling
   useOrderStatusUpdates((update) => {
     setOrders((prev) =>
       prev.map((o) =>

@@ -175,7 +175,7 @@ export function OrderWorkflowBoard({ project, onBack }: OrderWorkflowBoardProps)
     fetchOrders();
   }, [project.id]);
 
-  // Real-time order status updates via SignalR
+  // Order status updates via polling
   useOrderStatusUpdates((update) => {
     setOrders((prev) =>
       prev.map((o) =>
