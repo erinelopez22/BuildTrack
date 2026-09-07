@@ -1,18 +1,18 @@
 // /api/orders/:orderId/tracking-assignments — ported from TrackingController.cs + TrackingService.cs
 import { Hono, type Context } from 'hono';
 import { and, asc, eq, inArray, notInArray } from 'drizzle-orm';
-import { db } from '../db';
+import { db } from '../db/index.js';
 import {
   orderItems,
   orderTrackingAssignments,
   orderTrackingMaterials,
   profiles,
   skus,
-} from '../db/schema';
-import { authMiddleware, type AuthVars } from '../lib/auth';
-import { body, isUuid } from '../lib/http';
-import { fail, ok } from '../lib/response';
-import { num } from '../lib/num';
+} from '../db/schema.js';
+import { authMiddleware, type AuthVars } from '../lib/auth.js';
+import { body, isUuid } from '../lib/http.js';
+import { fail, ok } from '../lib/response.js';
+import { num } from '../lib/num.js';
 
 type Assignment = typeof orderTrackingAssignments.$inferSelect;
 

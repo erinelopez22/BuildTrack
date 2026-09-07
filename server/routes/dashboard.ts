@@ -1,7 +1,7 @@
 // /api/dashboard — ported from DashboardController.cs + DashboardService.cs
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm';
-import { db } from '../db';
+import { db } from '../db/index.js';
 import {
   borrowTransactions,
   companyAssets,
@@ -10,9 +10,9 @@ import {
   projects,
   quotationChangeRequests,
   skus,
-} from '../db/schema';
-import { authMiddleware, isSuperAdmin, type AuthVars } from '../lib/auth';
-import { ok } from '../lib/response';
+} from '../db/schema.js';
+import { authMiddleware, isSuperAdmin, type AuthVars } from '../lib/auth.js';
+import { ok } from '../lib/response.js';
 
 export const dashboardRoutes = new Hono<{ Variables: AuthVars }>();
 dashboardRoutes.use('*', authMiddleware);

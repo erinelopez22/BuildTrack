@@ -1,10 +1,10 @@
 // Seeds the default company and super-admin — mirrors the startup seed block in
 // backend/BuildTrack.API/Program.cs. Safe to run repeatedly.
-import './lib/loadEnv';
+import './lib/loadEnv.js';
 import { eq, sql } from 'drizzle-orm';
-import { db } from './db';
-import { companies, profiles, userRoles } from './db/schema';
-import { hashPassword } from './lib/auth';
+import { db } from './db/index.js';
+import { companies, profiles, userRoles } from './db/schema.js';
+import { hashPassword } from './lib/auth.js';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
 

@@ -1,4 +1,4 @@
-import './server/lib/loadEnv';
+import './server/lib/loadEnv.js';
 import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({

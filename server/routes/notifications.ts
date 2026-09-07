@@ -1,11 +1,11 @@
 // /api/notifications — ported from NotificationsController.cs + NotificationService.cs
 import { Hono } from 'hono';
 import { and, desc, eq } from 'drizzle-orm';
-import { db } from '../db';
-import { notifications } from '../db/schema';
-import { authMiddleware, type AuthVars } from '../lib/auth';
-import { isUuid } from '../lib/http';
-import { fail, ok } from '../lib/response';
+import { db } from '../db/index.js';
+import { notifications } from '../db/schema.js';
+import { authMiddleware, type AuthVars } from '../lib/auth.js';
+import { isUuid } from '../lib/http.js';
+import { fail, ok } from '../lib/response.js';
 
 type Notification = typeof notifications.$inferSelect;
 

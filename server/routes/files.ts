@@ -1,8 +1,8 @@
 // /api/files — ported from FilesController.cs (local disk → Vercel Blob)
 import { Hono } from 'hono';
-import { authMiddleware, type AuthVars } from '../lib/auth';
-import { uploadFile } from '../lib/blob';
-import { fail, ok } from '../lib/response';
+import { authMiddleware, type AuthVars } from '../lib/auth.js';
+import { uploadFile } from '../lib/blob.js';
+import { fail, ok } from '../lib/response.js';
 
 export const fileRoutes = new Hono<{ Variables: AuthVars }>();
 fileRoutes.use('*', authMiddleware);

@@ -1,19 +1,19 @@
 // /api/quotations — ported from QuotationsController.cs + QuotationService.cs
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
-import { db } from '../db';
+import { db } from '../db/index.js';
 import {
   profiles,
   projectQuotations,
   projects,
   quotationChangeRequests,
   quotationItems,
-} from '../db/schema';
-import { authMiddleware, type AuthVars } from '../lib/auth';
-import { requireOfficeAdmin } from '../lib/policies';
-import { body, isUuid } from '../lib/http';
-import { created, fail, ok } from '../lib/response';
-import { num } from '../lib/num';
+} from '../db/schema.js';
+import { authMiddleware, type AuthVars } from '../lib/auth.js';
+import { requireOfficeAdmin } from '../lib/policies.js';
+import { body, isUuid } from '../lib/http.js';
+import { created, fail, ok } from '../lib/response.js';
+import { num } from '../lib/num.js';
 
 type Quotation = typeof projectQuotations.$inferSelect;
 type QItem = typeof quotationItems.$inferSelect;

@@ -2,7 +2,7 @@
 // Deletes are ordered to satisfy the restrict FKs (delivery_items / tracking_materials → order_items, *_ → skus).
 import { Hono } from 'hono';
 import { isNotNull } from 'drizzle-orm';
-import { db } from '../db';
+import { db } from '../db/index.js';
 import {
   auditLogs,
   borrowTransactions,
@@ -22,10 +22,10 @@ import {
   quotationChangeRequests,
   quotationItems,
   skus,
-} from '../db/schema';
-import { authMiddleware, type AuthVars } from '../lib/auth';
-import { requireSuperAdmin } from '../lib/policies';
-import { ok } from '../lib/response';
+} from '../db/schema.js';
+import { authMiddleware, type AuthVars } from '../lib/auth.js';
+import { requireSuperAdmin } from '../lib/policies.js';
+import { ok } from '../lib/response.js';
 
 export const truncateRoutes = new Hono<{ Variables: AuthVars }>();
 truncateRoutes.use('*', authMiddleware, requireSuperAdmin);

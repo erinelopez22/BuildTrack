@@ -1,7 +1,7 @@
 // Role policies — mirrors the AddPolicy(...) block in backend/BuildTrack.API/Program.cs
 import type { MiddlewareHandler } from 'hono';
-import type { AuthVars } from './auth';
-import { fail } from './response';
+import type { AuthVars } from './auth.js';
+import { fail } from './response.js';
 
 const policy =
   (...allowed: string[]): MiddlewareHandler<{ Variables: AuthVars }> =>

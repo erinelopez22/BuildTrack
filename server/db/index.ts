@@ -3,7 +3,7 @@
 // even when DATABASE_URL is absent.
 import { neon } from '@neondatabase/serverless';
 import { drizzle, type NeonHttpDatabase } from 'drizzle-orm/neon-http';
-import * as schema from './schema';
+import * as schema from './schema.js';
 
 let _db: NeonHttpDatabase<typeof schema> | null = null;
 

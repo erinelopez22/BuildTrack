@@ -1,18 +1,18 @@
 // /api/users — ported from UsersController.cs + UserService.cs
 import { Hono } from 'hono';
 import { and, asc, eq, inArray, sql } from 'drizzle-orm';
-import { db } from '../db';
-import { companies, profiles, userRoles } from '../db/schema';
+import { db } from '../db/index.js';
+import { companies, profiles, userRoles } from '../db/schema.js';
 import {
   authMiddleware,
   hashPassword,
   isAdmin,
   isSuperAdmin,
   type AuthVars,
-} from '../lib/auth';
-import { requireAdmin, isValidRole } from '../lib/policies';
-import { body, isUuid } from '../lib/http';
-import { created, fail, ok } from '../lib/response';
+} from '../lib/auth.js';
+import { requireAdmin, isValidRole } from '../lib/policies.js';
+import { body, isUuid } from '../lib/http.js';
+import { created, fail, ok } from '../lib/response.js';
 
 type Profile = typeof profiles.$inferSelect;
 

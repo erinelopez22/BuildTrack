@@ -1,12 +1,12 @@
 // /api/companies — ported from CompaniesController.cs + CompanyService.cs
 import { Hono } from 'hono';
 import { asc, eq, sql } from 'drizzle-orm';
-import { db } from '../db';
-import { companies, profiles } from '../db/schema';
-import { authMiddleware, type AuthVars } from '../lib/auth';
-import { requireSuperAdmin } from '../lib/policies';
-import { body, isUuid } from '../lib/http';
-import { created, fail, ok } from '../lib/response';
+import { db } from '../db/index.js';
+import { companies, profiles } from '../db/schema.js';
+import { authMiddleware, type AuthVars } from '../lib/auth.js';
+import { requireSuperAdmin } from '../lib/policies.js';
+import { body, isUuid } from '../lib/http.js';
+import { created, fail, ok } from '../lib/response.js';
 
 type Company = typeof companies.$inferSelect;
 

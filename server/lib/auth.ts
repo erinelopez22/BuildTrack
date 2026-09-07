@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import type { MiddlewareHandler } from 'hono';
-import { fail } from './response';
+import { fail } from './response.js';
 
 export interface AuthUser {
   userId: string;

@@ -10,7 +10,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { db } from '../db';
+import { db } from '../db/index.js';
 import {
   auditLogs,
   orderItems,
@@ -21,12 +21,12 @@ import {
   projects,
   quotationItems,
   skus,
-} from '../db/schema';
-import { authMiddleware, isAdmin, isSuperAdmin, type AuthVars } from '../lib/auth';
-import { requireAdmin, requireProjectManager } from '../lib/policies';
-import { body, isUuid, qbool, qint, toDate } from '../lib/http';
-import { created, fail, ok } from '../lib/response';
-import { num, numOrNull } from '../lib/num';
+} from '../db/schema.js';
+import { authMiddleware, isAdmin, isSuperAdmin, type AuthVars } from '../lib/auth.js';
+import { requireAdmin, requireProjectManager } from '../lib/policies.js';
+import { body, isUuid, qbool, qint, toDate } from '../lib/http.js';
+import { created, fail, ok } from '../lib/response.js';
+import { num, numOrNull } from '../lib/num.js';
 
 type Project = typeof projects.$inferSelect;
 

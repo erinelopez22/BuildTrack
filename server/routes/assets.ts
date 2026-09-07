@@ -1,18 +1,18 @@
 // /api/company-assets — ported from CompanyAssetsController.cs + CompanyAssetService.cs
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
-import { db } from '../db';
-import { borrowTransactions, companyAssets, profiles, projects } from '../db/schema';
+import { db } from '../db/index.js';
+import { borrowTransactions, companyAssets, profiles, projects } from '../db/schema.js';
 import {
   authMiddleware,
   isAdmin,
   isSuperAdmin,
   type AuthVars,
-} from '../lib/auth';
-import { requireAdmin, requireWarehouseAdmin } from '../lib/policies';
-import { body, isUuid, toDate } from '../lib/http';
-import { created, fail, ok } from '../lib/response';
-import { num } from '../lib/num';
+} from '../lib/auth.js';
+import { requireAdmin, requireWarehouseAdmin } from '../lib/policies.js';
+import { body, isUuid, toDate } from '../lib/http.js';
+import { created, fail, ok } from '../lib/response.js';
+import { num } from '../lib/num.js';
 
 type Asset = typeof companyAssets.$inferSelect;
 type Borrow = typeof borrowTransactions.$inferSelect;

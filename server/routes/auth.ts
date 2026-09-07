@@ -1,13 +1,13 @@
 // /api/auth — ported from AuthController.cs + AuthService.cs
 import { Hono } from 'hono';
 import { and, eq, or, sql } from 'drizzle-orm';
-import { db } from '../db';
+import { db } from '../db/index.js';
 import {
   companies,
   profiles,
   refreshTokens,
   userRoles,
-} from '../db/schema';
+} from '../db/schema.js';
 import {
   authMiddleware,
   generateRefreshToken,
@@ -17,8 +17,8 @@ import {
   signAccessToken,
   verifyPassword,
   type AuthVars,
-} from '../lib/auth';
-import { fail, ok } from '../lib/response';
+} from '../lib/auth.js';
+import { fail, ok } from '../lib/response.js';
 
 type Profile = typeof profiles.$inferSelect;
 

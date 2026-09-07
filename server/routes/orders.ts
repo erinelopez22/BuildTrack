@@ -1,13 +1,13 @@
 // /api/orders — ported from OrdersController.cs + OrderService.cs
 import { Hono } from 'hono';
 import { and, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
-import { db } from '../db';
-import { orderItems, orders, profiles, projects, skus } from '../db/schema';
-import { authMiddleware, isSuperAdmin, type AuthVars } from '../lib/auth';
-import { requireApprover } from '../lib/policies';
-import { body, isUuid, toDate } from '../lib/http';
-import { created, fail, ok } from '../lib/response';
-import { num, numOrNull } from '../lib/num';
+import { db } from '../db/index.js';
+import { orderItems, orders, profiles, projects, skus } from '../db/schema.js';
+import { authMiddleware, isSuperAdmin, type AuthVars } from '../lib/auth.js';
+import { requireApprover } from '../lib/policies.js';
+import { body, isUuid, toDate } from '../lib/http.js';
+import { created, fail, ok } from '../lib/response.js';
+import { num, numOrNull } from '../lib/num.js';
 
 type Order = typeof orders.$inferSelect;
 type OrderItem = typeof orderItems.$inferSelect;

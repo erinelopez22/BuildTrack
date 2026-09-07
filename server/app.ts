@@ -2,23 +2,23 @@
 // local dev server (server/devServer.ts).
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import type { AuthVars } from './lib/auth';
-import { fail } from './lib/response';
-import { authRoutes } from './routes/auth';
-import { companyRoutes } from './routes/companies';
-import { userRoutes } from './routes/users';
-import { skuRoutes } from './routes/skus';
-import { projectRoutes } from './routes/projects';
-import { orderRoutes } from './routes/orders';
-import { trackingRoutes } from './routes/tracking';
-import { inventoryRoutes } from './routes/inventory';
-import { quotationRoutes } from './routes/quotations';
-import { assetRoutes } from './routes/assets';
-import { notificationRoutes } from './routes/notifications';
-import { dashboardRoutes } from './routes/dashboard';
-import { auditLogRoutes } from './routes/auditLogs';
-import { fileRoutes } from './routes/files';
-import { truncateRoutes } from './routes/truncate';
+import type { AuthVars } from './lib/auth.js';
+import { fail } from './lib/response.js';
+import { authRoutes } from './routes/auth.js';
+import { companyRoutes } from './routes/companies.js';
+import { userRoutes } from './routes/users.js';
+import { skuRoutes } from './routes/skus.js';
+import { projectRoutes } from './routes/projects.js';
+import { orderRoutes } from './routes/orders.js';
+import { trackingRoutes } from './routes/tracking.js';
+import { inventoryRoutes } from './routes/inventory.js';
+import { quotationRoutes } from './routes/quotations.js';
+import { assetRoutes } from './routes/assets.js';
+import { notificationRoutes } from './routes/notifications.js';
+import { dashboardRoutes } from './routes/dashboard.js';
+import { auditLogRoutes } from './routes/auditLogs.js';
+import { fileRoutes } from './routes/files.js';
+import { truncateRoutes } from './routes/truncate.js';
 
 export function createApp() {
   const app = new Hono<{ Variables: AuthVars }>().basePath('/api');

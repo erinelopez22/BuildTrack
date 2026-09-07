@@ -1,18 +1,18 @@
 // /api/inventory — ported from InventoryController.cs + InventoryService.cs
 import { Hono } from 'hono';
 import { and, asc, desc, eq, type SQL } from 'drizzle-orm';
-import { db } from '../db';
+import { db } from '../db/index.js';
 import {
   inventoryTransactions,
   profiles,
   projectInventory,
   projects,
   skus,
-} from '../db/schema';
-import { authMiddleware, type AuthVars } from '../lib/auth';
-import { body, isUuid, qint } from '../lib/http';
-import { fail, ok } from '../lib/response';
-import { num } from '../lib/num';
+} from '../db/schema.js';
+import { authMiddleware, type AuthVars } from '../lib/auth.js';
+import { body, isUuid, qint } from '../lib/http.js';
+import { fail, ok } from '../lib/response.js';
+import { num } from '../lib/num.js';
 
 export const inventoryRoutes = new Hono<{ Variables: AuthVars }>();
 inventoryRoutes.use('*', authMiddleware);

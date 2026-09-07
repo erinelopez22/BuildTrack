@@ -1,14 +1,14 @@
 // /api/skus — ported from SkusController.cs + SkuService.cs
 import { Hono } from 'hono';
 import { and, asc, desc, eq, sql, type SQL } from 'drizzle-orm';
-import { db } from '../db';
-import { skus } from '../db/schema';
-import { authMiddleware, isSuperAdmin, type AuthVars } from '../lib/auth';
-import { requireWarehouseAdmin, requireSuperAdmin } from '../lib/policies';
-import { body, isUuid, qbool } from '../lib/http';
-import { created, fail, ok } from '../lib/response';
-import { num } from '../lib/num';
-import materials from '../data/constructionMaterials.json';
+import { db } from '../db/index.js';
+import { skus } from '../db/schema.js';
+import { authMiddleware, isSuperAdmin, type AuthVars } from '../lib/auth.js';
+import { requireWarehouseAdmin, requireSuperAdmin } from '../lib/policies.js';
+import { body, isUuid, qbool } from '../lib/http.js';
+import { created, fail, ok } from '../lib/response.js';
+import { num } from '../lib/num.js';
+import { constructionMaterials } from '../data/constructionMaterials.js';
 
 type Sku = typeof skus.$inferSelect;
 
@@ -162,12 +162,7 @@ skuRoutes.post('/seed', requireSuperAdmin, async (c) => {
 
   let counter = 1;
   const toInsert: (typeof skus.$inferInsert)[] = [];
-  for (const m of materials as {
-    name: string;
-    unit: string;
-    description: string;
-    category: string;
-  }[]) {
+  for (const m of constructionMaterials) {
     if (have.has(`${m.name}|${m.unit}`)) continue;
     toInsert.push({
       skuCode: `MAT-${String(counter).padStart(4, '0')}`,

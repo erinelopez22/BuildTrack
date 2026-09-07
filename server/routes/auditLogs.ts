@@ -1,11 +1,11 @@
 // /api/audit-logs — ported from AuditLogsController.cs + AuditLogService.cs
 import { Hono } from 'hono';
 import { and, desc, eq, type SQL } from 'drizzle-orm';
-import { db } from '../db';
-import { auditLogs, profiles } from '../db/schema';
-import { authMiddleware, type AuthVars } from '../lib/auth';
-import { body, isUuid, qint } from '../lib/http';
-import { ok } from '../lib/response';
+import { db } from '../db/index.js';
+import { auditLogs, profiles } from '../db/schema.js';
+import { authMiddleware, type AuthVars } from '../lib/auth.js';
+import { body, isUuid, qint } from '../lib/http.js';
+import { ok } from '../lib/response.js';
 
 export const auditLogRoutes = new Hono<{ Variables: AuthVars }>();
 

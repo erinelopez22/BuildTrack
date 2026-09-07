@@ -1,4 +1,7 @@
-[
+// Auto-generated from the .NET SkuService seed list. Used by POST /api/skus/seed.
+export interface SeedMaterial { name: string; unit: string; description: string; category: string; }
+
+export const constructionMaterials: SeedMaterial[] = [
   {
     "name": "PORTLAND CEMENT",
     "unit": "bag",
@@ -605,4 +608,4 @@
     "description": "POLYETHYLENE MOISTURE BARRIER FILM",
     "category": "Waterproofing & Insulation"
   }
-]
+];
