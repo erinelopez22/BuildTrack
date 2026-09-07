@@ -10,7 +10,8 @@ const ALLOWED = new Set([
   '.webp',
   '.pdf',
 ]);
-const MAX_BYTES = 10 * 1024 * 1024;
+// Vercel serverless functions cap the request body at ~4.5 MB.
+const MAX_BYTES = 4 * 1024 * 1024;
 
 export interface UploadResult {
   fileUrl: string;
@@ -21,7 +22,7 @@ export async function uploadFile(
   file: File,
 ): Promise<{ result?: UploadResult; error?: string }> {
   if (!file || file.size === 0) return { error: 'No file provided.' };
-  if (file.size > MAX_BYTES) return { error: 'File exceeds 10 MB limit.' };
+  if (file.size > MAX_BYTES) return { error: 'File exceeds 4 MB limit.' };
 
   const dot = file.name.lastIndexOf('.');
   const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : '';
