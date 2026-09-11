@@ -64,8 +64,8 @@ interface DriverAssignment {
   evidence: EvidenceFile[];
   materials: MaterialAssignment[];
   created_by?: string;
+  created_by_name?: string;
   created_at?: string;
-  creator?: Driver;
   isNew?: boolean;
   isEditing?: boolean;
   // Per-driver status fields
@@ -245,6 +245,7 @@ export function TrackingAssignmentSection({
             max_quantity: m.quantityOrdered,
           })),
           created_by: a.createdBy,
+          created_by_name: a.createdByName,
           created_at: a.createdAt,
           tracking_status: a.trackingStatus,
           arrived_at: a.arrivedAt ?? null,
@@ -786,7 +787,7 @@ export function TrackingAssignmentSection({
             </div>
             <div>
               <p className="text-xs text-muted-foreground mb-1">Added By</p>
-              <p className="truncate">{assignment.creator?.full_name || assignment.creator?.email || "—"}</p>
+              <p className="truncate">{assignment.created_by_name || "—"}</p>
             </div>
             {assignment.created_at && (
               <div>
@@ -1078,7 +1079,8 @@ export function TrackingAssignmentSection({
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{mat.material_name}</p>
                         <p className="text-xs text-muted-foreground">
-                          Max: {mat.max_quantity} {mat.unit} • Remaining: {remaining} {mat.unit}
+                          Max: {mat.max_quantity} {mat.unit}
+                          {isPreparing && canEdit && ` • Remaining: ${remaining} ${mat.unit}`}
                         </p>
                       </div>
                       {isPreparing && canEdit ? (
