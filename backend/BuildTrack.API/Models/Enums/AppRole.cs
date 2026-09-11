@@ -7,10 +7,6 @@ public static class AppRoles
     public const string OfficeAdmin    = "office_admin";
     public const string WarehouseAdmin = "warehouse_admin";
     public const string ProjectManager = "project_manager";
-    public const string Procurement    = "procurement";
-    public const string Storekeeper    = "storekeeper";
-    public const string SiteLead       = "site_lead";
-    public const string Viewer         = "viewer";
     public const string Approver       = "approver";
     public const string ApprovalAdmin  = "approval_admin";
     public const string LogisticsAdmin = "logistics_admin";
@@ -23,8 +19,8 @@ public static class AppRoles
     public static readonly string[] All =
     [
         SuperAdmin, Admin, OfficeAdmin, WarehouseAdmin, ProjectManager,
-        Procurement, Storekeeper, SiteLead, Viewer, Approver, ApprovalAdmin,
-        LogisticsAdmin, ProjectEngineer, Receiver, TrackingDriver, Checker, Driver
+        Approver, ApprovalAdmin, LogisticsAdmin, ProjectEngineer, Receiver,
+        TrackingDriver, Checker, Driver
     ];
 
     public static bool IsValid(string role) => All.Contains(role);

@@ -41,7 +41,6 @@ const teamRoleOptions: { value: AppRole; label: string }[] = [
   { value: 'checker', label: 'Checker' },
   { value: 'office_admin', label: 'Office Admin' },
   { value: 'warehouse_admin', label: 'Trucking Admin' },
-  { value: 'viewer', label: 'Viewer' },
 ];
 
 export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) {
@@ -54,7 +53,7 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
   const [isRemoving, setIsRemoving] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<any | null>(null);
   const [selectedUserId, setSelectedUserId] = useState('');
-  const [selectedRole, setSelectedRole] = useState<AppRole>('viewer');
+  const [selectedRole, setSelectedRole] = useState<AppRole>('project_engineer');
   const [isAdding, setIsAdding] = useState(false);
 
   const fetchMembers = async () => {
@@ -94,7 +93,7 @@ export function ProjectTeamTab({ projectId, projectName }: ProjectTeamTabProps) 
       toast({ title: 'Success', description: 'Team member added' });
       setIsAddDialogOpen(false);
       setSelectedUserId('');
-      setSelectedRole('viewer');
+      setSelectedRole('project_engineer');
       fetchMembers();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message, variant: 'destructive' });

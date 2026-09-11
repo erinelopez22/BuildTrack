@@ -39,25 +39,16 @@ export const requireLogistics = policy(
   'tracking_driver',
   'driver',
 );
-export const requireReceiver = policy(
-  'super_admin',
-  'admin',
-  'receiver',
-  'storekeeper',
-);
+export const requireReceiver = policy('super_admin', 'admin', 'receiver');
 export const requireSuperAdmin = policy('super_admin');
 
-// All assignable roles — backend/BuildTrack.API/Models/Enums/AppRoles.cs
+// All assignable roles. procurement / storekeeper / site_lead / viewer were removed.
 export const ALL_ROLES = [
   'super_admin',
   'admin',
   'office_admin',
   'warehouse_admin',
   'project_manager',
-  'procurement',
-  'storekeeper',
-  'site_lead',
-  'viewer',
   'approver',
   'approval_admin',
   'logistics_admin',

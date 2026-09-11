@@ -1,13 +1,9 @@
-export type AppRole = 
-  | 'super_admin' 
-  | 'admin' 
+export type AppRole =
+  | 'super_admin'
+  | 'admin'
   | 'office_admin'
   | 'warehouse_admin'
-  | 'project_manager' 
-  | 'procurement' 
-  | 'storekeeper' 
-  | 'site_lead' 
-  | 'viewer'
+  | 'project_manager'
   | 'approver'
   | 'approval_admin'
   | 'logistics_admin'
@@ -94,10 +90,6 @@ export const ROLE_DISPLAY_NAMES: Record<AppRole, string> = {
   office_admin: 'Office Admin',
   warehouse_admin: 'Trucking Admin',
   project_manager: 'Project Manager',
-  procurement: 'Procurement',
-  storekeeper: 'Storekeeper',
-  site_lead: 'Site Lead',
-  viewer: 'Viewer',
   approver: 'Approver',
   approval_admin: 'Approval Admin',
   logistics_admin: 'Logistics Admin',
@@ -112,7 +104,6 @@ export const ROLE_DISPLAY_NAMES: Record<AppRole, string> = {
 export const ACTIVE_ROLES: AppRole[] = [
   'super_admin',
   'admin',
-  'viewer',
   'project_engineer',
   'checker',
   'driver',

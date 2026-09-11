@@ -107,7 +107,7 @@ export default function UsersPage() {
   // Assign role dialog
   const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
-  const [selectedRole, setSelectedRole] = useState<AppRole>('viewer');
+  const [selectedRole, setSelectedRole] = useState<AppRole>('checker');
 
   // Companies list (for super_admin company selector)
   const [companies, setCompanies] = useState<CompanyListItem[]>([]);
@@ -118,7 +118,7 @@ export default function UsersPage() {
     name: '',
     email: '',
     password: '',
-    role: 'viewer' as AppRole,
+    role: 'checker' as AppRole,
     companyId: '',
   });
   const [addUserErrors, setAddUserErrors] = useState<Record<string, string>>({});
@@ -373,7 +373,7 @@ export default function UsersPage() {
       } else {
         toast({ title: 'Success', description: 'User created successfully. They can now log in.' });
         setIsAddUserOpen(false);
-        setAddUserForm({ name: '', email: '', password: '', role: 'viewer', companyId: '' });
+        setAddUserForm({ name: '', email: '', password: '', role: 'checker', companyId: '' });
         setAddUserErrors({});
         fetchUsers();
       }
@@ -548,7 +548,7 @@ export default function UsersPage() {
       <Dialog open={isAddUserOpen} onOpenChange={(open) => {
         setIsAddUserOpen(open);
         if (!open) {
-          setAddUserForm({ name: '', email: '', password: '', role: 'viewer', companyId: '' });
+          setAddUserForm({ name: '', email: '', password: '', role: 'checker', companyId: '' });
           setAddUserErrors({});
         }
       }}>

@@ -32,8 +32,8 @@ export default function Settings() {
     twilio_sender_number: '',
     is_enabled: false,
     event_rules: {
-      order_status_change: ['admin', 'project_manager', 'procurement'] as AppRole[],
-      low_stock: ['admin', 'project_manager', 'storekeeper'] as AppRole[],
+      order_status_change: ['admin', 'project_manager'] as AppRole[],
+      low_stock: ['admin', 'project_manager', 'warehouse_admin'] as AppRole[],
       delivery_received: ['admin', 'project_manager'] as AppRole[],
     },
   });

@@ -1,7 +1,9 @@
-// Seeds 2 test users for every role in AppRoles — one account per (role, index).
-// Idempotent: skips any email that already exists. Run: npx tsx server/seedUsers.ts
+// Seeds/repairs 2 test users for every role in ALL_ROLES.
+// Idempotent: creates any missing profile AND ensures each has its role grant
+// (so re-running also restores role grants that were removed later).
+// Run: npx tsx server/seedUsers.ts
 import './lib/loadEnv.js';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from './db/index.js';
 import { profiles, userRoles } from './db/schema.js';
 import { hashPassword } from './lib/auth.js';
@@ -27,25 +29,20 @@ async function main() {
   );
 
   const emails = planned.map((p) => p.email);
-  const existing = new Set(
-    (
-      await db
-        .select({ email: profiles.email })
-        .from(profiles)
-        .where(inArray(profiles.email, emails))
-    ).map((r) => r.email.toLowerCase()),
-  );
+  const existing = await db
+    .select({ id: profiles.id, email: profiles.email })
+    .from(profiles)
+    .where(inArray(profiles.email, emails));
+  const idByEmail = new Map(existing.map((r) => [r.email.toLowerCase(), r.id]));
 
-  const toCreate = planned.filter((p) => !existing.has(p.email.toLowerCase()));
-
-  if (toCreate.length === 0) {
-    console.log('• All role test users already exist — nothing to do.');
-  } else {
+  // 1. create missing profiles
+  const missing = planned.filter((p) => !idByEmail.has(p.email.toLowerCase()));
+  if (missing.length) {
     const passwordHash = await hashPassword(PASSWORD);
     const inserted = await db
       .insert(profiles)
       .values(
-        toCreate.map((p) => ({
+        missing.map((p) => ({
           email: p.email,
           username: p.username,
           fullName: p.fullName,
@@ -56,28 +53,37 @@ async function main() {
         })),
       )
       .returning({ id: profiles.id, email: profiles.email });
-
-    const idByEmail = new Map(
-      inserted.map((r) => [r.email.toLowerCase(), r.id]),
-    );
-    await db.insert(userRoles).values(
-      toCreate.map((p) => ({
-        userId: idByEmail.get(p.email.toLowerCase())!,
-        role: p.role,
-      })),
-    );
-
-    console.log(`✓ Created ${toCreate.length} users (password: ${PASSWORD})`);
+    for (const r of inserted) idByEmail.set(r.email.toLowerCase(), r.id);
+    console.log(`✓ Created ${inserted.length} profiles`);
   }
 
-  console.log('\nRole test accounts:');
+  // 2. ensure the role grant for every planned user
+  let grantsAdded = 0;
+  for (const p of planned) {
+    const userId = idByEmail.get(p.email.toLowerCase());
+    if (!userId) continue;
+    const [has] = await db
+      .select({ id: userRoles.id })
+      .from(userRoles)
+      .where(and(eq(userRoles.userId, userId), eq(userRoles.role, p.role)));
+    if (!has) {
+      await db.insert(userRoles).values({ userId, role: p.role });
+      grantsAdded++;
+    }
+    // also make sure the account is active
+    await db
+      .update(profiles)
+      .set({ isActive: true })
+      .where(eq(profiles.id, userId));
+  }
+  console.log(`✓ Ensured role grants (${grantsAdded} added)`);
+
+  console.log('\nRole test accounts (password ' + PASSWORD + '):');
   for (const role of ALL_ROLES) {
-    console.log(
-      `  ${role.padEnd(16)}  ${role.replace(/_/g, '')}1@buildtrack.com , ${role.replace(/_/g, '')}2@buildtrack.com`,
-    );
+    const base = role.replace(/_/g, '');
+    console.log(`  ${role.padEnd(17)} ${base}1@buildtrack.com , ${base}2@buildtrack.com`);
   }
-  console.log(`\nAll use password: ${PASSWORD}`);
-  console.log('Non-super-admins must pick "BuildTrack" as the company at login.');
+  console.log('\nNon-super-admins must pick "BuildTrack" as the company at login.');
 }
 
 main().catch((err) => {

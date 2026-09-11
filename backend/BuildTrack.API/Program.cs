@@ -56,7 +56,7 @@ builder.Services.AddAuthorizationBuilder()
     .AddPolicy("RequireWarehouseAdmin", policy => policy.RequireRole("super_admin", "admin", "warehouse_admin"))
     .AddPolicy("RequireProjectManager", policy => policy.RequireRole("super_admin", "admin", "project_manager", "project_engineer"))
     .AddPolicy("RequireLogistics", policy => policy.RequireRole("super_admin", "admin", "logistics_admin", "tracking_driver", "driver"))
-    .AddPolicy("RequireReceiver", policy => policy.RequireRole("super_admin", "admin", "receiver", "storekeeper"));
+    .AddPolicy("RequireReceiver", policy => policy.RequireRole("super_admin", "admin", "receiver"));
 
 // ── Application Services ─────────────────────────────────────────────────────
 builder.Services.AddScoped<IJwtService, JwtService>();
@@ -87,7 +87,7 @@ builder.Services.AddCors(options =>
         {
             "http://localhost:8080",
             "http://localhost:5173",
-            "https://brave-mushroom-0725c8e00.2.azurestaticapps.net"
+            "https://orange-ocean-0e1833300.7.azurestaticapps.net"
         };
         policy.WithOrigins(origins.ToArray())
             .AllowAnyMethod()
@@ -154,6 +154,9 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 // Auto-migrate and seed on startup (dev convenience)
 // if (app.Environment.IsDevelopment())
 // {
+
+try
+{
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
@@ -252,11 +255,16 @@ app.MapHub<NotificationHub>("/hubs/notifications");
     ");
 
     // Seed default company "BuildTrack"
+    // db.Database.ExecuteSqlRaw(@"
+    //     IF NOT EXISTS (SELECT 1 FROM [Companies] WHERE [Name] = 'BuildTrack')
+    //         INSERT INTO [Companies] ([Id], [Name], [CreatedAt], [UpdatedAt])
+    //         VALUES ('00000000-0000-0000-0000-000000000001', 'BuildTrack', GETUTCDATE(), GETUTCDATE())
+    // ");
     db.Database.ExecuteSqlRaw(@"
-        IF NOT EXISTS (SELECT 1 FROM [Companies] WHERE [Name] = 'BuildTrack')
-            INSERT INTO [Companies] ([Id], [Name], [CreatedAt], [UpdatedAt])
-            VALUES ('00000000-0000-0000-0000-000000000001', 'BuildTrack', GETUTCDATE(), GETUTCDATE())
-    ");
+    IF NOT EXISTS (SELECT 1 FROM [Companies] WHERE [Name] = 'BuildTrack')
+        INSERT INTO [Companies] ([Id], [Name], [IsActive], [CreatedAt], [UpdatedAt])
+        VALUES ('00000000-0000-0000-0000-000000000001', 'BuildTrack', 1, GETUTCDATE(), GETUTCDATE())
+        ");
 
     // Add CompanyId column to Profiles
     db.Database.ExecuteSqlRaw(@"
@@ -327,5 +335,11 @@ app.MapHub<NotificationHub>("/hubs/notifications");
         Console.WriteLine("✓ Default admin seeded: admin@buildtrack.com / Admin@123456");
     }
 //}
+}
+catch (Exception ex)
+{
+Console.WriteLine($"Migration error: {ex.Message}");
+    // Optionally rethrow or handle as needed
+}
 
 app.Run();
